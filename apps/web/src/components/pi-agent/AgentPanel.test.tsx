@@ -7,6 +7,7 @@ import { createCaretStore } from '../../lib/pi-agent/caret-store.js';
 import { type AgentTarget, PiAgentContext, type PiAgentValue } from '../../lib/pi-agent/session.js';
 import type { FolderItem, NotebookConfig } from '../../lib/types.js';
 import { emptyTranscript, type TranscriptState } from '../../lib/pi-agent/transcript.js';
+import { type WebFeature, WebFeaturesProvider } from '../../lib/web-features.js';
 
 afterEach(() => {
   cleanup();
@@ -271,4 +272,19 @@ it('labels a shell command Run, fills the message box when an extension sets its
   panel(filled);
   expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).value).toBe('! pnpm test');
   expect(filled.takeEditorText).toHaveBeenCalledWith(editorText);
+});
+
+it("shows an edition gate's reason in place of the panel, and the panel again once it allows", () => {
+  const gated = (allowed: boolean): WebFeature => ({ id: 'plans', gate: id => id === 'agent' ? { allowed, reason: 'The agent is part of Pro.' } : { allowed: true } });
+  const view = render(createElement(WebFeaturesProvider, { features: [gated(false)] }, createElement(PiAgentContext.Provider, { value: agent() }, createElement(AgentPanel))));
+  expect(screen.getByRole('status').textContent).toBe('The agent is part of Pro.');
+  expect(screen.queryByRole('textbox', { name: 'Message to Pi' })).toBeNull();
+  view.rerender(createElement(WebFeaturesProvider, { features: [gated(true)] }, createElement(PiAgentContext.Provider, { value: agent() }, createElement(AgentPanel))));
+  expect(screen.getByRole('textbox', { name: 'Message to Pi' })).toBeTruthy();
+  expect(screen.queryByText('The agent is part of Pro.')).toBeNull();
+});
+
+it('gives a denied agent panel a plain reason when the gate names none', () => {
+  render(createElement(WebFeaturesProvider, { features: [{ id: 'plans', gate: () => ({ allowed: false }) }] }, createElement(PiAgentContext.Provider, { value: agent() }, createElement(AgentPanel))));
+  expect(screen.getByRole('status').textContent).toBe('This feature is not available to you.');
 });

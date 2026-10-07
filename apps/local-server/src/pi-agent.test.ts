@@ -95,7 +95,7 @@ async function start() {
   server = createServer(app);
   const piAgent = agent;
   server.on('upgrade', (req, socket, head) => {
-    if (!piAgent.upgrade(req, socket, head)) socket.destroy();
+    if (!piAgent.upgrade?.(req, socket, head)) socket.destroy();
   });
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   const address = server.address();

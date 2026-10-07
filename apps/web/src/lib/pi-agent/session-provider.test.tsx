@@ -3,7 +3,8 @@ import { act, cleanup, render, waitFor } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NotebookConfig } from '../types.js';
-import { PiAgentProvider, type PiAgentValue, type PiSessionInfo, usePiAgent } from './session.js';
+import { type WebFeature, WebFeaturesProvider } from '../web-features.js';
+import { agentSocketTarget, PiAgentProvider, type PiAgentValue, type PiSessionInfo, usePiAgent } from './session.js';
 
 /** A socket that never reaches Pi; tests push bridge records into it. */
 class FakeSocket {
@@ -13,7 +14,7 @@ class FakeSocket {
   onopen: (() => void) | null = null;
   onmessage: ((event: { data: string; }) => void) | null = null;
   onclose: (() => void) | null = null;
-  constructor() {
+  constructor(readonly url: string, readonly protocols?: string[]) {
     FakeSocket.last = this;
   }
   sent: { id?: string; type: string; }[] = [];
@@ -29,9 +30,12 @@ class FakeSocket {
 const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }];
 const live = (overrides: Partial<PiSessionInfo> = {}): PiSessionInfo => ({ id: 's1', cwd: '/home/me/workspace', location: { notebookId: 'nb', folder: null, repository: true }, status: 'ready', startedAt: '', ...overrides });
 let requests: { method: string; body?: unknown; }[] = [];
+/** What the next started session carries beyond its defaults, such as a remote agent's `socket`. */
+let sessionOverrides: Partial<PiSessionInfo> = {};
 
 beforeEach(() => {
   requests = [];
+  sessionOverrides = {};
   FakeSocket.last = undefined;
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
@@ -39,7 +43,7 @@ beforeEach(() => {
     vi.fn(async (_url: string, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
       requests.push({ method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-      const session = method === 'DELETE' ? null : method === 'GET' ? null : live({ id: method === 'PUT' ? 's2' : 's1' });
+      const session = method === 'DELETE' ? null : method === 'GET' ? null : live({ id: method === 'PUT' ? 's2' : 's1', ...sessionOverrides });
       return new Response(JSON.stringify({ session, piAvailable: true }), { status: 200 });
     }),
   );
@@ -58,16 +62,18 @@ function Probe({ onValue }: { onValue: (value: PiAgentValue) => void; }) {
   return null;
 }
 
-function mount() {
+function mount(features: WebFeature[] = []) {
   const seen: { current?: PiAgentValue; } = {};
   render(
-    <PiAgentProvider enabled notebookId='nb' notebooks={notebooks} folders={[]}>
-      <Probe
-        onValue={value => {
-          seen.current = value;
-        }}
-      />
-    </PiAgentProvider>,
+    <WebFeaturesProvider features={features}>
+      <PiAgentProvider enabled notebookId='nb' notebooks={notebooks} folders={[]}>
+        <Probe
+          onValue={value => {
+            seen.current = value;
+          }}
+        />
+      </PiAgentProvider>
+    </WebFeaturesProvider>,
   );
   return seen;
 }
@@ -194,4 +200,35 @@ it('reads the command list, the context usage after a run, and text an extension
   const stats = socket.sent.filter(command => command.type === 'get_session_stats').length;
   act(() => socket.receive({ type: 'agent_settled' }));
   expect(socket.sent.filter(command => command.type === 'get_session_stats').length).toBe(stats + 1);
+});
+
+it("connects to the session's own socket when the agent names one, and keeps it through bridge status records", async () => {
+  sessionOverrides = { socket: { url: 'wss://sandbox.example/rpc?ticket=abc', protocols: ['pi.v1'] } };
+  const agent = mount();
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  expect(FakeSocket.last).toMatchObject({ url: 'wss://sandbox.example/rpc?ticket=abc', protocols: ['pi.v1'] });
+  // The remote bridge does not know the address it was reached at.
+  act(() => FakeSocket.last!.receive({ type: 'bridge_status', session: live() }));
+  expect(agent.current?.session?.socket).toEqual({ url: 'wss://sandbox.example/rpc?ticket=abc', protocols: ['pi.v1'] });
+});
+
+it("opens the page's own /api/pi/ws when the session names no socket", async () => {
+  mount();
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  expect(FakeSocket.last!.url).toBe(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/pi/ws`);
+  expect(FakeSocket.last!.protocols).toBeUndefined();
+});
+
+it('picks the socket from the session, falling back to the page host over TLS or not', () => {
+  expect(agentSocketTarget({ socket: { url: 'wss://a.example/x' } }, { protocol: 'http:', host: 'localhost:4321' })).toEqual({ url: 'wss://a.example/x' });
+  expect(agentSocketTarget(null, { protocol: 'http:', host: 'localhost:4321' })).toEqual({ url: 'ws://localhost:4321/api/pi/ws' });
+  expect(agentSocketTarget({}, { protocol: 'https:', host: 'notes.example' })).toEqual({ url: 'wss://notes.example/api/pi/ws' });
+});
+
+it('starts no session while an edition gates the agent off, and still offers the panel to show its reason', async () => {
+  const agent = mount([{ id: 'plans', gate: id => ({ allowed: id !== 'agent', reason: 'Upgrade to Pro.' }) }]);
+  await waitFor(() => expect(requests.some(request => request.method === 'GET')).toBe(true));
+  await waitFor(() => expect(agent.current?.available).toBe(true));
+  expect(requests.some(request => request.method === 'POST')).toBe(false);
+  expect(FakeSocket.last).toBeUndefined();
 });

@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { responseError } from '../api.js';
 import type { FolderItem, NotebookConfig } from '../types.js';
+import { FEATURE_IDS, useFeatureGate } from '../web-features.js';
 import type { CaretStore } from './caret-store.js';
 import { commandsFromResponse, commandWithFocus, parseComposerInput, type PiCommand } from './commands.js';
 import { type AgentDialog, type AgentFocus, applyRecord, emptyTranscript, queuedText, startShell, transcriptFromMessages, type TranscriptState, withFocus } from './transcript.js';
@@ -35,9 +36,16 @@ export interface PiSessionInfo {
   /** The session file Pi records this conversation in, once Pi reports it. */
   sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
+  /** Where to open the WebSocket when the agent runs elsewhere; absent, the panel uses `/api/pi/ws` on the page's host. */
+  socket?: { url: string; protocols?: string[]; };
   pid?: number;
   startedAt: string;
   exit?: { code: number | null; signal: string | null; stderr: string; };
+}
+
+/** The WebSocket the panel opens for a session: the agent's own socket when it names one, else the page's host. */
+export function agentSocketTarget(info: Pick<PiSessionInfo, 'socket'> | null | undefined, page: Pick<Location, 'protocol' | 'host'> = location): { url: string; protocols?: string[]; } {
+  return info?.socket ?? { url: `${page.protocol === 'https:' ? 'wss' : 'ws'}://${page.host}/api/pi/ws` };
 }
 
 /**
@@ -231,6 +239,7 @@ export function usePiAgentAvailable(): boolean {
  * resumes the conversation it last had while that is still valid there.
  */
 export function PiAgentProvider({ enabled, notebookId, notebooks, folders, children }: { enabled: boolean; notebookId: string; notebooks: NotebookConfig[]; folders: FolderItem[]; children: ReactNode; }) {
+  const agentGate = useFeatureGate(FEATURE_IDS.agent);
   const [session, setSession] = useState<PiSessionInfo | null>(null);
   const [piAvailable, setPiAvailable] = useState(false);
   const [target, setTarget] = useState<AgentTarget | null>(null);
@@ -251,6 +260,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
   const [contextUsage, setContextUsage] = useState<PiContextUsage>();
   const [editorText, setEditorText] = useState<PiEditorText | null>(null);
   const socket = useRef<WebSocket | null>(null);
+  /** The socket the live session named, kept here because `connect` also runs from timers that have only the ref. */
+  const socketInfo = useRef<PiSessionInfo['socket']>(undefined);
   const sessionId = useRef<string | null>(null);
   const pending = useRef(new Map<string, 'messages' | 'state'>());
   /** `clear_queue` requests waiting for the queued text they take back. */
@@ -265,7 +276,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
 
   const connect = useCallback(function connect() {
     if (socket.current) return;
-    const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/pi/ws`);
+    const target = agentSocketTarget({ socket: socketInfo.current });
+    const ws = new WebSocket(target.url, target.protocols);
     socket.current = ws;
     const loadId = crypto.randomUUID(), stateId = crypto.randomUUID();
     const requestStats = () => ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_session_stats' }));
@@ -284,7 +296,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       if (socket.current !== ws || typeof event.data !== 'string') return;
       const record = JSON.parse(event.data) as Record<string, unknown>;
       if (record.type === 'bridge_status') {
-        const info = record.session as PiSessionInfo;
+        // A bridge on another host does not know the address it was reached at, so the session keeps the one that opened it.
+        const info = { ...record.session as PiSessionInfo, ...(socketInfo.current ? { socket: socketInfo.current } : {}) };
         sessionId.current = info.id;
         setSession(info);
         return;
@@ -345,6 +358,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       // The process may still run (a dev-server restart dropped the socket); reattach while it does.
       setTimeout(() => {
         sessionRequest('GET').then(({ session: info }) => {
+          // The session's address may carry a ticket that is valid once, so a reattach takes the fresh one.
+          if (info) socketInfo.current = info.socket;
           setSession(info);
           if (info && info.status !== 'exited' && info.id === sessionId.current) connect();
         }).catch((reason: Error) => setError(reason.message));
@@ -362,6 +377,7 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
       setEditorText(null);
     }
     sessionId.current = info?.id ?? null;
+    socketInfo.current = info?.socket;
     setSession(info);
     setError('');
     if (info && info.status !== 'exited') connect();
@@ -394,7 +410,8 @@ export function PiAgentProvider({ enabled, notebookId, notebooks, folders, child
 
   // Starts once, as soon as Pi is known to be installed and a notebook is selected.
   const started = useRef(false);
-  const ready = enabled && piAvailable && Boolean(notebookId);
+  // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
+  const ready = enabled && piAvailable && agentGate.allowed && Boolean(notebookId);
   useEffect(() => {
     if (!ready || started.current) return;
     started.current = true;

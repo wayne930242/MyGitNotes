@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { WebApp } from '../app/create-web-app.js';
 import { AuthControls } from '../components/AuthControls.js';
 import { SettingsModal } from '../components/SettingsModal.js';
-import { useAccountControls, type WebFeature, WebFeaturesProvider } from './web-features.js';
+import { useAccountControls, useCommitMessagePolish, useFeatureGate, type WebFeature, WebFeaturesProvider } from './web-features.js';
 
 vi.mock('../components/CoreUpdates.js', () => ({ CoreUpdates: () => null }));
 vi.mock('../components/ProductVersion.js', () => ({ ProductVersion: () => null }));
@@ -71,4 +71,29 @@ it("adds an edition's entries to the signed-in account menu", async () => {
   expect(menu.open).toBe(false);
   container.remove();
   vi.restoreAllMocks();
+});
+
+it('opens every feature without gates, and shows the first denial otherwise', () => {
+  function Probe({ id }: { id: string; }) {
+    const gate = useFeatureGate(id);
+    return createElement('span', null, gate.allowed ? 'open' : gate.reason);
+  }
+  const html = (features: WebFeature[], id: string) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(Probe, { id })));
+  expect(html([], 'agent')).toBe('<span>open</span>');
+  expect(html([{ id: 'quiet' }, { id: 'open', gate: () => ({ allowed: true }) }], 'r2')).toBe('<span>open</span>');
+  const denying: WebFeature = { id: 'plans', gate: id => id === 'r2' ? { allowed: false, reason: 'Upgrade' } : { allowed: true } };
+  const later: WebFeature = { id: 'later', gate: () => ({ allowed: false, reason: 'Later' }) };
+  expect(html([denying, later], 'r2')).toBe('<span>Upgrade</span>');
+  expect(html([denying, later], 'agent')).toBe('<span>Later</span>');
+});
+
+it('lets the last feature that sets one supply the commit message polish', () => {
+  const first = async () => 'first', second = async () => 'second';
+  function Probe() {
+    const polish = useCommitMessagePolish();
+    return createElement('span', null, polish ? String(polish === second) : 'none');
+  }
+  const html = (features: WebFeature[]) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(Probe)));
+  expect(html([])).toBe('<span>none</span>');
+  expect(html([{ id: 'a', commitMessagePolish: first }, { id: 'b' }, { id: 'c', commitMessagePolish: second }])).toBe('<span>true</span>');
 });

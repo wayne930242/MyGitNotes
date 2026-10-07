@@ -11,6 +11,7 @@ import { BUILTIN_COMMANDS, matchCommands, parseComposerInput, type PiCommand, sl
 import { type PiContextUsage, type PiEditorText, type PiLocation, type PiSessionInfo, usePiAgent } from '../../lib/pi-agent/session.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
+import { FEATURE_IDS, useFeatureGate } from '../../lib/web-features.js';
 import './pi-agent.css';
 
 type ContextMode = 'line' | 'path' | 'none';
@@ -89,8 +90,16 @@ function fromCwd(absolute: string, cwd: string | undefined): string {
   return base && absolute.startsWith(`${base}/`) ? absolute.slice(base.length + 1) : absolute;
 }
 
-/** A conversation with the workspace's Pi process, naming the file in focus (see AgentTarget) with each message. */
+/** The agent panel, or the reason an edition's gate gives for withholding it (an upgrade prompt, say). */
 export function AgentPanel() {
+  const { t } = useTranslation();
+  const gate = useFeatureGate(FEATURE_IDS.agent);
+  if (gate.allowed) return <AgentConversation />;
+  return <section className='pi-agent-panel pi-agent-gate' role='status' aria-label={t('piAgent.title')}>{gate.reason ?? t('feature.unavailable')}</section>;
+}
+
+/** A conversation with the workspace's Pi process, naming the file in focus (see AgentTarget) with each message. */
+function AgentConversation() {
   const { t } = useTranslation();
   const agent = usePiAgent();
   const target = agent.target;

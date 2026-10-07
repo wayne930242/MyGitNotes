@@ -7,6 +7,7 @@ import { copyToClipboard } from '../lib/clipboard.js';
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import { createR2Folder, deleteR2, fetchR2References, moveR2, type R2Listing, r2RawUrl, type R2References, uploadR2 } from '../lib/r2-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { FEATURE_IDS, useFeatureGate } from '../lib/web-features.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { baseName, parentPath } from '../lib/paths.js';
 
@@ -45,7 +46,19 @@ export function r2Folders(listing: R2Listing, showHidden: boolean) {
   return { root, folders: [...folders].sort() };
 }
 
-export function R2Panel({ notebookId, listing, directory, mutable, showHidden, busy, run, onNavigate, onRefresh, beforeChange, onNotesChanged, onInsert }: R2PanelProps) {
+/** The R2 panel, or the reason an edition's gate gives for withholding it (an upgrade prompt, say). */
+export function R2Panel(props: R2PanelProps) {
+  const { t } = useTranslation();
+  const gate = useFeatureGate(FEATURE_IDS.r2);
+  if (gate.allowed) return <R2Browser {...props} />;
+  return (
+    <section className='file-content'>
+      <p className='file-storage-hint' role='status'>{gate.reason ?? t('feature.unavailable')}</p>
+    </section>
+  );
+}
+
+function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, run, onNavigate, onRefresh, beforeChange, onNotesChanged, onInsert }: R2PanelProps) {
   const { t } = useTranslation();
   const [selected, setSelected] = useState(''), [operation, setOperation] = useState<Operation>();
   const [name, setName] = useState(''), [destination, setDestination] = useState(''), [references, setReferences] = useState<R2References>();

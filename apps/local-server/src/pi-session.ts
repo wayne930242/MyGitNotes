@@ -18,6 +18,11 @@ export interface PiSessionInfo {
   /** The session file Pi records this conversation in, once Pi reports it; a later start resumes from it. */
   sessionFile?: string;
   status: 'starting' | 'ready' | 'exited';
+  /**
+   * Where the web panel opens its WebSocket when the agent runs elsewhere (a hosted sandbox); absent, it uses
+   * `/api/pi/ws` on the page's own host. `protocols` are the WebSocket subprotocols to offer.
+   */
+  socket?: { url: string; protocols?: string[]; };
   pid?: number;
   startedAt: string;
   exit?: { code: number | null; signal: string | null; stderr: string; };

@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import type { NoteChangeFacts } from './commit-summary.js';
 
 /** A top-level page an edition adds beside the workspace routes. */
 export interface FeatureRoute {
@@ -22,6 +23,28 @@ export type RenderAccountControls = (props: { local: boolean; }) => ReactNode;
 /** Renders extra entries in the signed-in account menu, above sign-out; `close` closes the menu. */
 export type RenderAccountMenuItems = (props: { close: () => void; }) => ReactNode;
 
+/** What `commitMessagePolish` is given: the facts of every changed note, and the commit message as it stands (subject, body and trailers). */
+export interface CommitPolishInput {
+  facts: NoteChangeFacts[];
+  message: string;
+}
+
+/**
+ * Rewrites a commit message's subject and body. Whatever it returns, the trailers are regenerated from the
+ * facts afterwards, so a model can neither drop nor invent a `Note-Added`, `Note-Modified` or `Document-Modified` line.
+ */
+export type CommitMessagePolish = (input: CommitPolishInput) => Promise<string>;
+
+/** The features an edition may gate; `WebFeature.gate` is asked about each by one of these ids. */
+export const FEATURE_IDS = { agent: 'agent', r2: 'r2', commitPolish: 'commit-polish' } as const;
+
+/** Whether a feature is open to the signed-in user, and what to show in its place when it is not. */
+export interface FeatureGate {
+  allowed: boolean;
+  /** Shown where the feature would be, such as an upgrade prompt. */
+  reason?: ReactNode;
+}
+
 /**
  * What another edition adds to the web app at build time (see docs/adr/0002-open-core-editions.md).
  * Slots are added here when an edition needs one; without features the app renders as the community edition.
@@ -34,6 +57,14 @@ export interface WebFeature {
   accountControls?: RenderAccountControls;
   /** Adds entries to the community account menu, such as recent repositories, without replacing it. */
   accountMenuItems?: RenderAccountMenuItems;
+  /** Adds an "AI polish" button to the commit dialog, beside "Generate message"; the last feature that sets it wins. */
+  commitMessagePolish?: CommitMessagePolish;
+  /**
+   * Whether the agent panel (`FEATURE_IDS.agent`), the R2 panel (`FEATURE_IDS.r2`) and the polish button
+   * (`FEATURE_IDS.commitPolish`) are open to this user. A denied feature shows its `reason` in place instead
+   * of being hidden or failing at the server. It is presentation only: the server still enforces every limit.
+   */
+  gate?: (featureId: string) => FeatureGate;
 }
 
 const FeaturesContext = createContext<readonly WebFeature[]>([]);
@@ -52,4 +83,17 @@ export function useSettingsSections(): FeatureSettingsSection[] {
 
 export function useAccountControls(): RenderAccountControls | undefined {
   return useContext(FeaturesContext).reduce<RenderAccountControls | undefined>((found, feature) => feature.accountControls ?? found, undefined);
+}
+
+export function useCommitMessagePolish(): CommitMessagePolish | undefined {
+  return useContext(FeaturesContext).reduce<CommitMessagePolish | undefined>((found, feature) => feature.commitMessagePolish ?? found, undefined);
+}
+
+/** The first denial among the features, or an open gate; the community edition gates nothing. */
+export function useFeatureGate(featureId: string): FeatureGate {
+  for (const feature of useContext(FeaturesContext)) {
+    const gate = feature.gate?.(featureId);
+    if (gate && !gate.allowed) return gate;
+  }
+  return { allowed: true };
 }
