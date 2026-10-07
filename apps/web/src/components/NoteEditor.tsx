@@ -4,7 +4,8 @@ import { useOutlineActions, useOutlineInsertion } from '../lib/outline-actions.j
 import { useTranslation } from '../lib/i18n/index.js';
 import { NoteQuickActions } from './note-editor/NoteQuickActions.js';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { parseNoteFile, serializeNoteFile } from '@mygitnotes/core/note-file';
+import { parseNoteFile } from '@mygitnotes/core/note-file';
+import { currentNoteFile } from '../lib/current-note-file.js';
 import { MarkdownEditor, type MarkdownEditorHandle, type MarkdownEditorMode } from './MarkdownEditor.js';
 import type { NoteItem } from '../lib/types.js';
 import { usePanelContext } from '../lib/panel-context.js';
@@ -139,7 +140,8 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const historyTarget = useMemo(() => ({ path: note.path, notebookId: note.notebookId }), [note.path, note.notebookId]);
   // The history compares and keeps the note as saving it would write the file; a restored file goes back into the editor's fields.
   const { content: sessionContent, metadata: sessionMetadata, setContent: setSessionContent, setMetadata: setSessionMetadata } = session;
-  const currentFile = useCallback((latest: string | null) => serializeNoteFile(note.path, sessionMetadata, sessionContent, latest === null, new Date(), latest ?? undefined), [note.path, sessionContent, sessionMetadata]);
+  const stampFallback = useMemo(() => new Date(), [note.path]);
+  const currentFile = useCallback((latest: string | null) => currentNoteFile(note.path, sessionMetadata, sessionContent, latest, stampFallback), [note.path, sessionContent, sessionMetadata, stampFallback]);
   const restoreFile = useCallback((text: string) => {
     const parsed = parseNoteFile(text, note.path);
     setSessionContent(parsed.content);
