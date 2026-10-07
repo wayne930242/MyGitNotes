@@ -437,6 +437,8 @@ export abstract class RemoteSource {
     } catch (error) {
       throw new SourceError((error as Error).message, 400);
     }
+    const notebooks = (await this.config()).notebooks;
+    if (agentWorkspaceFile(file, notebooks)?.kind !== 'skill' || agentWorkspaceFile(nextPath, notebooks)?.kind !== 'skill') throw new SourceError('Only a workspace skill can be renamed.', 403);
     if (nextPath === file) return this.saveAgentResource(file, content, expected);
     const nextLocation = agentSkillLocation(nextPath)!;
     const snapshot = await this.getSnapshot(true);
@@ -454,8 +456,7 @@ export abstract class RemoteSource {
     }
     changes.set(nextPath, { path: nextPath, content: renameAgentSkillEntryContent(content, location.directory, nextLocation.directory, nextLocation.slug) });
 
-    const notebooks = (await this.config()).notebooks;
-    const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && agentFileAllowed(entry.path, notebooks) && !entry.path.startsWith(`${location.directory}/`));
+    const references = snapshot.entries.filter(entry => entry.type === 'blob' && entry.mode !== '120000' && agentWorkspaceFile(entry.path, notebooks) && !entry.path.startsWith(`${location.directory}/`));
     for (const entry of references) {
       const original = (await this.readFile(entry.path)).toString('utf8');
       const updated = rewriteAgentSkillReferences(original, location.directory, nextLocation.directory);

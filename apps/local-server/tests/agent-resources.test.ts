@@ -65,6 +65,32 @@ it('renames a remote skill directory and preserves every skill resource in one c
   expect(tree).toEqual(expect.arrayContaining([expect.objectContaining({ path: '.agents/skills/custom/SKILL.md', sha: null }), expect.objectContaining({ path: '.agents/skills/custom/agents/openai.yaml', sha: null }), expect.objectContaining({ path: '.agents/skills/renamed/SKILL.md', content: expect.stringContaining('name: renamed') }), expect.objectContaining({ path: '.agents/skills/renamed/agents/openai.yaml', sha: '.agents/skills/custom/agents/openai.yaml' })]));
 });
 
+it("rewrites skill references only in workspace files, leaving other tools' files as they are", async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  const before = { agents: files['AGENTS.md'], claude: files['CLAUDE.md'] };
+  files['AGENTS.md'] = 'Use `.agents/skills/custom/SKILL.md`.\n';
+  files['CLAUDE.md'] = 'Use `.agents/skills/custom/SKILL.md`.\n';
+  try {
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers, body: JSON.stringify({ path: '.agents/skills/custom/SKILL.md', slug: 'renamed', content: '---\nname: renamed\n---\n', revision: 'before' }) });
+    expect(response.status).toBe(200);
+    const tree = writes.find(w => w.endpoint === '/git/trees')?.body.tree;
+    expect(tree).toContainEqual(expect.objectContaining({ path: 'AGENTS.md', content: 'Use `.agents/skills/renamed/SKILL.md`.\n' }));
+    expect(tree.map((entry: any) => entry.path)).not.toContain('CLAUDE.md');
+  } finally {
+    files['AGENTS.md'] = before.agents;
+    files['CLAUDE.md'] = before.claude;
+  }
+});
+
+it('refuses to rename a skill outside the agent workspaces', async () => {
+  const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
+  for (const [file, slug] of [['.claude/skills/review/SKILL.md', 'renamed'], ['.agent/skills/review/SKILL.md', 'renamed']]) {
+    const response = await fetch(`${base}/api/agent-resources/rename-skill`, { method: 'POST', headers, body: JSON.stringify({ path: file, slug, content: '---\nname: renamed\n---\n', revision: 'before' }) });
+    expect(response.status).toBe(403);
+  }
+  expect(writes).toEqual([]);
+});
+
 it.each(['.agents/skills/custom/agents/openai.yaml', 'CLAUDE.md', '.claude/CLAUDE.md', '.claude/skills/review/SKILL.md', 'GEMINI.md', '.agent/skills/review/SKILL.md', '.agents/skills/format-tests.md', '.codex/agents/reviewer.toml'])("leaves other tools' files out of the agent pages: %s", async (path) => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
   expect((await fetch(`${base}/api/agent-resources/read?path=${encodeURIComponent(path)}`, { headers })).status).toBe(403);
