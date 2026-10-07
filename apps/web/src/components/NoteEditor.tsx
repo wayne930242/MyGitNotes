@@ -140,7 +140,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const historyTarget = useMemo(() => ({ path: note.path, notebookId: note.notebookId }), [note.path, note.notebookId]);
   // The history compares and keeps the note as saving it would write the file; a restored file goes back into the editor's fields.
   const { content: sessionContent, metadata: sessionMetadata, setContent: setSessionContent, setMetadata: setSessionMetadata } = session;
-  const stampFallback = useMemo(() => new Date(), [note.path]);
+  const [stampFallback] = useState(() => new Date());
   const currentFile = useCallback((latest: string | null) => currentNoteFile(note.path, sessionMetadata, sessionContent, latest, stampFallback), [note.path, sessionContent, sessionMetadata, stampFallback]);
   const restoreFile = useCallback((text: string) => {
     const parsed = parseNoteFile(text, note.path);
