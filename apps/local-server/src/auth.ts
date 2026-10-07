@@ -186,6 +186,9 @@ export function signInRouter(services: AuthServices): Router {
     try {
       const provider = providerFor(await providerSite(req));
       if (req.params.provider !== provider.type) throw new Error('This login provider is not configured.');
+      // Installing or reconfiguring the GitHub App on github.com returns here without a state this site issued.
+      // That code carries no CSRF or PKCE binding, so it is never redeemed; a fresh sign-in completes at once instead.
+      if (provider.type === 'github' && !req.query.state && typeof req.query.setup_action === 'string') return res.redirect('/api/auth/github');
       const pending = await sessions.finishSignIn(req, res, String(req.query.state || ''));
       if (!pending) throw new Error('Invalid or expired OAuth state. Start sign-in again.');
       if (pending.realm !== provider.realm || typeof req.query.code !== 'string') throw new Error('OAuth request expired. Start sign-in again.');

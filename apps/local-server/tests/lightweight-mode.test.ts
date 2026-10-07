@@ -97,6 +97,15 @@ describe('a lightweight deployment that lets each visitor choose a repository', 
     expect((await fetch(`${base}/api/auth/github/callback?state=${new URL(start.headers.get('location')!).searchParams.get('state')}&code=fixture`, { redirect: 'manual' })).status).toBe(400);
   });
 
+  it('restarts sign-in, without redeeming the code, when GitHub returns from installing the app', async () => {
+    const back = await fetch(`${base}/api/auth/github/callback?code=fixture&installation_id=5&setup_action=install`, { redirect: 'manual' });
+    expect(back.status).toBe(302);
+    expect(back.headers.get('location')).toBe('/api/auth/github');
+    expect(cookieOf(back, 'gh_notes_session')).toBeUndefined();
+    expect(vi.mocked(globalThis.fetch).mock.calls.some(([url]) => String(url) === 'https://github.com/login/oauth/access_token')).toBe(false);
+    expect((await fetch(`${base}/api/auth/github/callback?code=fixture`, { redirect: 'manual' })).status).toBe(400);
+  });
+
   it('asks to choose a repository, lists the granted ones the visitor can write, and opens the chosen one', async () => {
     const session = await signIn();
     const setup = await fetch(`${base}/api/workspace`, { headers: { Cookie: session } });
