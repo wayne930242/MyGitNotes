@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +56,8 @@ export interface PiSessionListener {
  * Commands that name a path (switch_session, export_html) stay out, so the bridge alone picks the files Pi opens.
  */
 const CLIENT_COMMANDS = new Set(['prompt', 'steer', 'follow_up', 'abort', 'clear_queue', 'new_session', 'get_state', 'get_messages', 'extension_ui_response', 'get_available_models', 'set_model', 'get_available_thinking_levels', 'set_thinking_level', 'get_commands', 'compact', 'set_session_name', 'get_session_stats', 'bash', 'abort_bash']);
+/** The commands that run a shell, which a session started with `shell: false` refuses. */
+const SHELL_COMMANDS = new Set(['bash', 'abort_bash']);
 const DIALOG_METHODS = new Set(['select', 'confirm', 'input', 'editor']);
 /** Fire-and-forget UI state keyed by extension; the latest of each is replayed to a client that attaches later. */
 const STATE_KEYS: Record<string, string> = { setStatus: 'statusKey', setWidget: 'widgetKey' };
@@ -72,6 +75,30 @@ export const WEB_CHAT_PROMPT = ["You are running inside MyGitNotes' web chat pan
 export const WEB_TOOLS_EXTENSION = fileURLToPath(new URL('./pi-web-tools-extension.mjs', import.meta.url));
 /** Appended to the web chat prompt when the note tools edit the page's working changes. */
 export const WEB_TOOLS_PROMPT = "Edit the workspace's notes only with the mygitnotes_* tools. They change the person's working changes in their browser and never commit: the person reviews and commits them, and a deleted note waits in their trash until then.";
+const SESSION_HEADER_LIMIT = 64 * 1024;
+
+/**
+ * The session file a start may resume: an existing Pi session file inside the home directory whose header
+ * records `cwd` as its folder. Anything else (gone, moved, another folder's) is not resumable, and Pi starts
+ * a new conversation instead.
+ */
+export function resumableSession(file: unknown, cwd: string): string | undefined {
+  if (typeof file !== 'string' || !path.isAbsolute(file) || !file.endsWith('.jsonl')) return undefined;
+  try {
+    const real = fs.realpathSync(file);
+    const home = fs.realpathSync(os.homedir());
+    if (!real.startsWith(`${home}${path.sep}`) || !fs.statSync(real).isFile()) return undefined;
+    const handle = fs.openSync(real, 'r');
+    const buffer = Buffer.alloc(SESSION_HEADER_LIMIT);
+    const length = fs.readSync(handle, buffer, 0, SESSION_HEADER_LIMIT, 0);
+    fs.closeSync(handle);
+    const header = JSON.parse(buffer.subarray(0, length).toString('utf8').split('\n', 1)[0]) as { type?: unknown; cwd?: unknown; };
+    return header.type === 'session' && typeof header.cwd === 'string' && fs.realpathSync(header.cwd) === cwd ? real : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** How long a note tool waits for the page to answer. */
 export const WEB_TOOL_TIMEOUT_MS = 30_000;
 const STDERR_LIMIT = 8000;
@@ -157,18 +184,23 @@ export class PiSession {
   private readonly exited: Promise<void>;
   private stderr = '';
 
+  /** Whether a client may run shell commands through `bash`; a session in a hosted sandbox refuses them. */
+  private readonly shell: boolean;
+
   /** `resume` names a session file to continue; without it Pi starts a new conversation. */
   /**
    * `webTools.url` is where Pi's note tools reach the bridge (see `callWebTool`); with it, Pi edits notes through
    * the page that holds the panel instead of its own file tools.
+   * `piArgs` are appended to Pi's arguments and `env` to its environment; `shell: false` refuses `bash` from clients.
    */
-  constructor({ cwd, location, resume, command = piCommand(), onExit, webTools }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; webTools?: { url: string; }; }) {
+  constructor({ cwd, location, resume, command = piCommand(), onExit, webTools, piArgs = [], env: extraEnv = {}, shell = true }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; webTools?: { url: string; }; piArgs?: string[]; env?: Record<string, string>; shell?: boolean; }) {
+    this.shell = shell;
     this.info = { id: randomUUID(), cwd, location, status: 'starting', startedAt: new Date().toISOString() };
     this.webToolToken = webTools ? randomBytes(32).toString('base64url') : undefined;
     const prompt = webTools ? `${WEB_CHAT_PROMPT}\n${WEB_TOOLS_PROMPT}` : WEB_CHAT_PROMPT;
     // No --approve: project trust stays Pi's decision, as it is in the user's terminal.
-    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, ...webTools ? ['--extension', WEB_TOOLS_EXTENSION] : [], '--append-system-prompt', prompt, ...resume ? ['--session', resume] : []];
-    const env = webTools ? { ...process.env, MYGITNOTES_WEB_TOOLS_URL: webTools.url, MYGITNOTES_WEB_TOOLS_TOKEN: this.webToolToken } : process.env;
+    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, ...webTools ? ['--extension', WEB_TOOLS_EXTENSION] : [], '--append-system-prompt', prompt, ...resume ? ['--session', resume] : [], ...piArgs];
+    const env = { ...process.env, ...extraEnv, ...webTools ? { MYGITNOTES_WEB_TOOLS_URL: webTools.url, MYGITNOTES_WEB_TOOLS_TOKEN: this.webToolToken } : {} };
     this.child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
@@ -260,7 +292,7 @@ export class PiSession {
       if (call) this.settleWebTool(command.id, () => typeof command.error === 'string' ? call.reject(new WebToolError(command.error)) : call.resolve(command.result));
       return undefined;
     }
-    if (!isRecord(command) || typeof command.type !== 'string' || !CLIENT_COMMANDS.has(command.type)) return 'Command is not allowed.';
+    if (!isRecord(command) || typeof command.type !== 'string' || !CLIENT_COMMANDS.has(command.type) || (!this.shell && SHELL_COMMANDS.has(command.type))) return 'Command is not allowed.';
     if (!this.alive) return 'The Pi session has ended.';
     if (command.type === 'extension_ui_response' && typeof command.id === 'string' && this.openDialogs.delete(command.id)) {
       this.broadcast(JSON.stringify({ type: 'bridge_ui_resolved', id: command.id }));

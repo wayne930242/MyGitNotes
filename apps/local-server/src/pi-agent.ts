@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo, WebToolError } from './pi-session.js';
+import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo, resumableSession, WebToolError } from './pi-session.js';
 import { asLocal, noteRepository, repositoryOrHome } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
@@ -73,29 +73,7 @@ export interface AgentFolder {
   location: PiLocation;
 }
 
-const SESSION_HEADER_LIMIT = 64 * 1024;
-
-/**
- * The session file a start may resume: an existing Pi session file inside the home directory whose header
- * records `cwd` as its folder. Anything else (gone, moved, another folder's) is not resumable, and Pi starts
- * a new conversation instead.
- */
-export function resumableSession(file: unknown, cwd: string): string | undefined {
-  if (typeof file !== 'string' || !path.isAbsolute(file) || !file.endsWith('.jsonl')) return undefined;
-  try {
-    const real = fs.realpathSync(file);
-    const home = fs.realpathSync(os.homedir());
-    if (!real.startsWith(`${home}${path.sep}`) || !fs.statSync(real).isFile()) return undefined;
-    const handle = fs.openSync(real, 'r');
-    const buffer = Buffer.alloc(SESSION_HEADER_LIMIT);
-    const length = fs.readSync(handle, buffer, 0, SESSION_HEADER_LIMIT, 0);
-    fs.closeSync(handle);
-    const header = JSON.parse(buffer.subarray(0, length).toString('utf8').split('\n', 1)[0]) as { type?: unknown; cwd?: unknown; };
-    return header.type === 'session' && typeof header.cwd === 'string' && fs.realpathSync(header.cwd) === cwd ? real : undefined;
-  } catch {
-    return undefined;
-  }
-}
+export { resumableSession } from './pi-session.js';
 
 /** Resolves the agent workspace the panel picked, the repository root or a folder holding core instructions, to the directory Pi starts in. */
 async function workspaceFolder(res: express.Response, repository: unknown, folder: unknown): Promise<AgentFolder> {
