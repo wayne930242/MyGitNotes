@@ -151,6 +151,8 @@ export interface PiAgentValue {
   /** A start is on its way: the automatic one has not been sent yet, or Pi is being started (a sandbox may take half a minute). */
   starting: boolean;
   start: () => Promise<void>;
+  /** The agent panel is showing: the first call starts Pi, so nobody who never opens it pays for a hosted sandbox. */
+  panelOpened: () => void;
   /**
    * Sends what the message box holds, read as Pi's terminal editor reads it (see parseComposerInput); returns false
    * when it is not complete enough to send, such as /name without a name.
@@ -453,17 +455,19 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     };
   }, [enabled, disconnect]);
 
-  // Starts once, as soon as Pi is known to be installed and the workspace is known.
+  // Starts once, when the panel first shows and Pi is known to be installed and the workspace is known.
   const started = useRef(false);
   const [autoStarted, setAutoStarted] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const panelOpened = useCallback(() => setOpened(true), []);
   // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
   const ready = enabled && piAvailable && agentGate.allowed && Boolean(homeRepository);
   useEffect(() => {
-    if (!ready || started.current) return;
+    if (!ready || !opened || started.current) return;
     started.current = true;
     setAutoStarted(true);
     void start();
-  }, [ready, start]);
+  }, [ready, opened, start]);
 
   // The live conversation's file is the one to resume; an ended session's is not.
   useEffect(() => {
@@ -492,8 +496,9 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     connected,
     transcript,
     error,
-    starting: starting || (ready && !autoStarted),
+    starting: starting || (ready && opened && !autoStarted),
     start,
+    panelOpened,
     send: (text, focus) => {
       const input = parseComposerInput(text);
       // A message sent while Pi works steers the current run, as Enter does in Pi's terminal.
@@ -592,7 +597,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, autoStarted, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, opened, autoStarted, panelOpened, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

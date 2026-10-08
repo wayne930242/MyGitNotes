@@ -175,7 +175,8 @@ function AgentConversation() {
   const caret = target?.caret ?? noCaret;
   const selection = useSyncExternalStore(caret.subscribe, caret.get);
   const position = target?.caret && target.content ? selectionPosition(target.content(), selection, target.lineNumberOffset) : undefined;
-  const { locate, loadCommands, editorText, takeEditorText } = agent;
+  const { locate, loadCommands, editorText, takeEditorText, panelOpened } = agent;
+  useEffect(panelOpened, [panelOpened]);
 
   // An extension (such as robot_hand) placed text in the message box for the user to review and send.
   const [shownEditorText, setShownEditorText] = useState<PiEditorText | null>(null);

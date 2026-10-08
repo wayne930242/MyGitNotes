@@ -60,19 +60,24 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** Reports the provider's value after each render, so a test acts on the latest one. */
-function Probe({ onValue }: { onValue: (value: PiAgentValue) => void; }) {
+/** Reports the provider's value after each render, so a test acts on the latest one; it shows the panel unless told not to. */
+function Probe({ onValue, opened }: { onValue: (value: PiAgentValue) => void; opened: boolean; }) {
   const value = usePiAgent();
   useEffect(() => onValue(value));
+  const { panelOpened } = value;
+  useEffect(() => {
+    if (opened) panelOpened();
+  }, [opened, panelOpened]);
   return null;
 }
 
-function mount(features: WebFeature[] = [], webTools?: WebToolHandler) {
+function mount(features: WebFeature[] = [], webTools?: WebToolHandler, opened = true) {
   const seen: { current?: PiAgentValue; } = {};
   render(
     <WebFeaturesProvider features={features}>
       <PiAgentProvider enabled homeRepository={home} workspaceTitle='Knowledge Base' notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'] }]} webTools={webTools}>
         <Probe
+          opened={opened}
           onValue={value => {
             seen.current = value;
           }}
@@ -82,6 +87,18 @@ function mount(features: WebFeature[] = [], webTools?: WebToolHandler) {
   );
   return seen;
 }
+
+it('starts nothing until the panel first shows, then starts once', async () => {
+  const agent = mount([], undefined, false);
+  await waitFor(() => expect(requests.map(request => request.method)).toEqual(['GET']));
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(requests.map(request => request.method)).toEqual(['GET']);
+  expect(agent.current?.starting).toBe(false);
+  act(() => agent.current!.panelOpened());
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  act(() => agent.current!.panelOpened());
+  expect(requests.filter(request => request.method === 'POST')).toHaveLength(1);
+});
 
 it("starts at the home repository's root workspace by default, resuming no conversation yet", async () => {
   mount();
