@@ -178,6 +178,24 @@ describe('reading a repository on an Enterprise site', () => {
   });
 });
 
+describe('the shared cache', () => {
+  it('keys an Enterprise repository by its site and leaves github.com keys as they were', async () => {
+    const keys = async (url?: string) => {
+      const stored: string[] = [];
+      const cache = { get: async (names: string[]) => names.map(() => null), set: async (entries: [string, string][]) => void stored.push(...entries.map(([key]) => key)) };
+      const api = url ? 'https://ghe.example.com/api/v3' : 'https://api.github.com';
+      const site = siteFixture(api, url ? 'https://ghe.example.com/api/graphql' : 'https://api.github.com/graphql');
+      await openRemoteHome(github(url), 'token', site.request, cache).reader.notes();
+      return stored;
+    };
+    const enterprise = await keys('https://ghe.example.com'), com = await keys();
+    expect(enterprise.length).toBeGreaterThan(0);
+    expect(com.length).toBeGreaterThan(0);
+    expect(enterprise.every(key => /^mgn:[a-z]+:v?\d+:https:\/\/ghe\.example\.com\/owner\/repo:/.test(key))).toBe(true);
+    expect(com.every(key => /^mgn:[a-z]+:v?\d+:owner\/repo:/.test(key))).toBe(true);
+  });
+});
+
 describe('archive downloads on an Enterprise site', () => {
   const tarball = (location: string) => {
     const request = vi.fn(async (input: any) => String(input).includes('/tarball/') ? new Response(null, { status: 302, headers: { location } }) : new Response('archive bytes')) as unknown as typeof fetch;
