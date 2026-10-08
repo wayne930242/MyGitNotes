@@ -93,6 +93,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   services.routes?.(app, services);
   app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
   app.get('/api/history/events', serverlessHistoryEvents);
+  if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));
@@ -305,7 +306,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         const target = await namedRemote(res, repository);
         if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
         const receipt = await target.reader.commitNotes(notes, revision, message, documents, newVersion(version));
-        res.json({ ...receipt, ...await publishedGists(res, notes) });
+        // A deleted note publishes nothing.
+        res.json({ ...receipt, ...await publishedGists(res, notes.filter((note: { delete?: boolean; }) => note?.delete !== true)) });
       } catch (error) {
         fail(res, error);
       }

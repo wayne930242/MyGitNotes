@@ -44,6 +44,17 @@ describe('remote note history', { timeout: 20_000 }, () => {
     await expect(f.reader().commitNotes([{ path: 'notes/ex/a.md', content: 'x', metadata: {} }, { path: 'notes/ex/work/b.md', content: 'y', metadata: {} }], f.head(), 'Both', [], { path: 'notes/ex/a.md', label: {}, today: '2026-10-07' })).rejects.toThrow('alone');
   });
 
+  it('deletes a working note with its version file in the same commit as the other changes, and refuses a note that is gone', async () => {
+    const file = versionFilePath('notes/ex/a.md');
+    const f = githubFixture({ [file]: 'versions: []\n' }, { hexIds: true });
+    const receipt = await f.reader().commitNotes([{ path: 'notes/ex/a.md', delete: true }, { path: 'notes/ex/work/b.md', content: 'kept\n', metadata: {} }], f.head(), 'Remove alpha');
+    expect(receipt.changedPaths).toEqual([file, 'notes/ex/a.md', 'notes/ex/work/b.md'].sort());
+    expect(f.text('notes/ex/a.md')).toBeUndefined();
+    expect(f.text(file)).toBeUndefined();
+    await expect(f.reader().commitNotes([{ path: 'notes/ex/a.md', delete: true }], f.head(), 'Again')).rejects.toMatchObject({ status: 409 });
+    await expect(f.reader().commitNotes([{ path: 'notes/ex/work/b.md', delete: true }], f.head(), 'Versioned', [], { path: 'notes/ex/work/b.md', label: {}, today: '2026-10-08' })).rejects.toThrow('alone');
+  });
+
   it('writes version files only in the versions scope, and lets other scopes move or delete them', async () => {
     const f = githubFixture({}, { hexIds: true });
     const file = versionFilePath('notes/ex/a.md');

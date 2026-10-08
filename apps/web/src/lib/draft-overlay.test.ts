@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_NOTE_QUERY, type NotebookFacets, type NoteListItem, type NoteQuery, noteRefKey } from '@mygitnotes/core/note-query';
-import { overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts } from './draft-overlay.js';
+import { overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts, withoutDeletedDrafts } from './draft-overlay.js';
 import type { WorkingNotes } from './working-notes.js';
 import type { NoteItem } from './types.js';
 
 const row = (path: string, extra: Partial<NoteListItem> = {}): NoteListItem => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {}, ...extra });
 const note = (path: string, extra: Partial<NoteItem> = {}): NoteItem => ({ id: path, path, notebookId: 'life', title: path, tags: [], metadata: {}, content: '', ...extra });
 const query = (extra: Partial<NoteQuery> = {}): NoteQuery => ({ ...DEFAULT_NOTE_QUERY, notebookId: 'life', ...extra });
-const drafts = (...entries: { note: NoteItem; base: NoteItem | null; }[]): WorkingNotes => Object.fromEntries(entries.map(entry => [noteRefKey(entry.note), entry]));
+const drafts = (...entries: { note: NoteItem; base: NoteItem | null; deleted?: true; }[]): WorkingNotes => Object.fromEntries(entries.map(entry => [noteRefKey(entry.note), entry]));
 
 describe('draft rows over a loaded page', () => {
   it('updates a drafted row in place and keeps the others', () => {
@@ -117,5 +117,21 @@ describe('draft paths, lookups and graph', () => {
     const result = overlayGraphDrafts(graph, [draft('one', '[b](b.md) [elsewhere](only-two.md)'), draft('two', '[b](b.md) [here](only-two.md)')], { one: 'first', two: 'second' });
     expect(result.nodes).toHaveLength(4);
     expect(result.links).toEqual([{ source: 'one:notes/shared/a.md', target: 'one:notes/shared/b.md' }, { source: 'two:notes/shared/a.md', target: 'two:notes/shared/only-two.md' }]);
+  });
+});
+
+describe('deleted drafts', () => {
+  const gone = note('notes/gone.md', { tags: ['old'] });
+  const deleted = drafts({ note: gone, base: gone, deleted: true });
+
+  it('take the note out of rows, paths, lookups, facets and the graph', () => {
+    expect(overlayDraftRows([row('notes/gone.md'), row('notes/kept.md')], query(), deleted)).toEqual({ notes: [row('notes/kept.md')], uncommitted: [], removed: 1 });
+    expect(overlayDraftPaths([{ notebookId: 'life', path: 'notes/gone.md' }], query(), deleted)).toEqual([]);
+    expect(overlayDraftLookup([{ notebookId: 'life', path: 'notes/gone.md' }], [row('notes/gone.md')], deleted)).toEqual([]);
+    const facets: NotebookFacets = { total: 1, hidden: 0, statuses: {}, tags: { old: 1 }, directories: { notes: 1 }, compilations: { total: 0, statuses: {}, tags: {} }, outlines: { total: 0, statuses: {}, tags: {} } };
+    expect(overlayDraftFacets({ life: facets }, deleted, false).life).toMatchObject({ total: 0, tags: {} });
+    const id = noteRefKey(gone), other = noteRefKey(note('notes/kept.md'));
+    const graph = { nodes: [{ id, path: gone.path, title: 'g', notebookId: 'life', tags: [], inDegree: 0, outDegree: 1, val: 3 }, { id: other, path: 'notes/kept.md', title: 'k', notebookId: 'life', tags: [], inDegree: 1, outDegree: 0, val: 3 }], links: [{ source: id, target: other }] };
+    expect(withoutDeletedDrafts(graph, deleted)).toEqual({ nodes: [graph.nodes[1]], links: [] });
   });
 });

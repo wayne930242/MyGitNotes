@@ -7,7 +7,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
 import { agentClientAllowed, type AgentFolder, createPiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
-import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY, WEB_CHAT_PROMPT } from './pi-session.js';
+import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY, WEB_CHAT_PROMPT, WEB_TOOLS_EXTENSION, WEB_TOOLS_PROMPT } from './pi-session.js';
 
 // A stand-in for `pi --mode rpc`: answers get_state with its session file (the --session one, else a new one per conversation),
 // echoes prompts with its cwd and argv, asks one dialog, and sets or clears a status.
@@ -47,6 +47,10 @@ process.stdin.on('data', chunk => {
       out({ type: 'extension_ui_request', id: 's2', method: 'setStatus', statusKey: 'gone', statusText: 'soon cleared' });
       out({ type: 'extension_ui_request', id: 's3', method: 'setStatus', statusKey: 'gone' });
       out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'status set' }] } });
+    } else if (command.type === 'prompt' && command.message.startsWith('tool ')) {
+      // What the web tools extension does: call the bridge with the session's token, and report the answer.
+      fetch(process.env.MYGITNOTES_WEB_TOOLS_URL, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + (command.message === 'tool forged' ? 'x' : process.env.MYGITNOTES_WEB_TOOLS_TOKEN) }, body: JSON.stringify({ tool: 'read_note', arguments: { path: 'notes/a.md' } }) })
+        .then(async res => out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ message: command.message, status: res.status, body: await res.json() }) }] } }));
     } else if (command.type === 'prompt' && command.message === 'ask') out({ type: 'extension_ui_request', id: 'dialog-1', method: 'select', title: 'Pick', options: ['A', 'B'] });
     else if (command.type === 'prompt') out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: JSON.stringify({ cwd: process.cwd(), args: process.argv.slice(2), message: command.message }) }] } });
     if (command.type === 'extension_ui_response') out({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'answered ' + command.value }] } });
@@ -77,7 +81,7 @@ function testFolder(workspace: string) {
   };
 }
 
-async function start() {
+async function start({ webTools = false } = {}) {
   // Inside the home directory, which is the only place a session may run.
   temp = fs.mkdtempSync(path.join(os.homedir(), '.mygitnotes-pi-agent-test-'));
   const script = path.join(temp, 'fake-pi.cjs');
@@ -86,9 +90,11 @@ async function start() {
   fs.writeFileSync(command, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
   const workspace = fs.realpathSync(temp);
   // Repository `home` lives at the temp root; any folder name maps to the directory of that name inside it.
-  agent = createPiAgent({ command, resolveFolder: testFolder(workspace) });
+  agent = createPiAgent({ command, resolveFolder: testFolder(workspace), webTools });
   const app = express();
   app.use(express.json());
+  // As createApp does: Pi's own calls are answered ahead of the workspace a signed-in request opens.
+  if (agent.tools) app.use('/api/pi', agent.tools);
   app.use('/api/pi', agent.router);
   server = createServer(app);
   const piAgent = agent;
@@ -436,5 +442,68 @@ describe('jsonlSplitter', () => {
     feed(Buffer.from('{"a":"x\u2028y"}\r\n{"b":'));
     feed(Buffer.from('1}\n'));
     expect(lines).toEqual(['{"a":"x\u2028y"}', '{"b":1}']);
+  });
+});
+
+describe('web agent note tools', () => {
+  const ask = async (client: ReturnType<typeof connect>, message: string) => {
+    client.send({ id: message, type: 'prompt', message });
+    const { status, body } = JSON.parse(assistantText(await client.next(record => record.type === 'message_end' && assistantText(record).includes(`"message":"${message}","status"`))));
+    return { status, body } as { status: number; body: Record<string, unknown>; };
+  };
+
+  it("gives Pi the tools extension and relays its calls to the page holding the panel, answering with the page's result", async () => {
+    const { base, port } = await start({ webTools: true });
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    client.send({ id: 'argv', type: 'prompt', message: 'argv' });
+    const args = JSON.parse(assistantText(await client.next(record => record.type === 'message_end'))).args as string[];
+    expect(args).toEqual(expect.arrayContaining(['--extension', WEB_TOOLS_EXTENSION]));
+    expect(args[args.indexOf('--append-system-prompt') + 1]).toBe(`${WEB_CHAT_PROMPT}\n${WEB_TOOLS_PROMPT}`);
+    const answered = ask(client, 'tool read');
+    const request = await client.next(record => record.type === 'web_tool_request');
+    expect(request).toMatchObject({ tool: 'read_note', arguments: { path: 'notes/a.md' } });
+    client.send({ type: 'web_tool_response', id: request.id, result: { source: 'working', content: '# A' } });
+    expect(await answered).toEqual({ status: 200, body: { result: { source: 'working', content: '# A' } } });
+  });
+
+  it("passes on the page's refusal, and refuses a call without the session's token or without a page", async () => {
+    const { base, port } = await start({ webTools: true });
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    const refused = ask(client, 'tool refused');
+    const request = await client.next(record => record.type === 'web_tool_request');
+    client.send({ type: 'web_tool_response', id: request.id, error: 'The person is editing this note.' });
+    expect(await refused).toEqual({ status: 409, body: { error: 'The person is editing this note.' } });
+    expect(await ask(client, 'tool forged')).toEqual({ status: 401, body: { error: 'Unknown note tool session.' } });
+    await expect(agent!.manager.session!.callWebTool('read_note', {}, 50)).rejects.toThrow('did not answer');
+    client.socket.close();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    await expect(agent!.manager.session!.callWebTool('read_note', {})).rejects.toThrow('Open MyGitNotes in a browser');
+  });
+
+  it('fails a call when the page that was asked leaves first', async () => {
+    const { base, port } = await start({ webTools: true });
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    await client.next(record => record.type === 'bridge_status');
+    const pending = agent!.manager.session!.callWebTool('read_note', {});
+    await client.next(record => record.type === 'web_tool_request');
+    client.socket.close();
+    await expect(pending).rejects.toThrow('closed before it answered');
+  });
+
+  it('offers neither the tools nor their route without webTools', async () => {
+    const { base, port } = await start();
+    await post(base, 'POST');
+    const client = connect(port, base);
+    await client.opened;
+    client.send({ id: 'argv', type: 'prompt', message: 'argv' });
+    const args = JSON.parse(assistantText(await client.next(record => record.type === 'message_end'))).args as string[];
+    expect(args).not.toContain(WEB_TOOLS_EXTENSION);
+    expect((await fetch(`${base}/api/pi/web-tools`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(404);
   });
 });

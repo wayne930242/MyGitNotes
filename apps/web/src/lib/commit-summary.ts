@@ -6,6 +6,8 @@ export interface NoteChangeFacts {
   path: string;
   title: string;
   added: boolean;
+  /** The note is deleted; its other facts are left empty. */
+  deleted?: boolean;
   titleFrom?: string;
   statusFrom?: string;
   statusTo?: string;
@@ -56,7 +58,8 @@ export function textSize(content: string): number {
 
 const minus = <T>(items: T[], other: T[]) => items.filter(item => !other.includes(item));
 
-export function noteChangeFacts(note: NoteItem, base: NoteItem | null): NoteChangeFacts {
+export function noteChangeFacts(note: NoteItem, base: NoteItem | null, deleted = false): NoteChangeFacts {
+  if (deleted) return { path: note.path, title: note.title || note.path.split('/').pop() || note.path, added: false, deleted: true, tagsAdded: [], tagsRemoved: [], sectionsAdded: [], sectionsRemoved: [], tasksDone: 0, tasksReopened: 0, tasksAdded: 0, textDelta: -textSize(note.content) };
   const before = base ?? { title: '', status: undefined, tags: [], content: '' };
   const beforeTasks = tasks(before.content), afterTasks = tasks(note.content);
   let tasksDone = 0, tasksReopened = 0, tasksAdded = 0;
@@ -73,6 +76,7 @@ export function noteChangeFacts(note: NoteItem, base: NoteItem | null): NoteChan
 /** The phrases that describe one note's change, most telling first. */
 export function changePhrases(facts: NoteChangeFacts, t: Translate): string[] {
   if (facts.added) return [t('commitSummary.created')];
+  if (facts.deleted) return [t('commitSummary.deleted')];
   const phrases: string[] = [];
   if (facts.titleFrom !== undefined) phrases.push(t('commitSummary.renamed', { from: facts.titleFrom }));
   if (facts.statusFrom !== undefined || facts.statusTo !== undefined) phrases.push(t('commitSummary.status', { from: facts.statusFrom || '—', to: facts.statusTo || '—' }));
@@ -103,14 +107,14 @@ const separator = (t: Translate) => t('commitSummary.separator');
 
 /** The machine-readable trailers a commit of these notes and documents carries, always read from the facts. */
 function commitTrailers(notes: NoteChangeFacts[], documents: string[]): string[] {
-  return [...notes.map(facts => `${facts.added ? 'Note-Added' : 'Note-Modified'}: ${facts.path}`), ...documents.map(path => `Document-Modified: ${path}`)];
+  return [...notes.map(facts => `${facts.added ? 'Note-Added' : facts.deleted ? 'Note-Deleted' : 'Note-Modified'}: ${facts.path}`), ...documents.map(path => `Document-Modified: ${path}`)];
 }
 
 /** The longest message the repository source accepts. */
 const MESSAGE_LIMIT = 4000;
 
 /** Trailer lines of the kinds `commitTrailers` writes, whatever their case. */
-const TRAILER_LINE = /^(Note-Added|Note-Modified|Document-Modified):/i;
+const TRAILER_LINE = /^(Note-Added|Note-Modified|Note-Deleted|Document-Modified):/i;
 
 /**
  * A commit message an edition's polish rewrote: its subject and body, with every trailer line it wrote or

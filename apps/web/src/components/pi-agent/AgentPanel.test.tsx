@@ -29,7 +29,7 @@ const repositories = [{ id: home, notebooks: ['nb', 'blog'] }];
 const workspaces = [{ repository: home, folder: '', hasInstructions: true, parents: [] }, { repository: home, folder: 'blog', hasInstructions: true, parents: [''] }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -278,4 +278,32 @@ it("shows an edition gate's reason in place of the panel, and the panel again on
 it('gives a denied agent panel a plain reason when the gate names none', () => {
   render(createElement(WebFeaturesProvider, { features: [{ id: 'plans', gate: () => ({ allowed: false }) }] }, createElement(PiAgentContext.Provider, { value: agent() }, createElement(AgentPanel))));
   expect(screen.getByRole('status').textContent).toBe('This feature is not available to you.');
+});
+
+it("puts Pi's setup in place of the message box when Pi answered with no model, and asks again on request", () => {
+  const value = agent({ modelState: { models: [], levels: [], loaded: true } });
+  panel(value);
+  expect(screen.queryByRole('textbox', { name: 'Message to Pi' })).toBeNull();
+  expect(screen.getByText('Pi has no model it can use yet.')).toBeTruthy();
+  expect(screen.getByRole('link', { name: 'How to set up a provider' }).getAttribute('href')).toContain('providers.md');
+  fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+  expect(value.checkModels).toHaveBeenCalled();
+});
+
+it('keeps the message box while the model list has not arrived, and once it has models', () => {
+  panel(agent());
+  expect(screen.getByRole('textbox', { name: 'Message to Pi' })).toBeTruthy();
+  cleanup();
+  panel(agent({ modelState: { models: [{ value: 'openai/gpt', label: 'GPT (openai)' }], levels: [], loaded: true } }));
+  expect(screen.getByRole('textbox', { name: 'Message to Pi' })).toBeTruthy();
+  expect(screen.queryByText('Pi has no model it can use yet.')).toBeNull();
+});
+
+it("shows an edition's model setup instead of Pi's own, with the check-again button", () => {
+  const value = agent({ modelState: { models: [], levels: [], loaded: true } });
+  const feature: WebFeature = { id: 'pro', agentModelSetup: createElement('p', null, 'Add a key in Settings') };
+  render(createElement(WebFeaturesProvider, { features: [feature] }, createElement(PiAgentContext.Provider, { value }, createElement(AgentPanel))));
+  expect(screen.getByText('Add a key in Settings')).toBeTruthy();
+  expect(screen.queryByText('Pi has no model it can use yet.')).toBeNull();
+  expect(screen.getByRole('button', { name: 'Check again' })).toBeTruthy();
 });

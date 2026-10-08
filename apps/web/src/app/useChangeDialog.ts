@@ -35,7 +35,7 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
   const documentError = (repository: string, file: string) => documents.find(document => document.repository === repository && document.file === file)?.error;
   const panelRemoteChanges: FileChange[] | undefined = remote
     ? [
-      ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, repository: repositoryFor(entry.note.notebookId)?.id, kind: entry.blocked ? 'conflict' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })),
+      ...Object.values(activeWorkingNotes).map(entry => ({ path: entry.note.path, repository: repositoryFor(entry.note.notebookId)?.id, kind: entry.blocked ? 'conflict' as const : entry.deleted ? 'deleted' as const : entry.base ? 'modified' as const : 'added' as const, tracked: Boolean(entry.base), revision: JSON.stringify(entry), available: canWriteNotebook(entry.note.notebookId) && !entry.blocked, staged: false, unstaged: true })),
       // Pending documents are listed only for repositories this requester may commit to.
       ...pendingDocuments.map(document => ({ path: document.file, repository: document.repository, kind: 'modified' as const, tracked: true, revision: document.diff, available: !document.error && !documentError(document.repository, document.file), staged: false, unstaged: true })),
     ]
@@ -56,7 +56,7 @@ export function useChangeDialog({ activeTab, agentSystemRef, remote, documents, 
       const notes: NoteChangeFacts[] = [], changedDocuments: string[] = [];
       for (const file of files) {
         const draft = draftOf(file);
-        if (draft) notes.push(noteChangeFacts(draft.note, draft.base));
+        if (draft) notes.push(noteChangeFacts(draft.note, draft.base, draft.deleted));
         else changedDocuments.push(file.path);
       }
       return { notes, documents: changedDocuments };

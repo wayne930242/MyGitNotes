@@ -62,6 +62,17 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
           throw error;
         }
         if (latest.revision !== expected) throw new Error('Remote changed during review. Retry Commit to check the latest revision.');
+        if (entry.deleted) {
+          // A deletion removes the note it was made from; a note changed since then is the person's to look at again.
+          if (!sameValue({ content: latest.content, metadata: latest.metadata }, { content: entry.base.content, metadata: entry.base.metadata })) {
+            const blocked = 'The note changed remotely after it was deleted here. Restore it from the trash and delete it again.';
+            stageWorkingNote(entry.note, entry.base, blocked, true);
+            throw new Error(`${entry.note.path}: ${blocked}`);
+          }
+          if (!sameValue(readWorkingNotes(scope)[entry.note.path], entry)) throw new Error('Local draft changed during review. Retry Commit.');
+          sent[entry.note.path] = entry;
+          continue;
+        }
         const merged = mergeNote(entry.base, entry.note, latest);
         if (merged.conflict) {
           const blocked = 'Remote changes conflict with this draft. Open the note and Refresh remote version.';
@@ -79,7 +90,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     }
     if (reviewRequired) throw new Error(t('changes.reviewRequired'));
     if (!Object.keys(sent).length && !sentDocuments.length) return [];
-    const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => ({ path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base })), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })), version);
+    const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => entry.deleted ? { path: entry.note.path, delete: true as const } : { path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base }), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })), version);
     for (const document of sentDocuments) {
       if (!settleDocumentDraft(document.client, repository.id, document, result.revision)) setActionError(t('changes.reviewRequired'));
       // The open notebook's document shows the committed page and any edit made meanwhile.

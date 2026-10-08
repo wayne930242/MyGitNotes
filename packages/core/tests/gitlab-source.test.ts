@@ -60,6 +60,12 @@ describe('GitLab remote contract', () => {
     expect(body.actions).toHaveLength(2);
     expect(body.actions.every((a: any) => a.last_commit_id === 'b'.repeat(40) && a.encoding === 'base64')).toBe(true);
   });
+  it('deletes a working note in a commit as a delete action', async () => {
+    const f = gitlabFixture(), r = reader(f);
+    await r.commitNotes([{ path: 'notes/ex/a.md', delete: true }], f.head, 'docs: remove a');
+    const body = JSON.parse(String(f.calls.find(c => c.init?.method === 'POST')!.init!.body));
+    expect(body.actions).toEqual([expect.objectContaining({ action: 'delete', file_path: 'notes/ex/a.md' })]);
+  });
   it('rejects stale and racing edits, symlinks and product writes without partial commits', async () => {
     const f = gitlabFixture();
     f.files.set('notes/ex/symlink.md', 'secret');

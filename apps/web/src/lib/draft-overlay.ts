@@ -38,26 +38,29 @@ export function overlayDraftRows(rows: NoteListItem[], query: NoteQuery, drafts:
       notes.push(row);
       continue;
     }
-    if (matches(draft.note, query)) notes.push(draft.note);
+    if (!draft.deleted && matches(draft.note, query)) notes.push(draft.note);
     else removed++;
   }
   const loaded = new Set(rows.map(noteRefKey));
-  const uncommitted = entries.filter(entry => entry.note.path !== options.hide && !loaded.has(noteRefKey(entry.note)) && matches(entry.note, query) && !matches(entry.base, query)).map(entry => entry.note);
+  const uncommitted = entries.filter(entry => !entry.deleted && entry.note.path !== options.hide && !loaded.has(noteRefKey(entry.note)) && matches(entry.note, query) && !matches(entry.base, query)).map(entry => entry.note);
   return { notes, uncommitted, removed };
 }
 
 export function overlayDraftPaths(notes: NoteRef[], query: NoteQuery, drafts: WorkingNotes): NoteRef[] {
   const entries = Object.values(drafts);
   if (!entries.length) return notes;
-  const kept = notes.filter(note => !drafts[noteRefKey(note)] || matches(drafts[noteRefKey(note)].note, query));
+  const kept = notes.filter(note => !drafts[noteRefKey(note)] || !drafts[noteRefKey(note)].deleted && matches(drafts[noteRefKey(note)].note, query));
   const known = new Set(kept.map(noteRefKey));
-  return [...kept, ...entries.filter(entry => !known.has(noteRefKey(entry.note)) && matches(entry.note, query)).map(entry => ({ notebookId: entry.note.notebookId, path: entry.note.path }))];
+  return [...kept, ...entries.filter(entry => !entry.deleted && !known.has(noteRefKey(entry.note)) && matches(entry.note, query)).map(entry => ({ notebookId: entry.note.notebookId, path: entry.note.path }))];
 }
 
 /** Lookup answers in the requested order, with a staged draft replacing the committed note. */
 export function overlayDraftLookup(refs: NoteRef[], notes: NoteListItem[], drafts: WorkingNotes): NoteListItem[] {
   const byKey = new Map(notes.map(note => [noteRefKey(note), note]));
-  return refs.map(ref => drafts[noteRefKey(ref)]?.note || byKey.get(noteRefKey(ref))).filter(Boolean) as NoteListItem[];
+  return refs.map(ref => {
+    const draft = drafts[noteRefKey(ref)];
+    return draft ? draft.deleted ? undefined : draft.note : byKey.get(noteRefKey(ref));
+  }).filter(Boolean) as NoteListItem[];
 }
 
 type FacetSource = Pick<NoteListItem, 'notebookId' | 'path' | 'status' | 'tags' | 'metadata' | 'kind'>;
@@ -97,13 +100,13 @@ export function overlayDraftFacets(notebooks: Record<string, NotebookFacets>, dr
   };
   for (const entry of entries) {
     if (entry.base) apply(entry.base, -1);
-    apply(entry.note, 1);
+    if (!entry.deleted) apply(entry.note, 1);
   }
   return result;
 }
 
 export function overlayDraftAgenda(agenda: NoteAgenda, drafts: WorkingNotes, options: { notebookId: string; showHidden: boolean; }): NoteAgenda {
-  const entries = Object.values(drafts).filter(entry => (options.notebookId === 'all' || entry.note.notebookId === options.notebookId) && (options.showHidden || !isNoteHidden({ ...entry.note.metadata, status: entry.note.status })));
+  const entries = Object.values(drafts).filter(entry => !entry.deleted && (options.notebookId === 'all' || entry.note.notebookId === options.notebookId) && (options.showHidden || !isNoteHidden({ ...entry.note.metadata, status: entry.note.status })));
   if (!Object.keys(drafts).length) return agenda;
   const drafted = new Set(Object.keys(drafts));
   const tasks = [...agenda.tasks.filter(task => !drafted.has(noteRefKey({ notebookId: task.notebookId, path: task.notePath }))), ...extractTodoTasks(entries.map(entry => entry.note))];
@@ -152,4 +155,11 @@ export function overlayGraphDrafts(graph: NoteGraphData, drafts: GraphDraftNote[
   return { nodes, links };
 }
 
-export const draftGraphNotes = (drafts: WorkingNotes): GraphDraftNote[] => Object.values(drafts).map(entry => ({ path: entry.note.path, notebookId: entry.note.notebookId, title: entry.note.title, status: entry.note.status, tags: entry.note.tags, content: entry.note.content }));
+export const draftGraphNotes = (drafts: WorkingNotes): GraphDraftNote[] => Object.values(drafts).filter(entry => !entry.deleted).map(entry => ({ path: entry.note.path, notebookId: entry.note.notebookId, title: entry.note.title, status: entry.note.status, tags: entry.note.tags, content: entry.note.content }));
+
+/** The graph without the notes a working change deletes, and without their links. */
+export function withoutDeletedDrafts(graph: NoteGraphData, drafts: WorkingNotes): NoteGraphData {
+  const deleted = new Set(Object.values(drafts).filter(entry => entry.deleted).map(entry => noteRefKey(entry.note)));
+  if (!deleted.size) return graph;
+  return { nodes: graph.nodes.filter(node => !deleted.has(node.id)), links: graph.links.filter(link => !deleted.has(link.source) && !deleted.has(link.target)) };
+}

@@ -136,3 +136,14 @@ describe('polished commit', () => {
     expect(() => polishedCommit('\n\nNote-Added: notes/a/new.md', [created], [])).toThrow(/empty/);
   });
 });
+
+describe('deleted notes', () => {
+  it('names a deleted note and writes its Note-Deleted trailer, which a polish cannot drop', () => {
+    const facts = noteChangeFacts(before, before, true);
+    expect(facts).toMatchObject({ deleted: true, added: false, path: 'notes/a/weekly-review.md' });
+    const summary = summarizeCommit([facts], [], english);
+    expect(summary.subject).toBe('Weekly Review: deleted');
+    expect(summary.details).toContain('Note-Deleted: notes/a/weekly-review.md');
+    expect(polishedCommit('Remove the old review\n\nNote-Modified: x.md', [facts], []).details).toBe('Note-Deleted: notes/a/weekly-review.md');
+  });
+});

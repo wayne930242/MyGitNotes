@@ -100,6 +100,12 @@ the `AGENTS.md` files `get_system_prompt` reads; their edits commit as
 to read the agent system before creating or editing notes when the note has
 one.
 
+## Web agent tools
+
+The hosted `/mcp` above is for connectors (ChatGPT, Claude, Codex) and commits every write. The agent in the web panel of a remote workspace edits notes differently: an edition's `PiAgent` created with `createPiAgent({ webTools: true })` starts Pi with `pi-web-tools-extension.mjs`, which registers `mygitnotes_read_note`, `mygitnotes_write_note`, `mygitnotes_edit_note`, `mygitnotes_delete_note` and `mygitnotes_list_changes`. Each call goes to `POST /api/pi/web-tools` with the session's bearer token (passed to Pi as `MYGITNOTES_WEB_TOOLS_TOKEN`), and the bridge relays it as a `web_tool_request` to the page that attached to the session last, which answers with `web_tool_response` within 30 seconds.
+
+The page applies the call to its working changes, as its editor does: reads see the person's working change before the committed note (`source: working | committed`), writes and edits stage a working change against the committed note, and a delete stages a deletion that waits in the Changes tool's uncommitted trash until the person commits or restores it (a note that exists only as a working change is dropped instead). Nothing commits. A note whose editor holds typing that is not yet a working change is refused, an open editor shows the agent's change at once, and without an attached page every call fails with a message to open MyGitNotes. Local workspaces do not get these tools: their Pi edits the working tree, which also commits nothing on its own.
+
 ## Agent edits and versions
 
 Every MCP edit of one file — `write`, `append` and `edit` on a note, `AGENTS.md`

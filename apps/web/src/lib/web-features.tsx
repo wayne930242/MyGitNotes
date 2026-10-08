@@ -79,6 +79,11 @@ export interface WebFeature {
    */
   agent?: boolean;
   /**
+   * Shown in the agent panel in place of the message box while Pi has no model it can call, such as how to add a
+   * provider key; the last feature that sets it wins, and without one the panel explains Pi's own setup.
+   */
+  agentModelSetup?: ReactNode;
+  /**
    * Whether the agent panel (`FEATURE_IDS.agent`), the R2 panel (`FEATURE_IDS.r2`) and the polish button
    * (`FEATURE_IDS.commitPolish`) are open to this user. A denied feature shows its `reason` in place instead
    * of being hidden or failing at the server. It is presentation only: the server still enforces every limit.
@@ -110,6 +115,10 @@ export function useAccountControls(): RenderAccountControls | undefined {
 
 export function useCommitMessagePolish(): CommitMessagePolish | undefined {
   return useContext(FeaturesContext).reduce<CommitMessagePolish | undefined>((found, feature) => feature.commitMessagePolish ?? found, undefined);
+}
+
+export function useAgentModelSetup(): ReactNode | undefined {
+  return useContext(FeaturesContext).reduce<ReactNode | undefined>((found, feature) => feature.agentModelSetup ?? found, undefined);
 }
 
 /** Whether the app asks the server for an agent session: always for a local workspace, and for a remote one only when an edition's server supplies an agent. */

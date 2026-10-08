@@ -1,5 +1,5 @@
 import { noteRefKey } from '@mygitnotes/core/note-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { mergeNote, NoteDraft, sameValue } from '../../lib/merge-note.js';
 import { ApiError } from '../../lib/api.js';
 import { NoteItem } from '../../lib/types.js';
@@ -13,6 +13,8 @@ import { useWorkspaceLinks } from '../WorkspaceLinks.js';
 import { useEditorRegistry } from '../../lib/note-editing.js';
 import type { NoteEditorSession, NoteEditorSharedProps } from './types.js';
 import type { NewVersionRequest } from '../../lib/history-api.js';
+import { externalEditCount, subscribeExternalEdits } from '../../lib/external-note-edits.js';
+import { readWorkingNotes } from '../../lib/working-notes.js';
 
 /** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
 function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -257,6 +259,21 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
     }
   }, [note.notebookId, note.path, branch, draftScope, readOnly]);
   /* eslint-enable react-hooks/exhaustive-deps */
+
+  // The agent changed this note's working change: show it, as what is now saved. It refuses a note with unsaved typing, so nothing is lost here.
+  const externalEdits = useSyncExternalStore(subscribeExternalEdits, () => externalEditCount(noteRefKey(note)));
+  useEffect(() => {
+    if (!externalEdits || !draftScope) return;
+    const entry = readWorkingNotes(draftScope)[note.path];
+    if (!entry || entry.deleted) return;
+    /* eslint-disable react/set-state-in-effect -- An edit made outside the editor arrives through this store; the editor takes it as its saved text. */
+    setContent(entry.note.content);
+    setMetadata(entry.note.metadata || {});
+    setHasUnsavedChanges(false);
+    /* eslint-enable react/set-state-in-effect */
+    lastSaved.current = { content: entry.note.content, metadata: entry.note.metadata || {} };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- Only an outside edit reloads; the note's identity is the session's own reset.
+  }, [externalEdits]);
 
   // Debounced auto-save directly to disk on edit
   useEffect(() => {

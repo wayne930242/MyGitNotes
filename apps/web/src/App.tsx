@@ -5,6 +5,7 @@ import { Button } from './components/Button.js';
 import { useOutlineActions } from './app/useOutlineActions.js';
 import { OutlineActionsProvider } from './lib/outline-actions.js';
 import { PiAgentProvider } from './lib/pi-agent/session.js';
+import { useWebAgentTools } from './app/useWebAgentTools.js';
 import { AddToOutlineDialog } from './components/AddToOutlineDialog.js';
 import { useFilterSidebar } from './app/useFilterSidebar.js';
 import { useTheme } from './app/useTheme.js';
@@ -138,6 +139,8 @@ export const AppContent: React.FC = () => {
     return { notebook: notebook.title, repository: name, branch: repository?.branch ?? '', path: note.path, readOnly, gists: repository?.type === 'github' && !readOnly };
   };
   /** Pending changes across repositories; a path names a file only within its repository, so each repository counts its own. */
+  // A remote deletion is a working change held in the trash, which the Changes panel lists and counts apart.
+  const remoteTrash = useMemo(() => Object.values(activeWorkingNotes).flatMap(entry => entry.deleted && entry.base ? [entry.base] : []), [activeWorkingNotes]);
   const changeCount = remote ? Object.keys(activeWorkingNotes).length + pendingDocuments.length : repositories.filter(repository => !repository.unavailable).reduce((sum, repository) => {
     const status = repository.id === sourceId ? gitStatus : repository.gitStatus;
     return sum + (status ? new Set([...status.staged, ...status.modified, ...status.untracked]).size : 0);
@@ -158,7 +161,7 @@ export const AppContent: React.FC = () => {
   const canManageTags = repositories.some(repository => repository.notebooks.length) && repositories.every(repository => repository.write || !repository.notebooks.length);
   const editorRegistry = useNoteEditorRegistry();
 
-  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraft, t });
+  const { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, findCommittedNote, readCommittedNote, readNoteForChange } = useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, remote, refreshWorkspace, readDraft, t });
 
   // Tag management: rename/merge/delete across the whole workspace, one commit per repository,
   // with a session-lifetime undo (kept in `tagOperations.history` until page reload).
@@ -205,6 +208,8 @@ export const AppContent: React.FC = () => {
 
   const outlineActions = useOutlineActions({ config, repositoryFor, readDraft, remote, sourceId, selectedNotebookId, locationKey: location.key, routedRef: editorRoute.note && editorNotebookId ? { notebookId: editorNotebookId, path: `${config?.notebooks.find(nb => nb.id === editorNotebookId)?.root}/${editorRoute.note}` } : null, prepareLeave: editorRegistry.flushEditors, openNote: handleOpenNote, openNewNote: options => void createNote(options), onError: setActionError });
 
+  // The agent's note tools edit this page's working changes; only a remote workspace has them, as local Pi edits its files.
+  const webAgentTools = useWebAgentTools({ config, activeWorkingNotes, repositoryFor, canWriteNotebook, revisionFor, readDraft, updateDraft, stageWorkingNote, findCommittedNote });
   const { commitWorkingNotes } = useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError });
   const { commitNoteFile } = useQuickNoteCommit({ remote, repositoryFor, refreshWorkspace, commitWorkingNotes, activeWorkingNotes, t });
   const legacyRecovery = useLegacyBookmarkRecovery(repositories.map(repository => repository.id));
@@ -462,9 +467,11 @@ export const AppContent: React.FC = () => {
                         onSaveNote={handleSaveNote}
                         onReadNote={readNoteForChange}
                         gitStatus={gitStatus}
-                        changeCount={changeCount}
-                        deletedNotes={deletedNotes}
-                        onRestoreNote={handleRestoreNote}
+                        changeCount={remote ? changeCount - remoteTrash.length : changeCount}
+                        deletedNotes={remote ? remoteTrash : deletedNotes}
+                        onRestoreNote={remote
+                          ? note => updateDraft(note.notebookId, note.path, null)
+                          : handleRestoreNote}
                         onOpenCommitModal={openCommitModal}
                         writable={canWrite}
                         remoteChanges={panelRemoteChanges}
@@ -763,7 +770,7 @@ export const AppContent: React.FC = () => {
   );
   // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
   return (
-    <PiAgentProvider enabled={agentEnabled} homeRepository={sourceId} workspaceTitle={config?.workspace.title ?? ''} notebooks={config?.notebooks ?? NO_NOTEBOOKS} repositories={repositories}>
+    <PiAgentProvider webTools={remote ? webAgentTools : undefined} enabled={agentEnabled} homeRepository={sourceId} workspaceTitle={config?.workspace.title ?? ''} notebooks={config?.notebooks ?? NO_NOTEBOOKS} repositories={repositories}>
       <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
     </PiAgentProvider>
   );

@@ -14,7 +14,7 @@ export interface GistSync {
 }
 
 /** Commits drafts of one repository as one commit on it; `gists` reports the published notes it pushed to their Gists. */
-export async function commitRemoteNotes(repository: RepositoryId, notes: { path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; }[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: NewVersionRequest): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
+export async function commitRemoteNotes(repository: RepositoryId, notes: ({ path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; } | { path: string; delete: true; })[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: NewVersionRequest): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
   const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents, version }) });
   if (!res.ok) throw await responseError(res, 'Failed to commit notes');
   return res.json();

@@ -12,7 +12,7 @@ import { type PiContextUsage, type PiEditorText, type PiLocation, type PiSession
 import { sameWorkspace, workspaceKey, workspaceName } from '../../lib/agent-workspaces.js';
 import { type AgentFocus, focusLabel, selectionPosition } from '../../lib/pi-agent/transcript.js';
 import { useTranslation } from '../../lib/i18n/index.js';
-import { FEATURE_IDS, useFeatureGate } from '../../lib/web-features.js';
+import { FEATURE_IDS, useAgentModelSetup, useFeatureGate } from '../../lib/web-features.js';
 import './pi-agent.css';
 
 type ContextMode = 'line' | 'path' | 'none';
@@ -129,6 +129,26 @@ function fromCwd(absolute: string, cwd: string | undefined): string {
 }
 
 /** The agent panel, or the reason an edition's gate gives for withholding it (an upgrade prompt, say). */
+const PI_PROVIDERS_URL = 'https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/providers.md';
+
+/** Takes the message box's place while Pi has no model it can call: the edition's guidance, else Pi's own setup. */
+function ModelSetup({ onCheck }: { onCheck: () => void; }) {
+  const { t } = useTranslation();
+  const edition = useAgentModelSetup();
+  return (
+    <div className='pi-agent-idle pi-agent-model-setup' role='status'>
+      {edition ?? (
+        <>
+          <p>{t('piAgent.noModel')}</p>
+          <p>{t('piAgent.noModel.hint')}</p>
+          <a href={PI_PROVIDERS_URL} target='_blank' rel='noreferrer'>{t('piAgent.noModel.docs')}</a>
+        </>
+      )}
+      <Button onClick={onCheck}>{t('piAgent.noModel.check')}</Button>
+    </div>
+  );
+}
+
 export function AgentPanel() {
   const { t } = useTranslation();
   const gate = useFeatureGate(FEATURE_IDS.agent);
@@ -190,6 +210,8 @@ function AgentConversation() {
   const name = useWorkspaceName();
   const live = Boolean(session && session.status !== 'exited');
   const ready = live && agent.connected;
+  // Pi answered with no model at all: no key, no login and no model the edition provides.
+  const noModel = ready && model.loaded === true && model.models.length === 0;
   const absolute = target && file?.path === target.path ? file.absolute : undefined;
   const located = absolute && fromCwd(absolute, session?.cwd);
   // Without a caret (a compilation pane), a line request sends the path alone, and the switch says so.
@@ -255,94 +277,96 @@ function AgentConversation() {
       )}
       {/* Pi's questions scroll with the conversation, so a tall one never pushes the composer out of the panel. */}
       <AgentTranscript transcript={agent.transcript} links={links}>{agent.transcript.dialogs.map(dialog => <AgentDialogCard key={dialog.id} dialog={dialog} onAnswer={answer => agent.answer(dialog, answer)} />)}</AgentTranscript>
-      <form
-        className='pi-agent-composer'
-        onSubmit={event => {
-          event.preventDefault();
-          send();
-        }}
-      >
-        {agent.transcript.queued.length > 0 && (
-          <ul className='pi-agent-queue' aria-label={t('piAgent.queue')}>
-            {agent.transcript.queued.map((message, index) => (
-              <li key={index}>
-                <span className='pi-agent-badge' title={t(message.kind === 'steer' ? 'piAgent.queue.steerHint' : 'piAgent.queue.followUpHint')}>{t(message.kind === 'steer' ? 'piAgent.queue.steer' : 'piAgent.queue.followUp')}</span>
-                <span className='pi-agent-queue-text' title={message.text}>{message.text}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-        {target && (
-          <div className='pi-agent-context'>
-            <div className='pi-agent-modes' role='radiogroup' aria-label={t('piAgent.context')}>{CONTEXT_MODES.map(option => <button key={option} type='button' role='radio' aria-checked={effectiveMode === option} disabled={option === 'line' && !target.caret} onClick={() => chooseMode(option)}>{t(`piAgent.context.${option}` as const)}</button>)}</div>
-            {focus && <span className='pi-agent-focus-chip' title={absolute}>{focusLabel(focus)}</span>}
-            {!located && file?.error && <span className='pi-agent-focus-chip' title={file.error}>{target.path.slice(target.path.lastIndexOf('/') + 1)}</span>}
-          </div>
-        )}
-        <div className='pi-agent-input'>
-          {menuOpen && <CommandMenu id={menuId} commands={matches} highlight={active} onPick={pick} />}
-          <textarea
-            ref={input}
-            className='ui-control'
-            rows={3}
-            value={draft}
-            placeholder={t(ready ? 'piAgent.placeholder' : 'piAgent.connecting')}
-            aria-label={t('piAgent.message')}
-            aria-controls={menuOpen ? menuId : undefined}
-            aria-activedescendant={menuOpen && matches.length ? `${menuId}-${active}` : undefined}
-            aria-autocomplete='list'
-            disabled={!ready}
-            onChange={event => {
-              setDraft(event.target.value);
-              setHighlight(0);
-            }}
-            onKeyDown={event => {
-              if (event.nativeEvent.isComposing) return;
-              if (menuOpen && matches.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
-                event.preventDefault();
-                setHighlight((active + (event.key === 'ArrowDown' ? 1 : matches.length - 1)) % matches.length);
-                return;
-              }
-              if (menuOpen && event.key === 'Escape') {
-                event.preventDefault();
-                setDismissed(draft);
-                return;
-              }
-              // Tab completes the highlighted command; Enter does too, unless the name is already typed out in full.
-              const chosen = menuOpen ? matches[active] : undefined;
-              if (chosen && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && chosen.name !== query))) {
-                event.preventDefault();
-                pick(chosen);
-                return;
-              }
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                send();
-              }
-            }}
-          />
-        </div>
-        <InfoDrawer section={infoSection} onClose={() => setInfoSection(null)} />
-        <div className='pi-agent-dialog-actions'>
-          <div className='pi-agent-indicators'>
-            <InfoToggles section={infoSection} onToggle={setInfoSection} />
-            {live && agent.contextUsage && <ContextUsage usage={agent.contextUsage} />}
-          </div>
-          {agent.transcript.running && (
-            <Button
-              onClick={async () => {
-                const restored = await agent.abort();
-                if (restored) setDraft(current => current.trim() ? `${restored}\n\n${current}` : restored);
-              }}
-              title={t(agent.transcript.queued.length ? 'piAgent.abortQueued' : 'piAgent.abort')}
-            >
-              <Square aria-hidden='true' />
-              {t('piAgent.abort')}
-            </Button>
+      {noModel ? <ModelSetup onCheck={agent.checkModels} /> : (
+        <form
+          className='pi-agent-composer'
+          onSubmit={event => {
+            event.preventDefault();
+            send();
+          }}
+        >
+          {agent.transcript.queued.length > 0 && (
+            <ul className='pi-agent-queue' aria-label={t('piAgent.queue')}>
+              {agent.transcript.queued.map((message, index) => (
+                <li key={index}>
+                  <span className='pi-agent-badge' title={t(message.kind === 'steer' ? 'piAgent.queue.steerHint' : 'piAgent.queue.followUpHint')}>{t(message.kind === 'steer' ? 'piAgent.queue.steer' : 'piAgent.queue.followUp')}</span>
+                  <span className='pi-agent-queue-text' title={message.text}>{message.text}</span>
+                </li>
+              ))}
+            </ul>
           )}
-          <Button type='submit' variant='primary' disabled={!ready || !draft.trim()}>{shell ? <SquareTerminal aria-hidden='true' /> : <Send aria-hidden='true' />}{t(shell ? 'piAgent.run' : agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}</Button>
-        </div>
-      </form>
+          {target && (
+            <div className='pi-agent-context'>
+              <div className='pi-agent-modes' role='radiogroup' aria-label={t('piAgent.context')}>{CONTEXT_MODES.map(option => <button key={option} type='button' role='radio' aria-checked={effectiveMode === option} disabled={option === 'line' && !target.caret} onClick={() => chooseMode(option)}>{t(`piAgent.context.${option}` as const)}</button>)}</div>
+              {focus && <span className='pi-agent-focus-chip' title={absolute}>{focusLabel(focus)}</span>}
+              {!located && file?.error && <span className='pi-agent-focus-chip' title={file.error}>{target.path.slice(target.path.lastIndexOf('/') + 1)}</span>}
+            </div>
+          )}
+          <div className='pi-agent-input'>
+            {menuOpen && <CommandMenu id={menuId} commands={matches} highlight={active} onPick={pick} />}
+            <textarea
+              ref={input}
+              className='ui-control'
+              rows={3}
+              value={draft}
+              placeholder={t(ready ? 'piAgent.placeholder' : 'piAgent.connecting')}
+              aria-label={t('piAgent.message')}
+              aria-controls={menuOpen ? menuId : undefined}
+              aria-activedescendant={menuOpen && matches.length ? `${menuId}-${active}` : undefined}
+              aria-autocomplete='list'
+              disabled={!ready}
+              onChange={event => {
+                setDraft(event.target.value);
+                setHighlight(0);
+              }}
+              onKeyDown={event => {
+                if (event.nativeEvent.isComposing) return;
+                if (menuOpen && matches.length && (event.key === 'ArrowDown' || event.key === 'ArrowUp')) {
+                  event.preventDefault();
+                  setHighlight((active + (event.key === 'ArrowDown' ? 1 : matches.length - 1)) % matches.length);
+                  return;
+                }
+                if (menuOpen && event.key === 'Escape') {
+                  event.preventDefault();
+                  setDismissed(draft);
+                  return;
+                }
+                // Tab completes the highlighted command; Enter does too, unless the name is already typed out in full.
+                const chosen = menuOpen ? matches[active] : undefined;
+                if (chosen && (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey && chosen.name !== query))) {
+                  event.preventDefault();
+                  pick(chosen);
+                  return;
+                }
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  send();
+                }
+              }}
+            />
+          </div>
+          <InfoDrawer section={infoSection} onClose={() => setInfoSection(null)} />
+          <div className='pi-agent-dialog-actions'>
+            <div className='pi-agent-indicators'>
+              <InfoToggles section={infoSection} onToggle={setInfoSection} />
+              {live && agent.contextUsage && <ContextUsage usage={agent.contextUsage} />}
+            </div>
+            {agent.transcript.running && (
+              <Button
+                onClick={async () => {
+                  const restored = await agent.abort();
+                  if (restored) setDraft(current => current.trim() ? `${restored}\n\n${current}` : restored);
+                }}
+                title={t(agent.transcript.queued.length ? 'piAgent.abortQueued' : 'piAgent.abort')}
+              >
+                <Square aria-hidden='true' />
+                {t('piAgent.abort')}
+              </Button>
+            )}
+            <Button type='submit' variant='primary' disabled={!ready || !draft.trim()}>{shell ? <SquareTerminal aria-hidden='true' /> : <Send aria-hidden='true' />}{t(shell ? 'piAgent.run' : agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}</Button>
+          </div>
+        </form>
+      )}
     </section>
   );
 }

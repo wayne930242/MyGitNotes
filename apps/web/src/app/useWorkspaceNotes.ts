@@ -47,11 +47,16 @@ export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, 
     setStaleNotice('');
   }
   /** The committed note, ignoring any staged draft, for use as a merge base. */
-  const readCommittedNote = async (ref: NoteRef): Promise<NoteItem> => {
+  /** The committed note at `ref`, or null when the repository has none there. */
+  const findCommittedNote = async (ref: NoteRef): Promise<NoteItem | null> => {
     const result = await queryClient.fetchQuery(noteLookupOptions(queryScope, [ref], true));
     const note = result.notes[0];
-    if (!note || typeof note.content !== 'string') throw new Error(t('notes.readFailed', { path: ref.path }));
-    return note as NoteItem;
+    return note && typeof note.content === 'string' ? note as NoteItem : null;
+  };
+  const readCommittedNote = async (ref: NoteRef): Promise<NoteItem> => {
+    const note = await findCommittedNote(ref);
+    if (!note) throw new Error(t('notes.readFailed', { path: ref.path }));
+    return note;
   };
   /** The note a change must be applied to: the staged draft when there is one, else the committed note. */
   const readNoteForChange = async (ref: NoteRef): Promise<NoteItem> => {
@@ -59,5 +64,5 @@ export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, 
     return pending ? pending.note : readCommittedNote(ref);
   };
 
-  return { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, readCommittedNote, readNoteForChange };
+  return { queryClient, queryScope, invalidateNotes, refreshNotes, staleNotice, findCommittedNote, readCommittedNote, readNoteForChange };
 }

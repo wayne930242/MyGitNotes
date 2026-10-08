@@ -7,7 +7,7 @@ import type { NoteGraphData } from '@mygitnotes/core/note-graph';
 import type { RepositoryId, RevisionSet } from '@mygitnotes/core/repository';
 import { ApiError } from './api.js';
 import { fetchNoteAgenda, fetchNoteFacets, fetchNoteGraph, fetchNotePaths, fetchNoteQuery, lookupNotes } from './notes-api.js';
-import { draftGraphNotes, overlayDraftAgenda, overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts } from './draft-overlay.js';
+import { draftGraphNotes, overlayDraftAgenda, overlayDraftFacets, overlayDraftLookup, overlayDraftPaths, overlayDraftRows, overlayGraphDrafts, withoutDeletedDrafts } from './draft-overlay.js';
 import { sameValue } from './merge-note.js';
 import type { WorkingNotes } from './working-notes.js';
 
@@ -220,6 +220,6 @@ export function useNoteAgenda(notebookId: string, showHidden = false): { agenda:
 export function useNoteGraph(enabled = true): { graph: NoteGraphData | undefined; loading: boolean; error: string; } {
   const scope = useNoteQueryScope();
   const result = useQuery({ queryKey: queryKey(scope, scope.revisions, 'graph', {}), queryFn: () => fetchNoteGraph(scope.revisions), enabled: enabled && Boolean(scope.sourceId), placeholderData: keepPreviousData });
-  const graph = useMemo(() => (enabled && result.data ? overlayGraphDrafts({ nodes: result.data.nodes, links: result.data.links }, draftGraphNotes(scope.drafts), scope.repositories) : undefined), [enabled, result.data, scope.drafts, scope.repositories]);
+  const graph = useMemo(() => (enabled && result.data ? overlayGraphDrafts(withoutDeletedDrafts({ nodes: result.data.nodes, links: result.data.links }, scope.drafts), draftGraphNotes(scope.drafts), scope.repositories) : undefined), [enabled, result.data, scope.drafts, scope.repositories]);
   return { graph, loading: enabled && result.isPending, error: errorText(result.error) };
 }

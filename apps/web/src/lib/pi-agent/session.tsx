@@ -61,6 +61,9 @@ export interface AgentTarget {
   lineNumberOffset?: number;
 }
 
+/** Runs one of the agent's note tools on this page and answers its result; a thrown error is the agent's to read. */
+export type WebToolHandler = (tool: string, args: Record<string, unknown>) => Promise<unknown>;
+
 /** A model Pi has credentials for; `value` is `provider/id`, the key the panel selects it by. */
 export interface PiModelOption {
   value: string;
@@ -72,6 +75,8 @@ export interface PiModelState {
   model?: string;
   thinking?: string;
   models: PiModelOption[];
+  /** Whether Pi has answered with its models; an empty list it answered means it has no model it can call. */
+  loaded?: boolean;
   /** The thinking levels the current model supports. */
   levels: string[];
 }
@@ -92,7 +97,7 @@ export function applyModelResponse(state: PiModelState, record: Record<string, u
     case 'get_state':
       return { ...state, model: data.model ? modelKey(data.model) : undefined, thinking: data.thinkingLevel };
     case 'get_available_models':
-      return { ...state, models: (data.models ?? []).map(model => ({ value: modelKey(model), label: `${model.name || model.id} (${model.provider})` })) };
+      return { ...state, loaded: true, models: (data.models ?? []).map(model => ({ value: modelKey(model), label: `${model.name || model.id} (${model.provider})` })) };
     case 'get_available_thinking_levels':
       return { ...state, levels: data.levels ?? [] };
     case 'set_model': {
@@ -164,6 +169,8 @@ export interface PiAgentValue {
   newConversation: () => void;
   end: () => Promise<void>;
   modelState: PiModelState;
+  /** Starts Pi afresh to read its models again, as after the person added a provider key, which Pi reads only when it starts. */
+  checkModels: () => void;
   /** Switches this session's model (`provider/id`); the thinking level follows what the model supports. */
   setModel: (value: string) => void;
   setThinking: (level: string) => void;
@@ -241,7 +248,11 @@ export function usePiAgentAvailable(): boolean {
  * in the agent workspace the user last switched to, else at the root of the home repository, and resumes the
  * conversation it last had while that is still valid there.
  */
-export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, notebooks, repositories, children }: { enabled: boolean; homeRepository: string; workspaceTitle: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[]; children: ReactNode; }) {
+export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, notebooks, repositories, webTools, children }: { enabled: boolean; homeRepository: string; workspaceTitle: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[]; /** Answers the agent's note tools, for a remote workspace whose notes this page holds as working changes. */ webTools?: WebToolHandler; children: ReactNode; }) {
+  const webToolsRef = useRef(webTools);
+  useEffect(() => {
+    webToolsRef.current = webTools;
+  }, [webTools]);
   const agentGate = useFeatureGate(FEATURE_IDS.agent);
   const [session, setSession] = useState<PiSessionInfo | null>(null);
   const [piAvailable, setPiAvailable] = useState(false);
@@ -306,6 +317,15 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     ws.onmessage = event => {
       if (socket.current !== ws || typeof event.data !== 'string') return;
       const record = JSON.parse(event.data) as Record<string, unknown>;
+      if (record.type === 'web_tool_request' && typeof record.id === 'string') {
+        const id = record.id, handler = webToolsRef.current;
+        const reply = (answer: { result: unknown; } | { error: string; }) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'web_tool_response', id, ...answer }));
+        };
+        if (!handler) reply({ error: 'This page cannot edit notes for the agent.' });
+        else handler(String(record.tool), (record.arguments ?? {}) as Record<string, unknown>).then(result => reply({ result }), (error: Error) => reply({ error: error.message }));
+        return;
+      }
       if (record.type === 'bridge_status') {
         // A bridge on another host does not know the address it was reached at, so the session keeps the one that opened it.
         const info = { ...record.session as PiSessionInfo, ...(socketInfo.current ? { socket: socketInfo.current } : {}) };
@@ -518,6 +538,18 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     },
     newConversation: () => command({ type: 'new_session' }),
     modelState,
+    // Pi reads its credentials only when it starts, so a key added since takes a fresh session; one without a model holds no conversation.
+    checkModels: () => {
+      void (async () => {
+        try {
+          attach((await sessionRequest('DELETE')).session);
+          remember(SESSION_FILE_KEY, null);
+          await start();
+        } catch (reason) {
+          setError((reason as Error).message);
+        }
+      })();
+    },
     setModel: value => {
       const slash = value.indexOf('/');
       command({ type: 'set_model', provider: value.slice(0, slash), modelId: value.slice(slash + 1) });

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useWorkingNoteCommit } from './useWorkingNoteCommit.js';
-import { readWorkingNotes, updateWorkingNote } from '../lib/working-notes.js';
+import { deletionEntry, readWorkingNotes, updateWorkingNote } from '../lib/working-notes.js';
 import { draftScope, repositoryOf, type WorkspaceRepository } from '../lib/workspace-repositories.js';
 import type { FileChange, NoteItem } from '../lib/types.js';
 import { documentDraftKey } from '../lib/use-workspace-document.js';
@@ -35,8 +35,8 @@ function stubServer(failFor?: string) {
 }
 
 function commitHook() {
-  const stageWorkingNote = (draft: NoteItem, draftBase: NoteItem | null, blocked?: string) => {
-    updateWorkingNote(draftScope(repositoryOf(repositories, draft.notebookId)!), draft.path, { note: draft, base: draftBase, ...(blocked ? { blocked } : {}) });
+  const stageWorkingNote = (draft: NoteItem, draftBase: NoteItem | null, blocked?: string, deleted?: boolean) => {
+    updateWorkingNote(draftScope(repositoryOf(repositories, draft.notebookId)!), draft.path, { note: draft, base: draftBase, ...(blocked ? { blocked } : {}), ...(deleted ? { deleted: true as const } : {}) });
     return draft;
   };
   const clearCommittedDrafts = vi.fn();
@@ -100,4 +100,22 @@ it('commits a document draft with the group of the repository that holds it', as
   await commitWorkingNotes([change('.github-notes-focus.yaml', other)], 'docs: focus');
   expect(commits.map(commit => [commit.repository, commit.documents.map((document: any) => document.path)])).toEqual([[other.id, ['.github-notes-focus.yaml']]]);
   expect(localStorage.getItem(documentDraftKey(focusDocumentClient, other.id))).toBeNull();
+});
+
+it('commits a deletion as a delete entry when the note is as it was deleted', async () => {
+  stubServer();
+  updateWorkingNote(draftScope(home), base.path, deletionEntry(base));
+  const { commitWorkingNotes, clearCommittedDrafts } = commitHook();
+  await commitWorkingNotes([change(base.path, home)], 'docs: remove a');
+  expect(commits[0].notes).toEqual([{ path: base.path, delete: true }]);
+  expect(Object.keys(clearCommittedDrafts.mock.calls[0][1])).toEqual([base.path]);
+});
+
+it('blocks a deletion of a note that changed remotely since, keeping it in the trash', async () => {
+  stubServer();
+  updateWorkingNote(draftScope(home), base.path, deletionEntry({ ...base, content: '# Older A' }));
+  const { commitWorkingNotes } = commitHook();
+  await expect(commitWorkingNotes([change(base.path, home)], 'docs: remove a')).rejects.toThrow(/changed remotely after it was deleted/);
+  expect(commits).toEqual([]);
+  expect(readWorkingNotes(draftScope(home))[base.path]).toMatchObject({ deleted: true, blocked: expect.stringContaining('Restore it from the trash') });
 });

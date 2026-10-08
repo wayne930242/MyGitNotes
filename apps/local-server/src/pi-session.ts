@@ -1,5 +1,5 @@
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
@@ -68,6 +68,12 @@ export const TRUST_STATUS_KEY = 'mygitnotes-project-trust';
 export const MCP_STATUS_KEY = 'mygitnotes-mcp-servers';
 /** Appended to Pi's system prompt: what the web chat can and cannot do, which Pi cannot tell from RPC mode alone. */
 export const WEB_CHAT_PROMPT = ["You are running inside MyGitNotes' web chat panel, bridged to Pi in RPC mode. The user reads your replies in a browser and types into a chat box.", 'Interactive extension dialogs (ask_user choices, confirmations and text input) work there, and so do slash commands: extension commands, /skill:name and prompt templates, plus /reload, /compact, /name and /new.', 'The user can run a shell command from that chat box by typing `!command` (its output joins your context) or `!!command` (kept out of your context), as in the terminal. A tool that places a command in the editor (such as robot_hand placing `! command` in the prompt) fills that chat box for the user to send.', "A user message that arrives while you are working is the user's own interjection, typed in the same chat box and queued until your current tool calls finish; treat it as coming from the user and act on it.", "A message may begin with an <editor-context> block naming the file open in the user's editor, with the caret or selection; its path is relative to your working directory."].join('\n');
+/** The extension that gives Pi the web agent's note tools, answered by the page through `callWebTool`. */
+export const WEB_TOOLS_EXTENSION = fileURLToPath(new URL('./pi-web-tools-extension.mjs', import.meta.url));
+/** Appended to the web chat prompt when the note tools edit the page's working changes. */
+export const WEB_TOOLS_PROMPT = "Edit the workspace's notes only with the mygitnotes_* tools. They change the person's working changes in their browser and never commit: the person reviews and commits them, and a deleted note waits in their trash until then.";
+/** How long a note tool waits for the page to answer. */
+export const WEB_TOOL_TIMEOUT_MS = 30_000;
 const STDERR_LIMIT = 8000;
 const SHUTDOWN_GRACE_MS = 5000;
 const KILL_GRACE_MS = 3000;
@@ -121,9 +127,26 @@ function parseMcpServers(text: unknown): PiMcpServer[] | undefined {
   return value.flatMap(entry => isRecord(entry) && typeof entry.name === 'string' && typeof entry.status === 'string' ? [{ name: entry.name, status: entry.status, toolCount: typeof entry.toolCount === 'number' ? entry.toolCount : 0, ...(typeof entry.blockedReason === 'string' ? { blockedReason: entry.blockedReason } : {}) }] : []);
 }
 
+/** A note tool call the page refused or could not answer; its message is the agent's to read. */
+export class WebToolError extends Error {
+  constructor(message: string, readonly status = 409) {
+    super(message);
+  }
+}
+
+interface PendingWebTool {
+  listener: PiSessionListener;
+  resolve: (result: unknown) => void;
+  reject: (error: Error) => void;
+  timer: NodeJS.Timeout;
+}
+
 /** One `pi --mode rpc` process. It outlives the sockets attached to it and ends only through `end()` or its own exit. */
 export class PiSession {
   readonly info: PiSessionInfo;
+  /** The bearer token Pi's note tools present; absent when the session has none. */
+  private readonly webToolToken: string | undefined;
+  private readonly webToolCalls = new Map<string, PendingWebTool>();
   private readonly child: ChildProcessWithoutNullStreams;
   private readonly listeners = new Set<PiSessionListener>();
   /** Dialog requests still waiting for an answer, replayed to a client that attaches later. */
@@ -135,11 +158,18 @@ export class PiSession {
   private stderr = '';
 
   /** `resume` names a session file to continue; without it Pi starts a new conversation. */
-  constructor({ cwd, location, resume, command = piCommand(), onExit }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; }) {
+  /**
+   * `webTools.url` is where Pi's note tools reach the bridge (see `callWebTool`); with it, Pi edits notes through
+   * the page that holds the panel instead of its own file tools.
+   */
+  constructor({ cwd, location, resume, command = piCommand(), onExit, webTools }: { cwd: string; location: PiLocation; resume?: string; command?: string; onExit?: (session: PiSession) => void; webTools?: { url: string; }; }) {
     this.info = { id: randomUUID(), cwd, location, status: 'starting', startedAt: new Date().toISOString() };
+    this.webToolToken = webTools ? randomBytes(32).toString('base64url') : undefined;
+    const prompt = webTools ? `${WEB_CHAT_PROMPT}\n${WEB_TOOLS_PROMPT}` : WEB_CHAT_PROMPT;
     // No --approve: project trust stays Pi's decision, as it is in the user's terminal.
-    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, '--append-system-prompt', WEB_CHAT_PROMPT, ...resume ? ['--session', resume] : []];
-    this.child = spawn(command, args, { cwd, env: process.env, stdio: ['pipe', 'pipe', 'pipe'] });
+    const args = ['--mode', 'rpc', '--extension', TRUST_EXTENSION, ...webTools ? ['--extension', WEB_TOOLS_EXTENSION] : [], '--append-system-prompt', prompt, ...resume ? ['--session', resume] : []];
+    const env = webTools ? { ...process.env, MYGITNOTES_WEB_TOOLS_URL: webTools.url, MYGITNOTES_WEB_TOOLS_TOKEN: this.webToolToken } : process.env;
+    this.child = spawn(command, args, { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
     this.info.pid = this.child.pid;
     this.child.stdout.on('data', jsonlSplitter(line => this.receive(line)));
     this.child.stderr.on('data', (chunk: Buffer) => {
@@ -152,6 +182,7 @@ export class PiSession {
         this.info.status = 'exited';
         this.info.exit = { code, signal, stderr: failure ? `${failure.message}\n${this.stderr}`.trim() : this.stderr };
         this.openDialogs.clear();
+        for (const [id, call] of this.webToolCalls) this.settleWebTool(id, () => call.reject(new WebToolError('The Pi session has ended.')));
         this.broadcastStatus();
         for (const listener of this.listeners) listener.close();
         this.listeners.clear();
@@ -179,7 +210,40 @@ export class PiSession {
       return () => {};
     }
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+      for (const [id, call] of this.webToolCalls) if (call.listener === listener) this.settleWebTool(id, () => call.reject(new WebToolError('The page holding the agent panel closed before it answered. Ask the person to keep MyGitNotes open.')));
+    };
+  }
+
+  /** Whether `token` is the one this session's note tools were given. */
+  acceptsWebToolToken(token: string | undefined): boolean {
+    if (!this.webToolToken || !token) return false;
+    const expected = Buffer.from(this.webToolToken), given = Buffer.from(token);
+    return expected.length === given.length && timingSafeEqual(expected, given);
+  }
+
+  /**
+   * Asks the page that attached last, the one holding the panel, to run a note tool, and resolves with its answer.
+   * Fails without a page, when the page leaves first, and after WEB_TOOL_TIMEOUT_MS.
+   */
+  callWebTool(tool: string, args: unknown, timeoutMs = WEB_TOOL_TIMEOUT_MS): Promise<unknown> {
+    const listener = [...this.listeners].at(-1);
+    if (!listener) return Promise.reject(new WebToolError('Open MyGitNotes in a browser to let the agent edit notes.', 503));
+    const id = randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => this.settleWebTool(id, () => reject(new WebToolError('The page did not answer the note tool in time.', 504))), timeoutMs);
+      this.webToolCalls.set(id, { listener, resolve, reject, timer });
+      listener.send(JSON.stringify({ type: 'web_tool_request', id, tool, arguments: args }));
+    });
+  }
+
+  private settleWebTool(id: string, settle: () => void) {
+    const call = this.webToolCalls.get(id);
+    if (!call) return;
+    this.webToolCalls.delete(id);
+    clearTimeout(call.timer);
+    settle();
   }
 
   /** Forwards one client frame; returns an error message when the frame is not an allowed command. */
@@ -189,6 +253,12 @@ export class PiSession {
       command = JSON.parse(text);
     } catch {
       return 'Commands must be JSON objects.';
+    }
+    // A page's answer to a note tool goes to the call waiting for it, never to Pi; a late or unknown one is dropped.
+    if (isRecord(command) && command.type === 'web_tool_response' && typeof command.id === 'string') {
+      const call = this.webToolCalls.get(command.id);
+      if (call) this.settleWebTool(command.id, () => typeof command.error === 'string' ? call.reject(new WebToolError(command.error)) : call.resolve(command.result));
+      return undefined;
     }
     if (!isRecord(command) || typeof command.type !== 'string' || !CLIENT_COMMANDS.has(command.type)) return 'Command is not allowed.';
     if (!this.alive) return 'The Pi session has ended.';

@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NotebookConfig } from '../types.js';
 import { type WebFeature, WebFeaturesProvider } from '../web-features.js';
-import { agentSocketTarget, PiAgentProvider, type PiAgentValue, type PiSessionInfo, usePiAgent } from './session.js';
+import { agentSocketTarget, PiAgentProvider, type PiAgentValue, type PiSessionInfo, usePiAgent, type WebToolHandler } from './session.js';
 
 /** A socket that never reaches Pi; tests push bridge records into it. */
 class FakeSocket {
@@ -17,7 +17,7 @@ class FakeSocket {
   constructor(readonly url: string, readonly protocols?: string[]) {
     FakeSocket.last = this;
   }
-  sent: { id?: string; type: string; }[] = [];
+  sent: { id?: string; type: string; [key: string]: unknown; }[] = [];
   send(text: string) {
     this.sent.push(JSON.parse(text));
   }
@@ -67,11 +67,11 @@ function Probe({ onValue }: { onValue: (value: PiAgentValue) => void; }) {
   return null;
 }
 
-function mount(features: WebFeature[] = []) {
+function mount(features: WebFeature[] = [], webTools?: WebToolHandler) {
   const seen: { current?: PiAgentValue; } = {};
   render(
     <WebFeaturesProvider features={features}>
-      <PiAgentProvider enabled homeRepository={home} workspaceTitle='Knowledge Base' notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'] }]}>
+      <PiAgentProvider enabled homeRepository={home} workspaceTitle='Knowledge Base' notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'] }]} webTools={webTools}>
         <Probe
           onValue={value => {
             seen.current = value;
@@ -253,4 +253,41 @@ it('starts no session while an edition gates the agent off, and still offers the
   await waitFor(() => expect(agent.current?.available).toBe(true));
   expect(requests.some(request => request.method === 'POST')).toBe(false);
   expect(FakeSocket.last).toBeUndefined();
+});
+
+it("answers the agent's note tools with the page's handler, its errors included, and without one says the page cannot", async () => {
+  const handler = vi.fn(async (tool: string, args: Record<string, unknown>) => {
+    if (tool === 'delete_note') throw new Error('The person is editing notes/a.md; ask them to finish first.');
+    return { tool, args };
+  });
+  mount([], handler);
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  const socket = FakeSocket.last!;
+  act(() => {
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen?.();
+    socket.receive({ type: 'web_tool_request', id: 'w1', tool: 'read_note', arguments: { path: 'notes/a.md' } });
+    socket.receive({ type: 'web_tool_request', id: 'w2', tool: 'delete_note', arguments: { path: 'notes/a.md' } });
+  });
+  await waitFor(() => expect(socket.sent.filter(record => record.type === 'web_tool_response')).toHaveLength(2));
+  expect(socket.sent).toContainEqual({ type: 'web_tool_response', id: 'w1', result: { tool: 'read_note', args: { path: 'notes/a.md' } } });
+  expect(socket.sent).toContainEqual({ type: 'web_tool_response', id: 'w2', error: 'The person is editing notes/a.md; ask them to finish first.' });
+  cleanup();
+  mount();
+  await waitFor(() => expect(FakeSocket.last).not.toBe(socket));
+  const bare = FakeSocket.last!;
+  act(() => {
+    bare.readyState = FakeSocket.OPEN;
+    bare.receive({ type: 'web_tool_request', id: 'w3', tool: 'read_note', arguments: {} });
+  });
+  expect(bare.sent).toContainEqual({ type: 'web_tool_response', id: 'w3', error: 'This page cannot edit notes for the agent.' });
+});
+
+it('checks the models again by ending the session and starting a fresh one, since Pi reads keys only at start', async () => {
+  const agent = mount();
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  requests = [];
+  act(() => agent.current!.checkModels());
+  await waitFor(() => expect(requests.map(request => request.method)).toEqual(['DELETE', 'POST']));
+  expect(requests[1].body).toEqual({ repository: home, folder: '' });
 });

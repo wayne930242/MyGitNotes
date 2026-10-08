@@ -71,6 +71,21 @@ export function onRemoteCommit(listener: RemoteCommitListener): () => void {
 }
 
 /** Shared workspace rules, independent of the Git hosting provider. */
+/** A working note to write in `commitNotes`. */
+export interface CommitNoteWrite {
+  path: string;
+  content: string;
+  metadata: NoteMetadata;
+  createOnly?: boolean;
+  delete?: false;
+}
+/** A working note's deletion in `commitNotes`. */
+export interface CommitNoteDeletion {
+  path: string;
+  delete: true;
+}
+export type CommitNoteChange = CommitNoteWrite | CommitNoteDeletion;
+
 export abstract class RemoteSource {
   private snapshot?: Promise<RemoteSnapshot>;
   protected fresh = false;
@@ -461,30 +476,43 @@ export abstract class RemoteSource {
   }
 
   /**
-   * Publish selected browser working notes as one commit after validation. With `version`, the one note's version
+   * Publish selected browser working notes as one commit after validation. A `delete` entry removes its note, and its
+   * version file with it, in the same commit. With `version`, the one note's version
    * file joins the same commit with a version recorded after the current head, since the commit cannot name itself.
    */
-  async commitNotes(notes: { path: string; content: string; metadata: NoteMetadata; createOnly?: boolean; }[], expected: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: { path: string; label: VersionLabel; today: string; }) {
+  async commitNotes(notes: CommitNoteChange[], expected: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: { path: string; label: VersionLabel; today: string; }) {
     if (!Array.isArray(notes) || !Array.isArray(documents) || !notes.length && !documents.length || notes.length + documents.length > 200) throw new SourceError('Select between 1 and 200 files.');
     if (typeof message !== 'string' || !message.trim() || message.length > 4000) throw new SourceError('A commit message of at most 4000 characters is required.');
     const snapshot = await this.getSnapshot(true);
-    for (const note of notes) {
+    const removals = notes.filter((note): note is CommitNoteDeletion => note?.delete === true);
+    for (const note of removals) {
+      if (typeof note.path !== 'string' || !isNoteFile(note.path)) throw new SourceError('Invalid note change.');
+      if (!snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
+    }
+    if (version && removals.length) throw new SourceError('A new version commits its note alone.');
+    const writes = notes.filter((note): note is CommitNoteWrite => note?.delete !== true);
+    for (const note of writes) {
       if (!note || typeof note.path !== 'string' || !isNoteFile(note.path) || typeof note.content !== 'string' || !note.metadata || typeof note.metadata !== 'object' || Array.isArray(note.metadata)) throw new SourceError('Invalid note change.');
       if (note.createOnly && snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`A note already exists at ${note.path}.`, 409);
       if (!note.createOnly && !snapshot.entries.some(entry => entry.path === note.path)) throw new SourceError(`Note moved or deleted: ${note.path}.`, 409);
     }
     // Bounds concurrent blob reads the same way `contents()` does, so a 200-note batch cannot burst 200 uncached platform reads at once.
-    await this.prefetchFiles(notes.filter(note => !note.createOnly).map(note => note.path));
-    const changes: { path: string; content: string; }[] = [];
-    for (let i = 0; i < notes.length; i += 6) {
+    await this.prefetchFiles(writes.filter(note => !note.createOnly).map(note => note.path));
+    const changes: RemoteChange[] = [];
+    for (let i = 0; i < writes.length; i += 6) {
       changes.push(
         ...await Promise.all(
-          notes.slice(i, i + 6).map(async note => {
+          writes.slice(i, i + 6).map(async note => {
             const existingRaw = note.createOnly ? undefined : await this.readFile(note.path).then(b => b.toString('utf8')).catch(() => undefined);
             return { path: note.path, content: serializeNoteFile(note.path, note.metadata, note.content, Boolean(note.createOnly), new Date(), existingRaw) };
           }),
         ),
       );
+    }
+    for (const note of removals) {
+      changes.push({ path: note.path, sha: null });
+      const versions = versionFilePath(note.path);
+      if (snapshot.entries.some(entry => entry.path === versions)) changes.push({ path: versions, sha: null });
     }
     for (const draft of documents) {
       const document = workspaceDocument(draft?.path);
@@ -504,7 +532,7 @@ export abstract class RemoteSource {
       const now = new Date();
       try {
         const record = readVersionFile(snapshot.entries.some(entry => entry.path === file) ? (await this.readSnapshotFile(snapshot, file)).toString('utf8') : null);
-        addVersion(record, { blob: gitBlobId(Buffer.from(change.content), snapshot.sha.length), parent: snapshot.sha, authored: now.toISOString() }, version.label, version.today, now);
+        addVersion(record, { blob: gitBlobId(Buffer.from(change.content!), snapshot.sha.length), parent: snapshot.sha, authored: now.toISOString() }, version.label, version.today, now);
         changes.push({ path: file, content: serializeVersionFile(record) });
       } catch (error) {
         throw error instanceof SourceError ? error : new SourceError((error as Error).message, 409);

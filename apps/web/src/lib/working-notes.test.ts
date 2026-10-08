@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, workingDiff } from './working-notes.js';
+import { clearCommittedNotes, deletionEntry, readWorkingNotes, updateWorkingNote, workingDiff } from './working-notes.js';
 import type { NoteItem } from './types.js';
 
 const base: NoteItem = { id: 'a', path: 'notes/ex/a.md', notebookId: 'ex', title: 'A', content: '# A\n', metadata: { custom: 'keep' }, tags: [], revision: 'one' };
@@ -57,5 +57,15 @@ describe('browser working notes', () => {
       },
     });
     expect(() => updateWorkingNote('repo:main', base.path, { base, note: { ...base, content: 'changed' } })).toThrow('Storage full');
+  });
+});
+
+describe('deletions', () => {
+  it('keeps a deletion, whose note equals its base, and diffs it as a removed file', () => {
+    const entries = updateWorkingNote('scope', base.path, deletionEntry(base));
+    expect(entries[base.path]).toEqual({ note: base, base, deleted: true });
+    const diff = workingDiff(entries);
+    expect(diff).toContain('-# A');
+    expect(diff).not.toContain('+# A');
   });
 });

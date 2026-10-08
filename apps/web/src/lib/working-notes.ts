@@ -7,6 +7,8 @@ export interface WorkingNote {
   note: NoteItem;
   base: NoteItem | null;
   blocked?: string;
+  /** The note is deleted: `base` is the committed note it removes, kept for its diff and for the trash's Restore. */
+  deleted?: true;
 }
 export type WorkingNotes = Record<string, WorkingNote>;
 const prefix = 'gh_notes_working:';
@@ -23,7 +25,7 @@ export function readWorkingNotes(scope: string): WorkingNotes {
 /** Persist before announcing success; quota errors leave the in-memory draft visible. */
 export function updateWorkingNote(scope: string, path: string, entry: WorkingNote | null): WorkingNotes {
   const entries = readWorkingNotes(scope);
-  if (entry?.base && !entry.blocked && sameValue(entry.note.content, entry.base.content) && sameValue(entry.note.metadata, entry.base.metadata)) entry = null;
+  if (entry?.base && !entry.blocked && !entry.deleted && sameValue(entry.note.content, entry.base.content) && sameValue(entry.note.metadata, entry.base.metadata)) entry = null;
   if (entry) entries[path] = entry;
   else delete entries[path];
   localStorage.setItem(workingNotesKey(scope), JSON.stringify(entries));
@@ -40,5 +42,8 @@ export function clearCommittedNotes(scope: string, sent: WorkingNotes): WorkingN
 
 export function workingDiff(entries: WorkingNotes): string {
   const raw = (note: NoteItem) => `---\n${YAML.stringify(note.metadata)}---\n${note.content}`;
-  return Object.values(entries).map(({ note, base }) => createUnifiedDiff(note.path, note.path, base ? raw(base) : null, raw(note))).filter(Boolean).join('\n');
+  return Object.values(entries).map(({ note, base, deleted }) => createUnifiedDiff(note.path, note.path, base ? raw(base) : null, deleted ? null : raw(note))).filter(Boolean).join('\n');
 }
+
+/** A working change that deletes the committed note `base`. */
+export const deletionEntry = (base: NoteItem): WorkingNote => ({ note: base, base, deleted: true });

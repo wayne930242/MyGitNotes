@@ -80,6 +80,14 @@ it('mounts an injected agent on a hosted deployment, and answers 403 where an ed
   expect((await fetch(`${community}/api/pi/session`)).status).toBe(403);
 });
 
+it("answers an agent's own tool calls ahead of the workspace, which a call without a sign-in cannot open", async () => {
+  const router = Router(), tools = Router();
+  tools.post('/web-tools', (_req, res) => res.json({ result: 'answered' }));
+  const base = await listen(createApp(dir, { configSource: noWorkspaceYet, remoteCache: undefined, piAgent: { router, tools } }));
+  expect(await fetch(`${base}/api/pi/web-tools`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).then(response => response.json())).toEqual({ result: 'answered' });
+  expect((await fetch(`${base}/api/pi/session`)).status).toBe(503);
+});
+
 it('serves the web build from the injected directory', async () => {
   const web = path.join(dir, 'pro-web');
   fs.mkdirSync(web);

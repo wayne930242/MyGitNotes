@@ -6,10 +6,12 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
-import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo } from './pi-session.js';
+import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo, WebToolError } from './pi-session.js';
 import { asLocal, noteRepository, repositoryOrHome } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
+/** Where Pi's note tools call the bridge, below the agent router. */
+export const WEB_TOOLS_PATH = '/web-tools';
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1', '[::1]', '::1'];
 const MAX_FRAME_BYTES = 16 * 1024 * 1024;
 
@@ -115,6 +117,8 @@ export class PiSessionManager {
   constructor(command?: string) {
     this.command = command ?? piCommand();
   }
+  /** Where a session started now reaches the bridge for its note tools; unset, Pi keeps its own file tools. */
+  webTools: { url: string; } | undefined;
 
   /** Whether Pi is installed where this server can start it; checked on each call, so installing Pi needs no restart. */
   get available(): boolean {
@@ -134,7 +138,7 @@ export class PiSessionManager {
     this.assertAvailable();
     const folder = await resolve();
     if (this.current?.alive) return this.current;
-    this.current = new PiSession({ ...folder, resume: resumableSession(resume, folder.cwd), command: this.command });
+    this.current = new PiSession({ ...folder, resume: resumableSession(resume, folder.cwd), command: this.command, webTools: this.webTools });
     return this.current;
   }
 
@@ -142,7 +146,7 @@ export class PiSessionManager {
   async restart(folder: AgentFolder): Promise<PiSession> {
     this.assertAvailable();
     await this.end();
-    this.current = new PiSession({ ...folder, command: this.command });
+    this.current = new PiSession({ ...folder, command: this.command, webTools: this.webTools });
     return this.current;
   }
 
@@ -160,6 +164,11 @@ export class PiSessionManager {
 export interface PiAgent {
   router: express.Router;
   /**
+   * Answers Pi's own calls (the web agent's note tools), which carry the session's token and no sign-in, so it is
+   * mounted at `/api/pi` ahead of the workspace a signed-in request opens.
+   */
+  tools?: express.Router;
+  /**
    * Handles the HTTP server's `upgrade` event for the agent socket; other paths are left to other handlers.
    * An agent that runs no socket of its own (one reached through `PiSessionInfo.socket`) leaves it out.
    */
@@ -168,6 +177,11 @@ export interface PiAgent {
 
 export interface PiAgentOptions {
   command?: string;
+  /**
+   * Gives Pi note tools that edit the working changes of the page holding the panel, for an agent of a remote
+   * workspace, whose notes are not files Pi could edit. Pi reaches them at `/api/pi/web-tools` on this server.
+   */
+  webTools?: boolean;
   /** Resolves the agent workspace a request names; defaults to one of the request's local repositories. */
   resolveFolder?: (res: express.Response, repository: unknown, folder: unknown) => Promise<AgentFolder>;
 }
@@ -182,9 +196,29 @@ function fail(res: express.Response, error: unknown) {
 }
 
 /** The local agent bridges its own socket and keeps its session in a local process, so unlike any `PiAgent`, it always has `upgrade` and a `manager`. */
-export function createPiAgent({ command, resolveFolder = workspaceFolder }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
+export function createPiAgent({ command, resolveFolder = workspaceFolder, webTools = false }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
   const manager = new PiSessionManager(command);
   const router = express.Router();
+  // Pi's note tools call in from the Pi process with the session's token rather than from a page or a signed-in person.
+  const tools = webTools ? express.Router() : undefined;
+  if (tools) {
+    tools.post(WEB_TOOLS_PATH, async (req, res) => {
+      const session = manager.session;
+      const token = req.headers.authorization?.match(/^Bearer (\S+)$/)?.[1];
+      if (!session?.acceptsWebToolToken(token)) return res.status(401).json({ error: 'Unknown note tool session.' });
+      const { tool, arguments: args } = req.body ?? {};
+      if (typeof tool !== 'string') return res.status(400).json({ error: 'Name a tool.' });
+      try {
+        res.json({ result: await session.callWebTool(tool, args ?? {}) });
+      } catch (error) {
+        res.status(error instanceof WebToolError ? error.status : 500).json({ error: (error as Error).message });
+      }
+    });
+  }
+  // A session started from a request reaches this server on the port that request arrived at.
+  const noteWebTools = (req: express.Request) => {
+    if (webTools) manager.webTools = { url: `http://127.0.0.1:${req.socket.localPort}${req.baseUrl}${WEB_TOOLS_PATH}` };
+  };
   router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
   // Pi only ever starts in an agent workspace, never at a path the request spells out.
   const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.repository, req.body?.folder);
@@ -194,6 +228,7 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder }: PiAg
   });
   router.post('/session', async (req, res) => {
     try {
+      noteWebTools(req);
       res.json(sessionBody(await manager.ensure(() => requestedFolder(req, res), req.body?.sessionFile)));
     } catch (error) {
       fail(res, error);
@@ -201,6 +236,7 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder }: PiAg
   });
   router.put('/session', async (req, res) => {
     try {
+      noteWebTools(req);
       res.json(sessionBody(await manager.restart(await requestedFolder(req, res))));
     } catch (error) {
       fail(res, error);
@@ -242,5 +278,5 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder }: PiAg
     }
     return true;
   };
-  return { router, upgrade, manager };
+  return { router, tools, upgrade, manager };
 }
