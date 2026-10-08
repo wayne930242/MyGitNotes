@@ -5,6 +5,9 @@
 export { applicationRoot, type AppServices, createApp } from './app.js';
 export { type AuthServices, authToken, createAuth, CredentialRejected, credentialToken, grantsRouter, signInRouter } from './auth.js';
 export { type AssetScope, type AssetStorage, envAssetStorage } from './asset-storage.js';
+export { type PublishedNote } from './gists.js';
+export { type PublishingRequest, type PublishingService, type PublishSync } from './publishing.js';
+export { type RemoteHandle } from './request-workspace.js';
 export { createPiAgent, type PiAgent, type PiAgentOptions } from './pi-agent.js';
 export { PiSession, type PiSessionInfo, WebToolError } from './pi-session.js';
 export { type BrowserSessions, cookieSessions, requestCookies, sessionCookie, storedSessions } from './browser-sessions.js';

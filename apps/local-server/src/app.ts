@@ -24,6 +24,7 @@ import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
 import { createGistRouter, gistSite, gistToken, noteGist, syncGists } from './gists.js';
 import { isLoopbackHttpOrigin, type PiAgent } from './pi-agent.js';
+import { type PublishingService, publishNotes } from './publishing.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,8 @@ export interface AppServices {
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
+  /** Publishes committed notes beyond the repository, after the commit succeeded and beside the Gist push; without it nothing changes. */
+  publishing?: PublishingService;
   /** Which R2 bucket and key space each request reaches, and any quota it meters; defaults to the deployment's environment (see asset-storage.ts). */
   assetStorage: AssetStorage;
   /** The built web app to serve; defaults to apps/web/dist under the application root. */
@@ -63,7 +66,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   const lightweight = !local && storageMode() === 'cookie';
   const recordStore = overrides.recordStore ?? (lightweight ? new NoRecordStore() : createRecordStore(base));
   const services: AppServices = { ...overrides, configSource, recordStore, workspaceChoices, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), assetStorage: overrides.assetStorage ?? envAssetStorage(), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
-  const { remoteCache: cache, piAgent, sessions, assetStorage } = services;
+  const { remoteCache: cache, piAgent, sessions, assetStorage, publishing } = services;
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -307,7 +310,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         if (!target.authenticated) throw new SourceError('Sign in with write permission to commit notes.', 403);
         const receipt = await target.reader.commitNotes(notes, revision, message, documents, newVersion(version));
         // A deleted note publishes nothing.
-        res.json({ ...receipt, ...await publishedGists(res, notes.filter((note: { delete?: boolean; }) => note?.delete !== true)) });
+        res.json({ ...receipt, ...await publishedGists(res, notes.filter((note: { delete?: boolean; }) => note?.delete !== true)), ...await publishNotes(publishing, { req, res, repository: target, notes }) });
       } catch (error) {
         fail(res, error);
       }
@@ -317,8 +320,9 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit notes.', 403);
         const { path: file, content, metadata, revision, createOnly, notebookId } = req.body;
         if (typeof file !== 'string' || typeof content !== 'string') throw new SourceError('path and content are required.');
-        const saved = await (await remoteNote(res, file, notebookId)).reader.save(file, content, metadata, revision, createOnly);
-        res.json({ ...saved, ...await publishedGists(res, [saved.note]) });
+        const target = await remoteNote(res, file, notebookId);
+        const saved = await target.reader.save(file, content, metadata, revision, createOnly);
+        res.json({ ...saved, ...await publishedGists(res, [saved.note]), ...await publishNotes(publishing, { req, res, repository: target, notes: [saved.note] }) });
       } catch (error) {
         fail(res, error);
       }
