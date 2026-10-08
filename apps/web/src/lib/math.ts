@@ -61,8 +61,16 @@ export function findMath(text: string): MathSpan[] {
   return spans;
 }
 
-export function renderMath(tex: string, display: boolean): string {
-  return `<span class="note-math" role="math" aria-label="${escapeHtml(tex)}">${katex.renderToString(tex, { ...KATEX_OPTIONS, displayMode: display })}</span>`;
+/**
+ * `html` is the app's output. `mathml` is for a page that may carry no inline style, such as a published note: KaTeX's HTML
+ * output positions every glyph with `style` attributes, MathML needs none. The `<annotation>` holding the TeX source is
+ * dropped, because sanitizing keeps the text of an element it removes, which would print the source beside the formula.
+ */
+export type MathOutput = 'html' | 'mathml';
+
+export function renderMath(tex: string, display: boolean, output: MathOutput = 'html'): string {
+  const rendered = katex.renderToString(tex, { ...KATEX_OPTIONS, output, displayMode: display });
+  return `<span class="note-math" role="math" aria-label="${escapeHtml(tex)}">${output === 'mathml' ? rendered.replace(/<annotation\b[^>]*>[\s\S]*?<\/annotation>/g, '') : rendered}</span>`;
 }
 
 /** The same formula as renderMath, drawn into `element`. */
@@ -86,8 +94,8 @@ function firstDollar(src: string): number | undefined {
   return undefined;
 }
 
-/** Marked tokens for `$$…$$` on their own lines (a display block) and `$…$` or `$$…$$` within text. */
-export const markedMath: MarkedExtension = {
+/** Marked tokens for `$$…$$` on their own lines (a display block) and `$…$` or `$$…$$` within text, drawn as `output`. */
+export const createMarkedMath = (output: MathOutput): MarkedExtension => ({
   extensions: [{
     name: 'mathBlock',
     level: 'block',
@@ -100,7 +108,7 @@ export const markedMath: MarkedExtension = {
       if (!span || !tail) return undefined;
       return { type: 'mathBlock', raw: src.slice(0, span.to + tail[0].length), tex: span.tex, display: true };
     },
-    renderer: token => `${renderMath((token as MathToken).tex, true)}\n`,
+    renderer: token => `${renderMath((token as MathToken).tex, true, output)}\n`,
   }, {
     name: 'mathInline',
     level: 'inline',
@@ -109,6 +117,8 @@ export const markedMath: MarkedExtension = {
       const span = mathAt(src, 0);
       return span ? { type: 'mathInline', raw: src.slice(0, span.to), tex: span.tex, display: span.display } : undefined;
     },
-    renderer: token => renderMath((token as MathToken).tex, (token as MathToken).display),
+    renderer: token => renderMath((token as MathToken).tex, (token as MathToken).display, output),
   }],
-};
+});
+
+export const markedMath: MarkedExtension = createMarkedMath('html');

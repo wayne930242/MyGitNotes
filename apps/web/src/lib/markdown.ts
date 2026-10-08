@@ -1,4 +1,4 @@
-import { Marked } from 'marked';
+import { Marked, type MarkedExtension } from 'marked';
 import markedCjkFriendly from 'marked-cjk-friendly';
 import DOMPurify from 'dompurify';
 import { parseYouTubeUrl } from '@mygitnotes/core/compilation';
@@ -7,17 +7,21 @@ import { parseR2Reference, r2AssetUrl, r2PreviewType } from '@mygitnotes/core/r2
 import { headingSlug, resolveWorkspaceHref } from './workspace-links.js';
 import { escapeHtml, stripMdxImports, transformDirectives, transformMdxComponents } from './directives.js';
 import { isMermaidInfo } from './mermaid.js';
-import { markedMath } from './math.js';
+import { createMarkedMath, type MathOutput } from './math.js';
 import { DEFAULT_YOUTUBE_LABELS, type YouTubeDisplayMode, type YouTubeLabels } from './youtube-embed.js';
 
 // CommonMark cannot close emphasis when a full-width punctuation mark sits before the delimiter and
 // a CJK character after it, so `**二口女（ふたくちおんな）**意象` renders as literal asterisks.
-const md = new Marked(markedCjkFriendly(), markedMath);
+function newMarked(math: MarkedExtension): Marked {
+  const marked = new Marked(markedCjkFriendly(), math);
+  // A mermaid fence renders to a placeholder holding its source as text; sanitized HTML cannot carry the SVG, so each
+  // surface draws the diagram once the HTML is mounted (see hydrateMermaid). The source stays in the <pre> because
+  // DOMPurify drops an attribute value containing `-->`, which every flowchart edge does.
+  marked.use({ renderer: { code: ({ text, lang }) => isMermaidInfo(lang ?? '') ? `<div class="note-mermaid"><pre>${escapeHtml(text)}</pre></div>\n` : false } });
+  return marked;
+}
 
-// A mermaid fence renders to a placeholder holding its source as text; sanitized HTML cannot carry the SVG, so each
-// surface draws the diagram once the HTML is mounted (see hydrateMermaid). The source stays in the <pre> because
-// DOMPurify drops an attribute value containing `-->`, which every flowchart edge does.
-md.use({ renderer: { code: ({ text, lang }) => isMermaidInfo(lang ?? '') ? `<div class="note-mermaid"><pre>${escapeHtml(text)}</pre></div>\n` : false } });
+const md = newMarked(createMarkedMath('html'));
 
 export const DOMPURIFY_DIRECTIVE_CONFIG = { ADD_TAGS: ['iframe', 'details', 'summary', 'aside', 'section', 'article', 'header', 'footer', 'figure', 'figcaption', 'abbr', 'svg', 'path', 'circle', 'cite'], ADD_ATTR: ['allow', 'allowfullscreen', 'loading', 'data-video-id', 'data-start', 'data-youtube-mode', 'data-youtube-mode-option', 'data-youtube-session', 'data-youtube-source-url', 'data-youtube-copy', 'data-copy-label', 'data-copied-label', 'data-copy-failed-label', 'controls', 'preload', 'data-type', 'data-variant', 'data-stat', 'data-cols', 'data-col-span', 'data-direction', 'data-arrow', 'data-icon', 'data-qrcode', 'data-size', 'data-component-name', 'data-lucide', 'data-slide-index', 'data-vertical', 'data-label', 'data-card-type', 'open', 'aria-label', 'aria-hidden', 'style', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin'] };
 
@@ -68,22 +72,57 @@ export function renderChatMarkdown(text: string, base?: ChatLinkBase): string {
   return parsed.body.innerHTML;
 }
 
+/** What a note is rendered with: the HTML parser and the DOMPurify instance of the window it runs in. */
+export interface NoteRendererOptions {
+  /** `new DOMParser()` of a browser window, or of a jsdom window on a server. */
+  parser: DOMParser;
+  /** DOMPurify bound to that same window. */
+  purify: Pick<typeof DOMPurify, 'sanitize'>;
+  /** Links to this origin resolve as workspace links; defaults to the browser's own. */
+  origin?: string;
+  /** `mathml` draws formulas without inline style, for a page that may carry none; the default is the app's HTML output. */
+  mathOutput?: MathOutput;
+}
+
+interface RenderContext {
+  marked: Marked;
+  parser: DOMParser;
+  purify: Pick<typeof DOMPurify, 'sanitize'>;
+  origin: string | undefined;
+}
+
+/**
+ * The notes' Markdown pipeline (marked, the MyGitNotes directives, KaTeX) bound to a window, so a server can render the
+ * same HTML the app does under a jsdom window. The app uses {@link renderNote}.
+ */
+export function createNoteRenderer({ parser, purify, origin, mathOutput = 'html' }: NoteRendererOptions) {
+  const marked = mathOutput === 'html' ? md : newMarked(createMarkedMath(mathOutput));
+  return {
+    /** `notebookId` names the note's notebook, so an asset URL reaches the right repository when notebook roots repeat across repositories. */
+    renderNote: (content: string, notePath: string, tableLabel?: string, youtubeLabels?: YouTubeLabels, notebookId?: string): string => renderNoteIn({ marked, parser, purify, origin }, content, notePath, tableLabel, youtubeLabels, notebookId),
+  };
+}
+
 /** `notebookId` names the note's notebook, so an asset URL reaches the right repository when notebook roots repeat across repositories. */
-export function renderNote(content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS, notebookId?: string): string {
+export function renderNote(content: string, notePath: string, tableLabel?: string, youtubeLabels?: YouTubeLabels, notebookId?: string): string {
+  return renderNoteIn({ marked: md, parser: new DOMParser(), purify: DOMPurify, origin: typeof window !== 'undefined' ? window.location.origin : undefined }, content, notePath, tableLabel, youtubeLabels, notebookId);
+}
+
+function renderNoteIn({ marked, parser, purify, origin }: RenderContext, content: string, notePath: string, tableLabel = 'Horizontally scrollable table (Alt + wheel)', youtubeLabels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS, notebookId?: string): string {
   const isMdx = /\.mdx$/i.test(notePath);
   let preprocessed = content;
   if (isMdx) {
     preprocessed = stripMdxImports(preprocessed);
   }
 
-  preprocessed = transformDirectives(preprocessed, source => md.parse(source, { gfm: true, breaks: true }) as string);
+  preprocessed = transformDirectives(preprocessed, source => marked.parse(source, { gfm: true, breaks: true }) as string);
 
   if (isMdx || /<(?:YouTubeEmbed|YouTube|ProtectedContent|Card|Tag|Badge|[A-Z][a-zA-Z0-9_-]*)\b/.test(preprocessed)) {
     preprocessed = transformMdxComponents(preprocessed);
   }
 
-  const rawHtml = md.parse(preprocessed, { gfm: true, breaks: true }) as string;
-  const parsed = new DOMParser().parseFromString(DOMPurify.sanitize(rawHtml, DOMPURIFY_DIRECTIVE_CONFIG), 'text/html');
+  const rawHtml = marked.parse(preprocessed, { gfm: true, breaks: true }) as string;
+  const parsed = parser.parseFromString(purify.sanitize(rawHtml, DOMPURIFY_DIRECTIVE_CONFIG), 'text/html');
   for (const table of parsed.querySelectorAll('table')) {
     const scroller = parsed.createElement('div');
     scroller.className = 'markdown-table-scroll';
@@ -183,7 +222,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
       link.setAttribute('rel', 'noopener noreferrer');
       continue;
     }
-    const target = resolveWorkspaceHref(href, notePath, undefined, typeof window !== 'undefined' ? window.location.origin : undefined);
+    const target = resolveWorkspaceHref(href, notePath, undefined, origin);
     if (!target) {
       link.removeAttribute('href');
       continue;
@@ -193,7 +232,7 @@ export function renderNote(content: string, notePath: string, tableLabel = 'Hori
     link.setAttribute('rel', 'noopener noreferrer');
     if (target.kind === 'external') link.setAttribute('target', '_blank');
   }
-  return DOMPurify.sanitize(parsed.body.innerHTML, DOMPURIFY_DIRECTIVE_CONFIG);
+  return purify.sanitize(parsed.body.innerHTML, DOMPURIFY_DIRECTIVE_CONFIG);
 }
 
 function r2Preview(doc: Document, key: string, notePath: string, label: string): HTMLElement {
