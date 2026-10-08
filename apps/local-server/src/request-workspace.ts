@@ -3,7 +3,7 @@ import path from 'node:path';
 import type express from 'express';
 import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
-import { authToken, type SessionServices } from './auth.js';
+import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
 
 export interface LocalHandle {
@@ -83,8 +83,11 @@ export function requestWorkspace(auth: SessionServices, configSource: WorkspaceC
     if (settings.home.source.type !== 'local') {
       try {
         token = await authToken(req, res, auth, settings.home.source);
-      } catch {
-        return res.status(401).json({ error: 'Session unavailable. Sign in again.' });
+      } catch (error) {
+        if (error instanceof CredentialRejected) return res.status(401).json({ error: 'Session unavailable. Sign in again.' });
+        // The session store or provider did not answer; the reader's session still stands.
+        console.warn(`[auth] session service unavailable: ${(error as Error).message}`);
+        return res.status(503).json({ error: 'Session service temporarily unavailable. Retry shortly.' });
       }
     }
     res.locals.workspace = openWorkspace(settings, token, cache);
