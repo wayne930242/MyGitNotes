@@ -5,6 +5,8 @@ import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { unseal } from '../src/auth.js';
+import { createRecordStore, digest } from '../src/record-store/index.js';
+import { createHash } from 'node:crypto';
 import { githubFixture } from '../../../packages/core/tests/fixtures/github.js';
 
 /** A GitHub Enterprise Server behind `fetch`: sign-in, the account lookup, Gists and one repository, all under `site`. */
@@ -155,6 +157,35 @@ describe('the sign-in realm', () => {
     await start({ MYGITNOTES_REPOSITORY: 'owner/repo', MYGITNOTES_BRANCH: 'main', MYGITNOTES_GITHUB_URL: site, MYGITNOTES_STORAGE: 'cookie' });
     const enterprise = await signIn();
     expect(sessionRealm(enterprise)).toBe(`github:${site}:ghe-client`);
+  });
+});
+
+describe('credentials and agent grants', () => {
+  /** Signs in, creates an agent grant, and reads back the credential and owner the server recorded for them. */
+  async function recorded(webRoot?: string, apiRoot?: string, env: Record<string, string> = {}) {
+    await start({ MYGITNOTES_REPOSITORY: 'owner/repo', MYGITNOTES_BRANCH: 'main', ...env }, webRoot, apiRoot);
+    const cookie = await signIn(webRoot);
+    const store = createRecordStore(root);
+    const granted = await fetch(`${base}/api/auth/agent-token`, post(cookie, { name: 'reader', write: false })).then(r => r.json());
+    const grant = await store.get(granted.url.split('/').pop());
+    expect(await fetch(`${base}/api/auth/agent-tokens`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ grants: [{ id: granted.id }] });
+    return { credential: grant.credential as string, credentialRecord: await store.get(grant.credential), grant };
+  }
+
+  it('keeps the credential id, realm and grant owner of github.com as they were', async () => {
+    const { credential, credentialRecord, grant } = await recorded('https://github.com', 'https://api.github.com');
+    expect(credential).toBe(createHash('sha256').update('github-credential:ghe-client:42').digest('base64url'));
+    expect(credentialRecord.realm).toBe('github:https://github.com:ghe-client');
+    expect(grant).toMatchObject({ kind: 'agent', ownerId: 42, source: 'github:owner/repo@main' });
+  });
+
+  it('scopes them to an Enterprise site, so a session or grant from one site never authorizes another', async () => {
+    const { credential, credentialRecord, grant } = await recorded(site, `${site}/api/v3`, { MYGITNOTES_GITHUB_URL: site });
+    const realm = `github:${site}:ghe-client`;
+    expect(credentialRecord.realm).toBe(realm);
+    expect(credential).toBe(createHash('sha256').update(`${realm}:credential:42`).digest('base64url'));
+    expect(credential).not.toBe(createHash('sha256').update('github-credential:ghe-client:42').digest('base64url'));
+    expect(grant).toMatchObject({ kind: 'agent', ownerId: `${digest(realm)}:42`, source: `github:${site}/owner/repo@main` });
   });
 });
 
