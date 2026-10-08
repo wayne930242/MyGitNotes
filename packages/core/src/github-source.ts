@@ -81,12 +81,16 @@ export function blobBatches(entries: RemoteEntry[]): RemoteEntry[][] {
 /** GitHub transport with its existing authorization-scoped cache. */
 export class GitHubSource extends RemoteSource {
   private client: GitHubApi;
-  constructor(repository: string, branch: string, token: string | undefined, private request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope) {
+  /** `url` names a GitHub Enterprise site; without it the repository is on github.com. */
+  constructor(repository: string, branch: string, token: string | undefined, private request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope, private url?: string) {
     super(repository, branch, token, cache, scope);
-    this.client = new GitHubApi(repository, token, request);
+    this.client = new GitHubApi(repository, token, request, url);
   }
   get id() {
-    return sourceIdentity({ type: 'github', repository: this.repository, branch: this.branch });
+    return sourceIdentity({ type: 'github', ...(this.url ? { url: this.url } : {}), repository: this.repository, branch: this.branch });
+  }
+  protected override cacheRepository() {
+    return this.url ? `${this.url}/${super.cacheRepository()}` : super.cacheRepository();
   }
   async api(endpoint: string, init: RequestInit = {}): Promise<any> {
     return this.client.json(endpoint, init, this.fresh && (endpoint === '' || endpoint.startsWith('/commits/')));
@@ -106,7 +110,7 @@ export class GitHubSource extends RemoteSource {
    * server instance takes the listing from this process or the shared cache instead of listing it again.
    */
   private async treeEntries(treeSha: string): Promise<GitHubEntry[]> {
-    const key = `mgn:tree:v${TREE_KEY_VERSION}:${this.repository.toLowerCase()}:${treeSha}`;
+    const key = `mgn:tree:v${TREE_KEY_VERSION}:${this.cacheRepository()}:${treeSha}`;
     let recent = processTrees.get(this.request);
     if (!recent) processTrees.set(this.request, recent = new Map());
     const remembered = recent.get(key);

@@ -21,6 +21,7 @@ export * from './note-service.js';
 export { keptNoteMetadata, replaceFileTags } from './note-file.js';
 export * from './templates.js';
 export * from './source-config.js';
+export { GITHUB_COM, type GitHubSite, githubSite, normalizeGitHubUrl } from './github-site.js';
 export * from './folders.js';
 export * from './folder-plan.js';
 export * from './file-manager.js';

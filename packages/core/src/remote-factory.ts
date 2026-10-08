@@ -8,7 +8,7 @@ import type { RepositoryScope } from './repository.js';
 
 /** Opens a repository that serves the notebooks `scope` supplies. */
 export function createRemoteSource(source: RemoteSourceConfig, token: string | undefined, request: typeof fetch, cache: RemoteCache | undefined, scope: RepositoryScope): RemoteSource {
-  return source.type === 'github' ? new GitHubSource(source.repository, source.branch, token, request, cache, scope) : new GitLabSource(source.url, source.repository, source.branch, token, request, cache, scope);
+  return source.type === 'github' ? new GitHubSource(source.repository, source.branch, token, request, cache, scope, source.url) : new GitLabSource(source.url, source.repository, source.branch, token, request, cache, scope);
 }
 
 /** Opens a repository that keeps its own workspace manifest and serves every notebook in it. */

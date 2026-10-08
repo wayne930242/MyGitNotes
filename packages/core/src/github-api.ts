@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { type GitHubSite, githubSite } from './github-site.js';
 
 export class SourceError extends Error {
   constructor(message: string, public status = 400, public retryAfter?: number) {
@@ -23,14 +24,18 @@ export class GitHubApi {
   private scope: string;
   private prefix: string;
   private lane: Lane;
-  constructor(private repository: string, private token: string | undefined, private request: typeof fetch) {
+  private site: GitHubSite;
+  /** `url` names a GitHub Enterprise site; without it the repository is on github.com. */
+  constructor(private repository: string, private token: string | undefined, private request: typeof fetch, url?: string) {
+    this.site = githubSite(url);
     let runtime = runtimes.get(request);
     if (!runtime) {
       runtime = { cache: new Map(), pending: new Map(), lanes: new Map(), bytes: 0, generation: new Map(), oauthScopes: new Map() };
       runtimes.set(request, runtime);
     }
     this.runtime = runtime;
-    this.scope = token ? createHash('sha256').update(token).digest('hex') : 'anonymous';
+    // A site keeps its own caches, lanes and rate limits; github.com keeps the keys it always had.
+    this.scope = (url ? `${url}:` : '') + (token ? createHash('sha256').update(token).digest('hex') : 'anonymous');
     this.prefix = `${this.scope}:${repository.toLowerCase()}:`;
     let lane = runtime.lanes.get(this.scope);
     if (!lane) {
@@ -158,7 +163,7 @@ export class GitHubApi {
     if (!fresh && !(this.token && endpoint === '') && cached && cached.expires > Date.now()) return structuredClone(cached.value);
     const generation = this.runtime.generation.get(this.prefix) || 0;
     const load = async () => {
-      const response = await this.send(`https://api.github.com/repos/${this.repository}${endpoint}`, { ...init, redirect: 'error', headers: { ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}), ...init.headers } });
+      const response = await this.send(`${this.site.api}/repos/${this.repository}${endpoint}`, { ...init, redirect: 'error', headers: { ...(cached?.etag ? { 'If-None-Match': cached.etag } : {}), ...init.headers } });
       if (!response.ok && !(response.status === 304 && cached)) {
         if ([401, 403, 404].includes(response.status)) this.invalidate();
         throw this.error(response.status);
@@ -177,7 +182,7 @@ export class GitHubApi {
   async blobTexts(shas: string[]): Promise<Map<string, string>> {
     const [owner, name] = this.repository.split('/');
     const fields = shas.map((sha, i) => `b${i}: object(oid: "${sha}") { ... on Blob { isBinary isTruncated text } }`).join('\n');
-    const response = await this.send('https://api.github.com/graphql', { method: 'POST', redirect: 'error', body: JSON.stringify({ query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, variables: { owner, name } }) });
+    const response = await this.send(this.site.graphql, { method: 'POST', redirect: 'error', body: JSON.stringify({ query: `query($owner: String!, $name: String!) { repository(owner: $owner, name: $name) { ${fields} } }`, variables: { owner, name } }) });
     if (!response.ok) {
       if ([401, 403, 404].includes(response.status)) this.invalidate();
       throw this.error(response.status);
@@ -198,13 +203,13 @@ export class GitHubApi {
   }
 
   async archive(sha: string): Promise<Response> {
-    const response = await this.send(`https://api.github.com/repos/${this.repository}/tarball/${encodeURIComponent(sha)}`, { redirect: 'manual' });
+    const response = await this.send(`${this.site.api}/repos/${this.repository}/tarball/${encodeURIComponent(sha)}`, { redirect: 'manual' });
     if (response.status !== 302) {
       if (response.ok) return response;
       throw this.error(response.status);
     }
     const location = new URL(response.headers.get('location') || '');
-    if (location.protocol !== 'https:' || location.hostname !== 'codeload.github.com' || location.port || location.username || location.password) {
+    if (!this.site.archiveAllowed(location)) {
       throw new SourceError('GitHub returned an unexpected archive destination.', 502);
     }
     // The short-lived GitHub download URL carries its own authorization. Never forward the user's token.

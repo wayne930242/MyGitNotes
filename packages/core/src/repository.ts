@@ -25,8 +25,8 @@ export function repositoryRef(source: SourceConfig): RepositoryRef {
 
 /** Whether the credential signed in for `home` also reaches `other`: the same platform and site. */
 export function sharesCredential(home: SourceConfig, other: SourceConfig): boolean {
-  if (home.type !== other.type) return false;
-  return home.type !== 'gitlab' || (other.type === 'gitlab' && home.url === other.url);
+  if (home.type === 'local' || other.type === 'local') return home.type === other.type;
+  return home.type === other.type && home.url === other.url;
 }
 
 /** Why a notebook repository cannot serve this request. */

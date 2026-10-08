@@ -117,8 +117,12 @@ export abstract class RemoteSource {
     await this.loadCached(entries.filter(entry => wanted.has(entry.path) && entry.type === 'blob' && entry.mode !== '120000'));
   }
 
+  /** What shared-cache keys call this repository; a source on a named site adds the site, so one name on two sites never shares an entry. */
+  protected cacheRepository(): string {
+    return this.repository.toLowerCase();
+  }
   private blobKey(sha: string) {
-    return `mgn:blob:v1:${this.repository.toLowerCase()}:${sha}`;
+    return `mgn:blob:v1:${this.cacheRepository()}:${sha}`;
   }
   protected cacheable(entry: RemoteEntry) {
     return Boolean(this.cache) && CACHEABLE_FILE.test(entry.path) && (entry.size === undefined || entry.size * 4 / 3 <= REMOTE_CACHE_MAX_VALUE);
@@ -289,7 +293,7 @@ export abstract class RemoteSource {
   }
 
   private notebookKey(kind: string, notebooks: NotebookConfig[], entries: RemoteEntry[]) {
-    return `mgn:${kind}:${INDEX_VERSION}:${this.repository.toLowerCase()}:${hashJson(notebooks.map(nb => [nb.id, nb.root, nb.assets || 'assets', (nb.templates || []).map(t => t.file), entries.find(entry => entry.type === 'tree' && entry.path === nb.root)?.sha || null]))}`;
+    return `mgn:${kind}:${INDEX_VERSION}:${this.cacheRepository()}:${hashJson(notebooks.map(nb => [nb.id, nb.root, nb.assets || 'assets', (nb.templates || []).map(t => t.file), entries.find(entry => entry.type === 'tree' && entry.path === nb.root)?.sha || null]))}`;
   }
 
   /** Query read model over this reader's snapshot. Notebook indexes and derived results are cached by notebook content. */

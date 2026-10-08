@@ -3,22 +3,17 @@ import path from 'node:path';
 import { parseEnv } from 'node:util';
 import YAML from 'yaml';
 import { resolveWorkspaceConfigPath } from './config.js';
+import { normalizeGitHubUrl } from './github-site.js';
+import { normalizeHttpsSiteUrl } from './site-url.js';
 
-export type RemoteSourceConfig = { type: 'github'; repository: string; branch: string; } | { type: 'gitlab'; url: string; repository: string; branch: string; };
+/** A GitHub source names its site with `url` unless it is github.com, which a source leaves out. */
+export type RemoteSourceConfig = { type: 'github'; url?: string; repository: string; branch: string; } | { type: 'gitlab'; url: string; repository: string; branch: string; };
 export type SourceConfig = { type: 'local'; path: string; } | RemoteSourceConfig;
 export const SERVER_CONFIG_FILENAME = 'github-notes.server.yaml';
 
 /** Deployment-owned HTTPS base URL, including an optional relative installation root. */
 export function normalizeGitLabUrl(value: unknown): string {
-  if (typeof value !== 'string' || !value.trim()) throw new Error('Configure a GitLab HTTPS site URL.');
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error('GitLab URL must be an absolute HTTPS URL.');
-  }
-  if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || /[\\\s]/.test(value) || /%2f|%5c|%2e/i.test(value)) throw new Error('GitLab URL must use HTTPS with a site path and no credentials, query or fragment.');
-  return url.href.replace(/\/+$/, '');
+  return normalizeHttpsSiteUrl(value, 'GitLab');
 }
 export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   const source = (raw as { source?: Record<string, unknown>; })?.source;
@@ -29,7 +24,8 @@ export function parseSourceConfig(raw: unknown, base: string): SourceConfig {
   /* eslint-enable no-control-regex */
   if (validBranch && typeof source?.repository === 'string') {
     if (source.type === 'github' && /^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/.test(source.repository) && !/\/\.{1,2}$/.test(source.repository)) {
-      return { type: 'github', repository: source.repository, branch };
+      const url = source.url === undefined ? undefined : normalizeGitHubUrl(source.url);
+      return { type: 'github', ...(url ? { url } : {}), repository: source.repository, branch };
     }
     if (source.type === 'gitlab' && source.repository.split('/').length >= 2 && source.repository.split('/').every(part => /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(part) && !part.endsWith('.git') && !part.endsWith('.atom'))) {
       return { type: 'gitlab', url: normalizeGitLabUrl(source.url ?? 'https://gitlab.com'), repository: source.repository, branch };
@@ -68,7 +64,7 @@ export interface RepositoryMapping {
 /** Whether a mapping names the platform repository `source` serves; the worktree's checked-out branch is its own. */
 export function mapsRepository(mapping: RepositoryMapping, source: RemoteSourceConfig): boolean {
   if (mapping.source.type !== source.type || mapping.source.repository !== source.repository) return false;
-  return mapping.source.type !== 'gitlab' || (source.type === 'gitlab' && mapping.source.url === source.url);
+  return mapping.source.url === source.url;
 }
 
 /** Worktree paths for notebook repositories; a relative `path` resolves against the server configuration file. */
@@ -96,7 +92,7 @@ export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.
   // An empty key, as .env.example ships them, counts as unset.
   const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] || env[`GITHUB_NOTES_${suffix}`] || undefined;
   const type = get('SOURCE');
-  if (type) return parseSourceConfig({ source: type === 'local' ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) } : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
+  if (type) return parseSourceConfig({ source: type === 'local' ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) } : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: type === 'github' ? get('GITHUB_URL') : get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
   const file = serverConfigFile(base, env);
   if (fs.existsSync(file)) return parseSourceConfig(YAML.parse(fs.readFileSync(file, 'utf8')), path.dirname(file));
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');
@@ -104,5 +100,6 @@ export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.
 }
 export function sourceIdentity(source: SourceConfig): string {
   if (source.type === 'local') return `local:${source.path}`;
-  return source.type === 'github' ? `github:${source.repository}@${source.branch}` : `gitlab:${source.url}/${source.repository}@${source.branch}`;
+  if (source.type === 'github') return source.url ? `github:${source.url}/${source.repository}@${source.branch}` : `github:${source.repository}@${source.branch}`;
+  return `gitlab:${source.url}/${source.repository}@${source.branch}`;
 }
