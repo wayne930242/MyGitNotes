@@ -2,7 +2,6 @@ import { useState } from 'react';
 import type { NoteRef } from '@mygitnotes/core/note-query';
 import { Button } from '../Button.js';
 import { ApiError, publishGist, unpublishGist } from '../../lib/api.js';
-import { gistLink } from '../../lib/gist-link.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { useNoteLocation } from '../../lib/note-location.js';
 
@@ -41,8 +40,8 @@ export function NoteInfoPanel({ note, ...gist }: { note: NoteRef; } & GistProps)
 }
 
 /**
- * Publishes the note body as a secret Gist and records its id and address in the `gist` and `gist_url` frontmatter of
- * the draft; every later commit of the note updates the Gist. Unpublishing deletes the Gist and drops both fields.
+ * Publishes the note body as a secret Gist and records its id in the `gist` frontmatter of the draft; every later commit
+ * of the note updates the Gist, and the server opens it on its site. Unpublishing deletes the Gist and drops the field.
  */
 function NoteGist({ path, content, metadata, setMetadata, locked }: { path: string; } & GistProps) {
   const { t } = useTranslation();
@@ -63,19 +62,19 @@ function NoteGist({ path, content, metadata, setMetadata, locked }: { path: stri
   const publish = () =>
     run(async () => {
       const created = await publishGist({ path, content, metadata });
-      setMetadata({ ...metadata, gist: created.id, gist_url: created.url });
+      setMetadata({ ...metadata, gist: created.id });
     });
   const unpublish = () =>
     run(async () => {
       await unpublishGist(id);
-      const { gist: _removed, gist_url: _removedUrl, ...rest } = metadata;
+      const { gist: _removed, ...rest } = metadata;
       setMetadata(rest);
     });
   return (
     <div>
       <dt>{t('editor.infoGist')}</dt>
       <dd className='note-info-gist'>
-        {id ? <a href={gistLink(id, metadata.gist_url)} target='_blank' rel='noreferrer'>{t('editor.gistOpen')}</a> : <span>{t('editor.gistNotPublished')}</span>}
+        {id ? <a href={`/api/gists/${encodeURIComponent(id)}/open`} target='_blank' rel='noreferrer'>{t('editor.gistOpen')}</a> : <span>{t('editor.gistNotPublished')}</span>}
         <Button size='small' variant={id ? 'danger' : 'default'} disabled={busy || locked || (!id && !content.trim())} onClick={() => void (id ? unpublish() : publish())}>{t(id ? 'editor.gistUnpublish' : 'editor.gistPublish')}</Button>
         <span className='note-info-hint'>{t(id ? 'editor.gistSyncHint' : 'editor.gistPublishHint')}</span>
         {error && <span role='alert' className='text-danger'>{error.message} {error.reauthorize && <a className='underline' href='/api/auth/github'>{t('auth.signInWithGithub')}</a>}</span>}

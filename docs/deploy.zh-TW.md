@@ -269,13 +269,15 @@ Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存
 3. Compose 接續建置與啟動步驟；單純 Docker 接續映像建置與容器啟動步驟；Vercel 執行 `gh workflow run deploy-vercel-sparse.yml --ref core`。
 4. 開啟 `APP_URL`：登入會前往 Enterprise 站台，筆記檢視成功載入。
 
-下列項目都跟著這個站台：儲存庫讀寫、登入、`MYGITNOTES_REPOSITORY` 留空時的儲存庫選擇器、GitHub App 安裝連結（`<站台>/github-apps/<slug>/installations/new`），以及 Gist 發佈（筆記的「開啟 Gist」連結使用發佈當時站台回傳的網址，記在 frontmatter 的 `gist_url`，與 `gist` 並列）。位於同一站台其他儲存庫的筆記本這樣宣告：`source: { type: github, url: https://ghe.example.com, repository: team/design }`；沒有 `url` 代表 github.com，是不同的站台，不會共用登入。
+下列項目都跟著這個站台：儲存庫讀寫、登入、`MYGITNOTES_REPOSITORY` 留空時的儲存庫選擇器、GitHub App 安裝連結（`<站台>/github-apps/<slug>/installations/new`），以及 Gist 發佈（筆記的「開啟 Gist」連結會向站台的 Gist API 查詢網址，再開到那裡）。位於同一站台其他儲存庫的筆記本這樣宣告：`source: { type: github, url: https://ghe.example.com, repository: team/design }`；沒有 `url` 代表 github.com，是不同的站台，不會共用登入。
+
+舊版會忽略 `github` 來源上的 `url`。現在 manifest 或 server YAML 裡帶了 `url`，就代表那個站台；github.com 的來源若殘留 `url`（例如填了儲存庫的網頁網址），請刪掉，也不要留空值。
 
 與 github.com 的差異：
 
 - **從範本建立**：github.com 提供入門範本。Enterprise 站台只有在 `MYGITNOTES_STARTER_TEMPLATE` 指定該站台上的範本時才顯示建立連結；否則請使用者選擇既有儲存庫。
 - **Core 更新**仍然追蹤 github.com，Enterprise 站台的儲存庫不提供，站台的權杖也就不會送到 github.com。
-- **封存檔下載**只接受導向該站台自己的 codeload（`https://codeload.<主機>/…`，未啟用子網域隔離時為 `https://<主機>/codeload/…`），且必須是 HTTPS 預設連接埠。
+- **封存檔下載**只接受導向該站台自己的 codeload（`https://codeload.<主機>/…`，未啟用子網域隔離時為 `https://<主機>/codeload/…`），必須是 HTTPS，連接埠與站台網址相同（預設連接埠則不帶）。
 - Pro 服務仍然只支援 github.com。
 
 ## Core 更新

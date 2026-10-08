@@ -168,11 +168,15 @@ describe('reading a repository on an Enterprise site', () => {
       if (url.startsWith('https://ghe.example.com/api/v3/repos/owner/repo')) return new Response(JSON.stringify({ private: false, site: 'ghes' }));
       throw new Error(`Unexpected ${url}`);
     }) as unknown as typeof fetch;
-    const com = new GitHubApi('owner/repo', 'token', request), ghes = new GitHubApi('owner/repo', 'token', request, 'https://ghe.example.com');
-    expect(await com.json('')).toMatchObject({ site: 'com' });
-    expect(await ghes.json('')).toMatchObject({ site: 'ghes' });
-    expect(await ghes.json('/commits/main')).toMatchObject({ site: 'ghes' });
-    expect(request).toHaveBeenCalledTimes(3);
+    // Anonymous reads of an immutable commit are served from the process cache, so a key without the site would
+    // answer the second site from the first one's entry.
+    const commit = `/commits/${'a'.repeat(40)}`;
+    const com = new GitHubApi('owner/repo', undefined, request), ghes = new GitHubApi('owner/repo', undefined, request, 'https://ghe.example.com');
+    expect(await com.json(commit)).toMatchObject({ site: 'com' });
+    expect(await ghes.json(commit)).toMatchObject({ site: 'ghes' });
+    expect(await com.json(commit)).toMatchObject({ site: 'com' });
+    expect(await ghes.json(commit)).toMatchObject({ site: 'ghes' });
+    expect(request).toHaveBeenCalledTimes(2);
   });
   it('shares a rate-limit cooldown only within a site', async () => {
     const request = vi.fn(async (input: any) => String(input).startsWith('https://ghe.example.com/') ? new Response('{}', { status: 429, headers: { 'retry-after': '120' } }) : new Response(JSON.stringify({ private: false }))) as unknown as typeof fetch;

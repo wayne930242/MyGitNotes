@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { createRecordStore } from '../src/record-store/index.js';
+import { gistPageAllowed } from '../src/gists.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Hosted\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n';
 const files: Record<string, string> = { '.mygitnotes.yaml': manifest, 'notes/life/shared.md': '---\ntitle: Shared\ngist: abc123\n---\n\nOld body\n', 'notes/life/private.md': '# Private\n' };
@@ -134,4 +135,15 @@ it('reports a Gist update the grant is not allowed to make as needing a new sign
   const { status, body } = await commit([{ path: 'notes/life/shared.md', content: 'New body\n', metadata: { gist: 'abc123' } }]);
   expect(status).toBe(200);
   expect(body.gists).toEqual([{ path: 'notes/life/shared.md', gist: 'abc123', error: expect.any(String), reauthorize: true }]);
+});
+
+it('opens only a Gist page of the workspace site', () => {
+  const allowed = (location: string, site?: string) => gistPageAllowed(new URL(location), site);
+  expect(allowed('https://gist.github.com/octo/abc123')).toBe(true);
+  for (const location of ['http://gist.github.com/octo/abc123', 'https://gist.github.com:8443/abc123', 'https://u:p@gist.github.com/abc123', 'https://evil.example/gist/abc123', 'https://github.com/gist/abc123']) expect(allowed(location)).toBe(false);
+  expect(allowed('https://ghe.example.com/gist/octo/abc123', 'https://ghe.example.com')).toBe(true);
+  expect(allowed('https://gist.ghe.example.com/octo/abc123', 'https://ghe.example.com')).toBe(true);
+  expect(allowed('https://ghe.example.com:8443/gist/abc123', 'https://ghe.example.com:8443')).toBe(true);
+  expect(allowed('https://example.com/ghe/gist/abc123', 'https://example.com/ghe')).toBe(true);
+  for (const location of ['https://gist.github.com/abc123', 'https://ghe.example.com/other/abc123', 'https://ghe.example.com:8443/gist/abc123', 'https://evilghe.example.com/gist/abc123', 'https://gist.ghe.example.com.evil.test/abc123', 'https://example.com/gist/abc123']) expect(allowed(location, location.includes('example.com/') && !location.includes('ghe.') ? 'https://example.com/ghe' : 'https://ghe.example.com')).toBe(false);
 });

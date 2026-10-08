@@ -269,13 +269,15 @@ This subsection applies on top of [Vercel through GitHub Actions sparse checkout
 3. For Compose, continue at the build and start step; for plain Docker, continue at the image build and container start steps; for Vercel, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
 4. Open `APP_URL`; sign-in opens the Enterprise site and the Notes view loads.
 
-What follows the site: repository reads and writes, sign-in, the repository picker when `MYGITNOTES_REPOSITORY` is empty, the GitHub App installation link (`<site>/github-apps/<slug>/installations/new`), and Gist publishing (a note's **Open the Gist** link uses the address the site returned when the note was published, recorded as `gist_url` beside `gist` in its frontmatter). A notebook in another repository on the same site declares `source: { type: github, url: https://ghe.example.com, repository: team/design }`; without `url` it means github.com, a different site, and does not share the sign-in.
+What follows the site: repository reads and writes, sign-in, the repository picker when `MYGITNOTES_REPOSITORY` is empty, the GitHub App installation link (`<site>/github-apps/<slug>/installations/new`), and Gist publishing (a note's **Open the Gist** link asks the site's Gist API for the Gist's address and opens it there). A notebook in another repository on the same site declares `source: { type: github, url: https://ghe.example.com, repository: team/design }`; without `url` it means github.com, a different site, and does not share the sign-in.
+
+Earlier versions ignored `url` on a `github` source. A manifest or server YAML that carries one now names that site, so remove a leftover `url` (for example a repository's web address) from a github.com source, and do not leave it empty.
 
 Differences from github.com:
 
 - **Create from template**: github.com offers the starter template. An Enterprise site offers the create link only when `MYGITNOTES_STARTER_TEMPLATE` names a template on that site; otherwise people pick an existing repository.
 - **Core updates** keep following github.com and are not offered for a repository on an Enterprise site, so the site's token is never sent to github.com.
-- **Archive downloads** accept a redirect only to the site's own codeload (`https://codeload.<host>/…`, or `https://<host>/codeload/…` without subdomain isolation), over HTTPS on the default port.
+- **Archive downloads** accept a redirect only to the site's own codeload (`https://codeload.<host>/…`, or `https://<host>/codeload/…` without subdomain isolation), over HTTPS on the port the site's URL names (none for the default).
 - The Pro service stays github.com only.
 
 ## Core updates

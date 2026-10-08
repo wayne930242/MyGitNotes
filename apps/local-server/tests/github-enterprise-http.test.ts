@@ -41,7 +41,8 @@ async function start(env: Record<string, string>, webRoot = site, apiRoot = `${s
     }
     if (url === `${apiRoot}/user`) return json({ id: 42, login: 'octo' });
     if (url === `${apiRoot}/gists` && init?.method === 'POST') return json({ id: 'abc123', html_url: `${webRoot}/gist/octo/abc123` });
-    if (url.startsWith(`${apiRoot}/gists/abc123`)) return json({ files: { 'a.md': {} } });
+    if (url.startsWith(`${apiRoot}/gists/abc123`)) return json({ files: { 'a.md': {} }, html_url: `${webRoot}/gist/octo/abc123` });
+    if (url.startsWith(`${apiRoot}/gists/evil`)) return json({ files: {}, html_url: 'https://evil.example/gist/octo/evil' });
     expect(authorization).toBe('Bearer ghe-user-token');
     if (url === `${apiRoot}/user/repos?affiliation=owner,collaborator,organization_member&sort=updated&per_page=100&page=1`) return json([repository('team/handbook', '2026-10-03T00:00:00Z'), repository('team/read-only', '2026-10-05T00:00:00Z', false)]);
     if (url === `${apiRoot}/repos/team/handbook`) return json(repository('team/handbook', '2026-10-03T00:00:00Z'));
@@ -127,6 +128,9 @@ describe('a deployment whose repository is on GitHub Enterprise Server', () => {
     const saved = await fetch(`${base}/api/notes/commit`, edit).then(r => r.json());
     expect(saved.gists).toEqual([{ path: note.path, gist: 'abc123' }]);
     expect(outbound.filter(call => call.url.includes('/gists/abc123')).map(call => [call.method, call.url])).toEqual([['GET', `${site}/api/v3/gists/abc123`], ['PATCH', `${site}/api/v3/gists/abc123`]]);
+    const opened = await fetch(`${base}/api/gists/abc123/open`, { headers: { Cookie: cookie }, redirect: 'manual' });
+    expect([opened.status, opened.headers.get('location')]).toEqual([302, `${site}/gist/octo/abc123`]);
+    expect((await fetch(`${base}/api/gists/evil/open`, { headers: { Cookie: cookie }, redirect: 'manual' })).status).toBe(502);
     expect((await fetch(`${base}/api/gists/abc123`, post(cookie, {}, 'DELETE'))).status).toBe(200);
     expect(outbound.at(-1)).toMatchObject({ method: 'DELETE', url: `${site}/api/v3/gists/abc123` });
     expect(outbound.every(call => call.url.startsWith(`${site}/`))).toBe(true);

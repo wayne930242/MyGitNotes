@@ -103,6 +103,18 @@ export function gistSite(res: Response): string | undefined {
   return source.type === 'github' ? source.url : undefined;
 }
 
+/**
+ * Whether `location` is a Gist page of the GitHub site `url` names: gist.github.com for github.com; for an Enterprise
+ * site its `/gist/` path or the `gist.` subdomain of subdomain isolation, on the site's port.
+ */
+export function gistPageAllowed(location: URL, url?: string): boolean {
+  if (location.protocol !== 'https:' || location.username || location.password) return false;
+  if (!url) return location.hostname === 'gist.github.com' && !location.port;
+  const site = new URL(url);
+  if (location.port !== site.port) return false;
+  return location.hostname === `gist.${site.hostname}` || location.hostname === site.hostname && location.pathname.startsWith(`${site.pathname.replace(/\/$/, '')}/gist/`);
+}
+
 /** Publishes note bodies as secret Gists of the signed-in GitHub account, and deletes them again. */
 export function createGistRouter(): Router {
   const router = Router();
@@ -118,6 +130,21 @@ export function createGistRouter(): Router {
       const { path: file, content, metadata } = req.body ?? {};
       if (typeof file !== 'string' || !file || typeof content !== 'string') throw new SourceError('path and content are required.');
       res.json(await createGist(token(res), { path: file, content, metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {} }, gistSite(res)));
+    } catch (error) {
+      fail(res, error);
+    }
+  });
+  // Opens a Gist where its site keeps it. The address comes from the site's Gist API, never from the note, whose
+  // frontmatter is repository content anyone with write access can change.
+  router.get('/api/gists/:id/open', async (req, res) => {
+    try {
+      const id = req.params.id;
+      if (!GIST_ID.test(id)) throw new SourceError('Invalid Gist id.');
+      const site = gistSite(res);
+      const body = await (await gistRequest(token(res), `/${id}`, {}, site)).json() as { html_url?: unknown; };
+      const location = typeof body.html_url === 'string' ? URL.parse(body.html_url) : null;
+      if (!location || !gistPageAllowed(location, site)) throw new SourceError('GitHub returned an unexpected Gist address.', 502);
+      res.redirect(302, location.href);
     } catch (error) {
       fail(res, error);
     }
