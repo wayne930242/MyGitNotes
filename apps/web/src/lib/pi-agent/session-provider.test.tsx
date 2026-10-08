@@ -88,6 +88,32 @@ it("starts at the home repository's root workspace by default, resuming no conve
   await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ repository: home, folder: '' }));
 });
 
+it('counts as starting while the automatic start is on its way, and no longer once it answers or fails', async () => {
+  const answered = vi.mocked(fetch).getMockImplementation()!;
+  let release!: () => void;
+  let posted = false;
+  const held = new Promise<void>(resolve => (release = resolve));
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    if (init?.method === 'POST') {
+      posted = true;
+      await held;
+    }
+    return answered(url, init);
+  });
+  const agent = mount();
+  await waitFor(() => expect(posted).toBe(true));
+  expect(agent.current?.starting).toBe(true);
+  expect(agent.current?.session).toBeNull();
+  release();
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  expect(agent.current?.starting).toBe(false);
+  cleanup();
+  localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ repository: home, folder: 'flaky' }));
+  const failed = mount();
+  await waitFor(() => expect(failed.current?.error).toBe('Pi could not start.'));
+  expect(failed.current?.starting).toBe(false);
+});
+
 it('falls back to the home root when the remembered workspace is gone, and forgets it', async () => {
   localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ repository: home, folder: 'gone' }));
   const agent = mount();

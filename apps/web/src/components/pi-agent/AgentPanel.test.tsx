@@ -29,7 +29,7 @@ const repositories = [{ id: home, notebooks: ['nb', 'blog'] }];
 const workspaces = [{ repository: home, folder: '', hasInstructions: true, parents: [] }, { repository: home, folder: 'blog', hasInstructions: true, parents: [''] }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', starting: false, start: vi.fn(async () => {}), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -194,6 +194,16 @@ it('offers a manual start when no session runs, showing why the last one ended',
   expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).disabled).toBe(true);
   fireEvent.click(screen.getByRole('button', { name: 'Start session' }));
   expect(value.start).toHaveBeenCalled();
+});
+
+it('shows a start under way as loading, not as a button, until the session answers', () => {
+  panel(agent({ session: null, connected: false, starting: true }));
+  expect(screen.getByRole('status').textContent).toBe('Starting Pi…');
+  expect(screen.getByText('Starting')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Start session' })).toBeNull();
+  cleanup();
+  panel(agent({ session: null, connected: false }));
+  expect(screen.getByRole('button', { name: 'Start session' })).toBeTruthy();
 });
 
 it('shows messages Pi has queued while it works, and puts them back in the message box when the run is stopped', async () => {

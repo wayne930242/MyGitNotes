@@ -1528,6 +1528,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'piAgent.exited': 'Pi session 已結束。',
   'piAgent.notRunning': '目前沒有執行中的 Pi session。',
   'piAgent.start': '啟動 session',
+  'piAgent.startingSession': '正在啟動 Pi…',
   'piAgent.noModel': 'Pi 目前沒有可用的模型。',
   'piAgent.noModel.hint': '請加入你自己的 provider API key：在執行 MyGitNotes 的電腦上開終端機執行 pi 並使用 /login，或替伺服器設定 provider 的 key 環境變數（例如 OPENAI_API_KEY），完成後再檢查一次。',
   'piAgent.noModel.docs': '如何設定 provider',

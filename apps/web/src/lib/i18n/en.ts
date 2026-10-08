@@ -1527,6 +1527,7 @@ export const en = {
   'piAgent.exited': 'The Pi session has ended.',
   'piAgent.notRunning': 'No Pi session is running.',
   'piAgent.start': 'Start session',
+  'piAgent.startingSession': 'Starting Pi…',
   'piAgent.noModel': 'Pi has no model it can use yet.',
   'piAgent.noModel.hint': "Add your own provider API key: run pi in a terminal on the computer that runs MyGitNotes and use /login, or set the provider's key variable, such as OPENAI_API_KEY, for the server. Then check again.",
   'piAgent.noModel.docs': 'How to set up a provider',

@@ -148,6 +148,8 @@ export interface PiAgentValue {
   connected: boolean;
   transcript: TranscriptState;
   error: string;
+  /** A start is on its way: the automatic one has not been sent yet, or Pi is being started (a sandbox may take half a minute). */
+  starting: boolean;
   start: () => Promise<void>;
   /**
    * Sends what the message box holds, read as Pi's terminal editor reads it (see parseComposerInput); returns false
@@ -414,7 +416,9 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     if (info && info.status !== 'exited') connect();
   }, [connect, disconnect]);
 
+  const [starting, setStarting] = useState(false);
   const start = useCallback(async () => {
+    setStarting(true);
     try {
       // A running session is kept whatever is asked for; the server only uses the workspace and the conversation
       // to start one, by default the home repository's root, resuming the last conversation while it is still valid there.
@@ -431,6 +435,8 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       }
     } catch (reason) {
       setError((reason as Error).message);
+    } finally {
+      setStarting(false);
     }
   }, [attach, homeRepository]);
 
@@ -449,11 +455,13 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
 
   // Starts once, as soon as Pi is known to be installed and the workspace is known.
   const started = useRef(false);
+  const [autoStarted, setAutoStarted] = useState(false);
   // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
   const ready = enabled && piAvailable && agentGate.allowed && Boolean(homeRepository);
   useEffect(() => {
     if (!ready || started.current) return;
     started.current = true;
+    setAutoStarted(true);
     void start();
   }, [ready, start]);
 
@@ -484,6 +492,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     connected,
     transcript,
     error,
+    starting: starting || (ready && !autoStarted),
     start,
     send: (text, focus) => {
       const input = parseComposerInput(text);
@@ -541,12 +550,15 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     // Pi reads its credentials only when it starts, so a key added since takes a fresh session; one without a model holds no conversation.
     checkModels: () => {
       void (async () => {
+        // Starting from the stop on, so the stopped session between the two never offers the start button.
+        setStarting(true);
         try {
           attach((await sessionRequest('DELETE')).session);
           remember(SESSION_FILE_KEY, null);
           await start();
         } catch (reason) {
           setError((reason as Error).message);
+          setStarting(false);
         }
       })();
     },
@@ -580,7 +592,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, autoStarted, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

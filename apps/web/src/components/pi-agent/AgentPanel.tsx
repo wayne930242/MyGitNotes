@@ -1,6 +1,7 @@
 import { ChevronDown, FolderGit2, MessageSquarePlus, Power, Send, Square, SquareTerminal } from 'lucide-react';
 import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Button } from '../Button.js';
+import { LoadingStatus } from '../LoadingStatus.js';
 import { WorkspaceDialog } from '../WorkspaceDialog.js';
 import { Select } from '../Select.js';
 import { AgentDialogCard } from './AgentDialogCard.js';
@@ -209,6 +210,8 @@ function AgentConversation() {
   const links = useMemo(() => chatLinks(session, agent.notebooks, agent.repositories), [session, agent.notebooks, agent.repositories]);
   const name = useWorkspaceName();
   const live = Boolean(session && session.status !== 'exited');
+  // Until a start answers there is no session, but nothing for the person to do either.
+  const starting = !live && agent.starting;
   const ready = live && agent.connected;
   // Pi answered with no model at all: no key, no login and no model the edition provides.
   const noModel = ready && model.loaded === true && model.models.length === 0;
@@ -245,7 +248,7 @@ function AgentConversation() {
   return (
     <section className='pi-agent-panel' aria-label={t('piAgent.title')}>
       <header className='pi-agent-header'>
-        <span className='pi-agent-status' data-status={live ? session!.status : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : 'piAgent.status.none')}</span>
+        <span className='pi-agent-status' data-status={live ? session!.status : starting ? 'starting' : 'none'}>{t(live ? `piAgent.status.${session!.status}` as const : starting ? 'piAgent.status.starting' : 'piAgent.status.none')}</span>
         {/* The workspace name opens the workspace picker; its tooltip names the absolute folder Pi runs in. */}
         <button type='button' className='pi-agent-cwd' title={session?.cwd ? `${t('piAgent.switchWorkspace')}\n${session.cwd}` : t('piAgent.switchWorkspace')} aria-haspopup='dialog' aria-expanded={switching} onClick={() => setSwitching(open => !open)}>
           <span>{session ? name(session.location) : t('piAgent.switchWorkspace')}</span>
@@ -268,7 +271,8 @@ function AgentConversation() {
       )}
       {switching && <SwitchWorkspace onDone={() => setSwitching(false)} />}
       {agent.error && <p role='alert' className='pi-agent-error'>{agent.error}</p>}
-      {!live && (
+      {starting && <LoadingStatus className='pi-agent-idle'>{t('piAgent.startingSession')}</LoadingStatus>}
+      {!live && !starting && (
         <div className='pi-agent-idle'>
           <p>{t(session?.status === 'exited' ? 'piAgent.exited' : 'piAgent.notRunning')}</p>
           {session?.exit?.stderr && <pre className='pi-agent-pre'>{session.exit.stderr}</pre>}
