@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { act, cleanup, render, waitFor } from '@testing-library/react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { NotebookConfig } from '../types.js';
 import { type WebFeature, WebFeaturesProvider } from '../web-features.js';
@@ -60,14 +60,16 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/** Reports the provider's value after each render, so a test acts on the latest one; it shows the panel unless told not to. */
+/** Reports the provider's value after each render, so a test acts on the latest one; unless told not to, it reaches for the agent once Pi is known to be there, as focusing the message box does. */
 function Probe({ onValue, opened }: { onValue: (value: PiAgentValue) => void; opened: boolean; }) {
   const value = usePiAgent();
   useEffect(() => onValue(value));
-  const { panelOpened } = value;
+  const woken = useRef(false);
   useEffect(() => {
-    if (opened) panelOpened();
-  }, [opened, panelOpened]);
+    if (!opened || woken.current || !value.available) return;
+    woken.current = true;
+    value.wake();
+  });
   return null;
 }
 
@@ -88,16 +90,68 @@ function mount(features: WebFeature[] = [], webTools?: WebToolHandler, opened = 
   return seen;
 }
 
-it('starts nothing until the panel first shows, then starts once', async () => {
+it('starts nothing until woken, then once however often it is woken while starting or running', async () => {
   const agent = mount([], undefined, false);
-  await waitFor(() => expect(requests.map(request => request.method)).toEqual(['GET']));
+  await waitFor(() => expect(agent.current?.available).toBe(true));
   await new Promise(resolve => setTimeout(resolve, 50));
   expect(requests.map(request => request.method)).toEqual(['GET']);
   expect(agent.current?.starting).toBe(false);
-  act(() => agent.current!.panelOpened());
+  act(() => {
+    agent.current!.wake();
+    agent.current!.wake();
+  });
   await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
-  act(() => agent.current!.panelOpened());
+  act(() => agent.current!.wake());
   expect(requests.filter(request => request.method === 'POST')).toHaveLength(1);
+});
+
+it('holds a message sent before Pi is ready, starting Pi, and sends it once the socket opens', async () => {
+  const agent = mount([], undefined, false);
+  await waitFor(() => expect(agent.current?.available).toBe(true));
+  let accepted = false;
+  act(() => {
+    accepted = agent.current!.send('summarize this folder');
+    accepted = agent.current!.send('and list its links') && accepted;
+  });
+  expect(accepted).toBe(true);
+  expect(agent.current?.held).toBe('summarize this folder\n\nand list its links');
+  await waitFor(() => expect(FakeSocket.last).toBeDefined());
+  expect(requests.filter(request => request.method === 'POST')).toHaveLength(1);
+  const socket = FakeSocket.last!;
+  act(() => {
+    socket.readyState = FakeSocket.OPEN;
+    socket.onopen?.();
+  });
+  expect(socket.sent.at(-1)).toMatchObject({ type: 'prompt', message: 'summarize this folder\n\nand list its links' });
+  expect(agent.current?.held).toBeNull();
+});
+
+it('puts a held message back in the message box when Pi fails to start', async () => {
+  localStorage.setItem('mygitnotes.piAgent.location', JSON.stringify({ repository: home, folder: 'flaky' }));
+  const agent = mount([], undefined, false);
+  await waitFor(() => expect(agent.current?.available).toBe(true));
+  act(() => void agent.current!.send('summarize this folder'));
+  await waitFor(() => expect(agent.current?.error).toBe('Pi could not start.'));
+  expect(agent.current?.held).toBeNull();
+  expect(agent.current?.editorText?.text).toBe('summarize this folder');
+});
+
+it('wakes again after a hosted sandbox stopped for idling, resuming the conversation, but not after Pi exited on its own', async () => {
+  const agent = mount();
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  act(() => FakeSocket.last!.receive({ type: 'bridge_status', session: live({ sessionFile: '/s/kept.jsonl' }) }));
+  // The sandbox stopped: the socket closes and the session reads back as none.
+  act(() => FakeSocket.last!.onclose!());
+  await waitFor(() => expect(agent.current?.session).toBeNull(), { timeout: 3000 });
+  expect(requests.filter(request => request.method === 'POST')).toHaveLength(1);
+  act(() => agent.current!.wake());
+  await waitFor(() => expect(requests.filter(request => request.method === 'POST')).toHaveLength(2));
+  expect(requests.at(-1)?.body).toEqual({ repository: home, folder: '', sessionFile: '/s/kept.jsonl' });
+  await waitFor(() => expect(agent.current?.session?.id).toBe('s1'));
+  act(() => FakeSocket.last!.receive({ type: 'bridge_status', session: live({ status: 'exited' }) }));
+  act(() => agent.current!.wake());
+  await new Promise(resolve => setTimeout(resolve, 50));
+  expect(requests.filter(request => request.method === 'POST')).toHaveLength(2);
 });
 
 it("starts at the home repository's root workspace by default, resuming no conversation yet", async () => {
@@ -105,7 +159,7 @@ it("starts at the home repository's root workspace by default, resuming no conve
   await waitFor(() => expect(requests.find(request => request.method === 'POST')?.body).toEqual({ repository: home, folder: '' }));
 });
 
-it('counts as starting while the automatic start is on its way, and no longer once it answers or fails', async () => {
+it('counts as starting while a start is on its way, and no longer once it answers or fails', async () => {
   const answered = vi.mocked(fetch).getMockImplementation()!;
   let release!: () => void;
   let posted = false;

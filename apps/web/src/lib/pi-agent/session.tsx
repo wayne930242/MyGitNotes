@@ -148,16 +148,22 @@ export interface PiAgentValue {
   connected: boolean;
   transcript: TranscriptState;
   error: string;
-  /** A start is on its way: the automatic one has not been sent yet, or Pi is being started (a sandbox may take half a minute). */
+  /** Pi is being started (a hosted sandbox takes seconds to resume, half a minute the first time). */
   starting: boolean;
   start: () => Promise<void>;
-  /** The agent panel is showing: the first call starts Pi, so nobody who never opens it pays for a hosted sandbox. */
-  panelOpened: () => void;
+  /**
+   * The person is about to use the agent, as by focusing the message box: starts Pi when no session runs, none is
+   * starting and none ended on its own, so nobody pays for a hosted sandbox they only looked at, and one stopped
+   * for idling comes back on the next use.
+   */
+  wake: () => void;
   /**
    * Sends what the message box holds, read as Pi's terminal editor reads it (see parseComposerInput); returns false
    * when it is not complete enough to send, such as /name without a name.
    */
   send: (text: string, focus?: AgentFocus) => boolean;
+  /** A message sent before Pi was ready, which goes once Pi connects; if Pi fails to start it returns to the message box. */
+  held: string | null;
   /** The slash commands Pi offers, as of the last `loadCommands`; the built-ins are the panel's to add. */
   commands: PiCommand[];
   /** Asks Pi for its commands again, as a /reload may have changed them. */
@@ -247,8 +253,8 @@ export function usePiAgentAvailable(): boolean {
 }
 
 /**
- * Starts the workspace's Pi process in the background as soon as a local workspace loads, so the panel
- * opens onto a warm session, and keeps it across panel and page changes until the user ends it. It starts
+ * Starts the workspace's Pi process when the person first reaches for the agent (see `wake`), and keeps it across
+ * panel and page changes until the user ends it or, hosted, its sandbox stops for idling. It starts
  * in the agent workspace the user last switched to, else at the root of the home repository, and resumes the
  * conversation it last had while that is still valid there.
  */
@@ -285,6 +291,16 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     }
   }, []);
   const [editorText, setEditorText] = useState<PiEditorText | null>(null);
+  /** What `held` names, with the prompt it becomes, kept in a ref for the socket that sends it. */
+  const heldMessage = useRef<{ text: string; message: string; } | null>(null);
+  const [held, setHeld] = useState<string | null>(null);
+  const releaseHeld = useCallback(() => {
+    const waiting = heldMessage.current;
+    if (!waiting) return;
+    heldMessage.current = null;
+    setHeld(null);
+    setEditorText(current => ({ text: waiting.text, serial: (current?.serial ?? 0) + 1 }));
+  }, []);
   const socket = useRef<WebSocket | null>(null);
   /** The socket the live session named, kept here because `connect` also runs from timers that have only the ref. */
   const socketInfo = useRef<PiSessionInfo['socket']>(undefined);
@@ -317,6 +333,12 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_available_models' }));
       ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'get_available_thinking_levels' }));
       requestStats();
+      const waiting = heldMessage.current;
+      if (waiting) {
+        heldMessage.current = null;
+        setHeld(null);
+        ws.send(JSON.stringify({ id: crypto.randomUUID(), type: 'prompt', message: waiting.message }));
+      }
     };
     ws.onmessage = event => {
       if (socket.current !== ws || typeof event.data !== 'string') return;
@@ -416,10 +438,14 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     setSession(info);
     setError('');
     if (info && info.status !== 'exited') connect();
-  }, [connect, disconnect]);
+    else releaseHeld();
+  }, [connect, disconnect, releaseHeld]);
 
   const [starting, setStarting] = useState(false);
+  /** Whether a start is on its way, read where two calls in one render would both still see `starting` false. */
+  const startingNow = useRef(false);
   const start = useCallback(async () => {
+    startingNow.current = true;
     setStarting(true);
     try {
       // A running session is kept whatever is asked for; the server only uses the workspace and the conversation
@@ -437,10 +463,12 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       }
     } catch (reason) {
       setError((reason as Error).message);
+      releaseHeld();
     } finally {
+      startingNow.current = false;
       setStarting(false);
     }
-  }, [attach, homeRepository]);
+  }, [attach, homeRepository, releaseHeld]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -455,19 +483,12 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     };
   }, [enabled, disconnect]);
 
-  // Starts once, when the panel first shows and Pi is known to be installed and the workspace is known.
-  const started = useRef(false);
-  const [autoStarted, setAutoStarted] = useState(false);
-  const [opened, setOpened] = useState(false);
-  const panelOpened = useCallback(() => setOpened(true), []);
   // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
   const ready = enabled && piAvailable && agentGate.allowed && Boolean(homeRepository);
-  useEffect(() => {
-    if (!ready || !opened || started.current) return;
-    started.current = true;
-    setAutoStarted(true);
-    void start();
-  }, [ready, opened, start]);
+  // A session that ended on its own (Pi exited, say for want of a key) waits for the start button, so focus never loops a failing start.
+  const wake = useCallback(() => {
+    if (ready && !session && !startingNow.current) void start();
+  }, [ready, session, start]);
 
   // The live conversation's file is the one to resume; an ended session's is not.
   useEffect(() => {
@@ -496,11 +517,21 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     connected,
     transcript,
     error,
-    starting: starting || (ready && opened && !autoStarted),
+    starting,
     start,
-    panelOpened,
+    wake,
     send: (text, focus) => {
       const input = parseComposerInput(text);
+      // Before Pi connects a message or command waits, starting Pi if none runs; the built-ins and shell runs need Pi itself.
+      const waiting = socket.current?.readyState !== WebSocket.OPEN && (startingNow.current || (session ? session.status !== 'exited' : ready));
+      if (waiting && (input.kind === 'message' || input.kind === 'command')) {
+        const message = input.kind === 'message' ? withFocus(input.text, focus) : commandWithFocus(input.text, focus);
+        const before = heldMessage.current;
+        heldMessage.current = before ? { text: `${before.text}\n\n${text}`, message: `${before.message}\n\n${message}` } : { text, message };
+        setHeld(heldMessage.current.text);
+        wake();
+        return true;
+      }
       // A message sent while Pi works steers the current run, as Enter does in Pi's terminal.
       const steer = transcript.running ? { streamingBehavior: 'steer' } : {};
       switch (input.kind) {
@@ -528,6 +559,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
           return true;
       }
     },
+    held,
     commands,
     loadCommands,
     contextUsage,
@@ -597,7 +629,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, opened, autoStarted, panelOpened, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, wake, held, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

@@ -29,7 +29,7 @@ const repositories = [{ id: home, notebooks: ['nb', 'blog'] }];
 const workspaces = [{ repository: home, folder: '', hasInstructions: true, parents: [] }, { repository: home, folder: 'blog', hasInstructions: true, parents: [''] }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', starting: false, start: vi.fn(async () => {}), panelOpened: vi.fn(), send: vi.fn(() => true), commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', starting: false, start: vi.fn(async () => {}), wake: vi.fn(), send: vi.fn(() => true), held: null, commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {
@@ -201,9 +201,33 @@ it('shows a start under way as loading, not as a button, until the session answe
   expect(screen.getByRole('status').textContent).toBe('Starting Pi…');
   expect(screen.getByText('Starting')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Start session' })).toBeNull();
+});
+
+it('rests without a session, offering no button, and starts Pi when the message box is focused', () => {
+  const value = agent({ session: null, connected: false });
+  panel(value);
+  expect(screen.getByText('Standby')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Start session' })).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  const box = screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement;
+  expect(box.disabled).toBe(false);
+  expect(value.wake).not.toHaveBeenCalled();
+  fireEvent.focus(box);
+  expect(value.wake).toHaveBeenCalled();
+});
+
+it('sends while Pi rests or starts, showing what waits for it', () => {
+  const resting = agent({ session: null, connected: false });
+  panel(resting);
+  write('summarize this folder');
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(resting.send).toHaveBeenCalledWith('summarize this folder', undefined);
+  expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).value).toBe('');
   cleanup();
-  panel(agent({ session: null, connected: false }));
-  expect(screen.getByRole('button', { name: 'Start session' })).toBeTruthy();
+  panel(agent({ session: null, connected: false, starting: true, held: 'summarize this folder' }));
+  const queue = screen.getByRole('list', { name: 'Queued messages' });
+  expect([...queue.querySelectorAll('li')].map(item => item.textContent)).toEqual(['Waitingsummarize this folder']);
+  expect((screen.getByRole('textbox', { name: 'Message to Pi' }) as HTMLTextAreaElement).disabled).toBe(false);
 });
 
 it('shows messages Pi has queued while it works, and puts them back in the message box when the run is stopped', async () => {

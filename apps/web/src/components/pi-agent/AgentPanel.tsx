@@ -175,8 +175,7 @@ function AgentConversation() {
   const caret = target?.caret ?? noCaret;
   const selection = useSyncExternalStore(caret.subscribe, caret.get);
   const position = target?.caret && target.content ? selectionPosition(target.content(), selection, target.lineNumberOffset) : undefined;
-  const { locate, loadCommands, editorText, takeEditorText, panelOpened } = agent;
-  useEffect(panelOpened, [panelOpened]);
+  const { locate, loadCommands, editorText, takeEditorText, wake } = agent;
 
   // An extension (such as robot_hand) placed text in the message box for the user to review and send.
   const [shownEditorText, setShownEditorText] = useState<PiEditorText | null>(null);
@@ -214,6 +213,10 @@ function AgentConversation() {
   // Until a start answers there is no session, but nothing for the person to do either.
   const starting = !live && agent.starting;
   const ready = live && agent.connected;
+  // No session and none ended on its own: the message box starts one when used, so this is a resting state, not a problem.
+  const resting = !live && !starting && session?.status !== 'exited';
+  // While Pi starts the person may go on typing, and what they send waits for it.
+  const writable = ready || resting || starting;
   // Pi answered with no model at all: no key, no login and no model the edition provides.
   const noModel = ready && model.loaded === true && model.models.length === 0;
   const absolute = target && file?.path === target.path ? file.absolute : undefined;
@@ -235,7 +238,7 @@ function AgentConversation() {
 
   const send = () => {
     const text = draft.trim();
-    if (!text || !ready) return;
+    if (!text || !writable) return;
     if (agent.send(text, focus)) setDraft('');
     // A built-in that is not ready to send, /name without a name, waits for its argument.
     else if (parseComposerInput(text).kind === 'builtin') setDraft(`${text} `);
@@ -273,9 +276,9 @@ function AgentConversation() {
       {switching && <SwitchWorkspace onDone={() => setSwitching(false)} />}
       {agent.error && <p role='alert' className='pi-agent-error'>{agent.error}</p>}
       {starting && <LoadingStatus className='pi-agent-idle'>{t('piAgent.startingSession')}</LoadingStatus>}
-      {!live && !starting && (
+      {!live && !starting && !resting && (
         <div className='pi-agent-idle'>
-          <p>{t(session?.status === 'exited' ? 'piAgent.exited' : 'piAgent.notRunning')}</p>
+          <p>{t('piAgent.exited')}</p>
           {session?.exit?.stderr && <pre className='pi-agent-pre'>{session.exit.stderr}</pre>}
           <Button variant='primary' onClick={() => void agent.start()}>{t('piAgent.start')}</Button>
         </div>
@@ -290,8 +293,14 @@ function AgentConversation() {
             send();
           }}
         >
-          {agent.transcript.queued.length > 0 && (
+          {(agent.transcript.queued.length > 0 || agent.held) && (
             <ul className='pi-agent-queue' aria-label={t('piAgent.queue')}>
+              {agent.held && (
+                <li>
+                  <span className='pi-agent-badge' title={t('piAgent.queue.heldHint')}>{t('piAgent.queue.held')}</span>
+                  <span className='pi-agent-queue-text' title={agent.held}>{agent.held}</span>
+                </li>
+              )}
               {agent.transcript.queued.map((message, index) => (
                 <li key={index}>
                   <span className='pi-agent-badge' title={t(message.kind === 'steer' ? 'piAgent.queue.steerHint' : 'piAgent.queue.followUpHint')}>{t(message.kind === 'steer' ? 'piAgent.queue.steer' : 'piAgent.queue.followUp')}</span>
@@ -314,12 +323,13 @@ function AgentConversation() {
               className='ui-control'
               rows={3}
               value={draft}
-              placeholder={t(ready ? 'piAgent.placeholder' : 'piAgent.connecting')}
+              placeholder={t(ready || resting ? 'piAgent.placeholder' : 'piAgent.connecting')}
               aria-label={t('piAgent.message')}
               aria-controls={menuOpen ? menuId : undefined}
               aria-activedescendant={menuOpen && matches.length ? `${menuId}-${active}` : undefined}
               aria-autocomplete='list'
-              disabled={!ready}
+              disabled={!writable}
+              onFocus={wake}
               onChange={event => {
                 setDraft(event.target.value);
                 setHighlight(0);
@@ -368,7 +378,7 @@ function AgentConversation() {
                 {t('piAgent.abort')}
               </Button>
             )}
-            <Button type='submit' variant='primary' disabled={!ready || !draft.trim()}>{shell ? <SquareTerminal aria-hidden='true' /> : <Send aria-hidden='true' />}{t(shell ? 'piAgent.run' : agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}</Button>
+            <Button type='submit' variant='primary' disabled={!writable || !draft.trim()}>{shell ? <SquareTerminal aria-hidden='true' /> : <Send aria-hidden='true' />}{t(shell ? 'piAgent.run' : agent.transcript.running ? 'piAgent.steer' : 'piAgent.send')}</Button>
           </div>
         </form>
       )}
