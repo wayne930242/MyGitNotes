@@ -34,8 +34,9 @@ export function githubSite(url?: string): GitHubSite {
     api: residency ? `https://api.${site.hostname}` : `${url}/api/v3`,
     graphql: residency ? `https://api.${site.hostname}/graphql` : `${url}/api/graphql`,
     enterprise: true,
-    // The site's own codeload only: a `/codeload/` path on its host, or the `codeload.` subdomain of subdomain isolation.
-    archiveAllowed: location => location.protocol === 'https:' && !location.port && !location.username && !location.password && (location.hostname === `codeload.${site.hostname}` || location.hostname === site.hostname && location.pathname.startsWith('/codeload/')),
+    // The site's own codeload only: a `/codeload/` path on its host, or the `codeload.` subdomain of subdomain isolation,
+    // on the port the site itself is configured with.
+    archiveAllowed: location => location.protocol === 'https:' && location.port === site.port && !location.username && !location.password && (location.hostname === `codeload.${site.hostname}` || location.hostname === site.hostname && location.pathname.startsWith('/codeload/')),
     installUrl: slug => `${url}/github-apps/${encodeURIComponent(slug)}/installations/new`,
   };
 }

@@ -100,6 +100,11 @@ describe('archive redirect hosts', () => {
     expect(allowed('https://ghe.example.com', 'https://ghe.example.com/codeload/o/r/legacy.tar.gz/abc')).toBe(true);
     expect(allowed('https://octocorp.ghe.com', 'https://codeload.octocorp.ghe.com/o/r/legacy.tar.gz/abc')).toBe(true);
   });
+  it('accepts the port an Enterprise site is configured with, and no other', () => {
+    expect(allowed('https://ghe.example.com:8443', 'https://ghe.example.com:8443/codeload/o/r/legacy.tar.gz/abc')).toBe(true);
+    expect(allowed('https://ghe.example.com:8443', 'https://codeload.ghe.example.com:8443/o/r/legacy.tar.gz/abc')).toBe(true);
+    for (const location of ['https://ghe.example.com/codeload/x', 'https://ghe.example.com:9443/codeload/x']) expect(allowed('https://ghe.example.com:8443', location)).toBe(false);
+  });
   it('refuses any other destination for an Enterprise site', () => {
     for (const location of ['https://codeload.github.com/x', 'https://ghe.example.com/raw/x', 'https://ghe.example.com/other', 'http://ghe.example.com/codeload/x', 'https://ghe.example.com:8443/codeload/x', 'https://u:p@ghe.example.com/codeload/x', 'https://codeload.other.example.com/x', 'https://evilghe.example.com/codeload/x', 'https://codeload.ghe.example.com.evil.test/x']) expect(allowed('https://ghe.example.com', location)).toBe(false);
   });
