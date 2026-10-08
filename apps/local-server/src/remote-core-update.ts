@@ -11,6 +11,13 @@ function homeSource(res: Response): RemoteSourceConfig {
   return source;
 }
 
+/**
+ * Core updates follow the upstream on github.com; a home on another GitHub site, or on GitLab, has no update through
+ * this route. Sending that site's token to github.com would also give it to the wrong host.
+ */
+const updatable = (source: RemoteSourceConfig): source is RemoteSourceConfig & { type: 'github'; } => source.type === 'github' && !source.url;
+const unsupportedMessage = (source: RemoteSourceConfig) => source.type === 'gitlab' ? 'GitLab Core updates are not supported yet.' : 'Core updates are not supported on a GitHub Enterprise site.';
+
 export function createRemoteCoreUpdateRouter(auth: SessionServices): Router {
   const router = Router();
   const updater = async (req: Request, res: Response, source: RemoteSourceConfig & { type: 'github'; }) => new GitHubCoreUpdate(source.repository, buildInfo.sha, await authToken(req, res, auth, source));
@@ -18,8 +25,8 @@ export function createRemoteCoreUpdateRouter(auth: SessionServices): Router {
     router[method](method === 'get' ? '/status' : '/update', async (req, res) => {
       try {
         const source = homeSource(res);
-        if (source.type !== 'github') {
-          if (method === 'post') throw new RemoteCoreError('Core updates through GitLab are not supported yet.', 'UNSUPPORTED_PROVIDER', 422);
+        if (!updatable(source)) {
+          if (method === 'post') throw new RemoteCoreError(source.type === 'gitlab' ? 'Core updates through GitLab are not supported yet.' : unsupportedMessage(source), 'UNSUPPORTED_PROVIDER', 422);
           const status: CoreStatus = { state: 'unsupported', canUpdate: false, current: null, upstreamSha: null, upstream: '', running: null, runningBuild: buildInfo.sha };
           return res.json({ status });
         }
@@ -34,7 +41,7 @@ export function createRemoteCoreUpdateRouter(auth: SessionServices): Router {
   router.post('/install', async (req, res) => {
     try {
       const source = homeSource(res);
-      if (source.type !== 'github') throw new RemoteCoreError('GitLab Core updates are not supported yet.', 'UNSUPPORTED_PROVIDER', 422);
+      if (!updatable(source)) throw new RemoteCoreError(unsupportedMessage(source), 'UNSUPPORTED_PROVIDER', 422);
       res.json(await (await updater(req, res, source)).install());
     } catch (error) {
       res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Workflow installation failed.', code: error instanceof RemoteCoreError ? error.code : 'INSTALL_FAILED' });
@@ -43,7 +50,7 @@ export function createRemoteCoreUpdateRouter(auth: SessionServices): Router {
   router.get('/runs/:requestId', async (req, res) => {
     try {
       const source = homeSource(res);
-      if (source.type !== 'github') throw new RemoteCoreError('GitLab Core updates are not supported yet.', 'UNSUPPORTED_PROVIDER', 422);
+      if (!updatable(source)) throw new RemoteCoreError(unsupportedMessage(source), 'UNSUPPORTED_PROVIDER', 422);
       res.json({ run: await (await updater(req, res, source)).follow(req.params.requestId) });
     } catch (error) {
       res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Run status unavailable.', code: error instanceof RemoteCoreError ? error.code : 'REQUEST_FAILED' });

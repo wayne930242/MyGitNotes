@@ -1,5 +1,5 @@
 /** Where the repository a visitor chose is kept; apart from the routes so auth can read it too. */
-import type { WorkspaceRequest } from '@mygitnotes/core';
+import { normalizeGitHubUrl, type WorkspaceRequest } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { cookieOptions, workspaceChoiceCookie } from './browser-sessions.js';
 import { seal, unseal } from './record-store/index.js';
@@ -16,6 +16,11 @@ const setting = (env: NodeJS.ProcessEnv, suffix: string) => env[`MYGITNOTES_${su
 /** A GitHub deployment without a configured repository lets each visitor pick theirs. */
 export function choosesRepository(env: NodeJS.ProcessEnv = process.env): boolean {
   return setting(env, 'SOURCE') === 'github' && !setting(env, 'REPOSITORY');
+}
+/** The GitHub Enterprise site a deployment names with `MYGITNOTES_GITHUB_URL`; absent means github.com. */
+export function deploymentGitHubUrl(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const url = setting(env, 'GITHUB_URL');
+  return url === undefined ? undefined : normalizeGitHubUrl(url);
 }
 
 /**

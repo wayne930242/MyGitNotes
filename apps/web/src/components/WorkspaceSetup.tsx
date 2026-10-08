@@ -29,8 +29,8 @@ interface AvailableAnswer {
   total: number;
   githubApp: boolean;
   installUrl: string | null;
-  /** GitHub's page for a new repository from the starter template. */
-  newRepositoryUrl: string;
+  /** GitHub's page for a new repository from the starter template; absent on an Enterprise site that names no template. */
+  newRepositoryUrl: string | null;
 }
 
 const FEATURES = [{ icon: ListTree, key: 'setup.featureNotes' }, { icon: Network, key: 'setup.featureGraph' }, { icon: GitBranch, key: 'setup.featureGit' }] as const;
@@ -152,7 +152,7 @@ export function RepositoryPicker({ login }: { login?: string; }) {
     };
   }, [query, reload, t]);
   const startCreating = () => {
-    if (!answer) return;
+    if (!answer?.newRepositoryUrl) return;
     window.open(answer.newRepositoryUrl, '_blank', 'noopener');
     // A filtered list is not a full picture of what existed, so the next unfiltered one becomes the baseline.
     creation.current = { before: query ? null : new Set(answer.repositories.map(repository => repository.fullName)) };
@@ -214,13 +214,13 @@ export function RepositoryPicker({ login }: { login?: string; }) {
         </ul>
       )}
       {answer && answer.total > answer.repositories.length && <p className='text-xs text-muted mb-3'>{t('setup.moreRepositories', { count: answer.total - answer.repositories.length })}</p>}
-      {answer && !creating && (
+      {answer?.newRepositoryUrl && !creating && (
         <button type='button' onClick={startCreating} className='w-full flex items-center justify-center gap-2 mb-3 px-3 py-2 rounded-lg border border-dashed border-line text-sm text-muted hover:text-fg hover:bg-fg/5 transition'>
           <Plus size={16} aria-hidden='true' />
           {t('setup.createRepository')}
         </button>
       )}
-      {answer && creating && (
+      {answer?.newRepositoryUrl && creating && (
         <section aria-label={t('setup.createSteps')} className='mb-3 p-3 rounded-lg bg-sidebar text-sm'>
           <h3 className='font-semibold mb-2'>{t('setup.createSteps')}</h3>
           <ol className='list-decimal pl-5 flex flex-col gap-2'>

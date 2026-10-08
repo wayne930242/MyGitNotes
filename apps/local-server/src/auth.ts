@@ -1,9 +1,9 @@
-import { type SourceConfig, SourceError, sourceIdentity, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { GITHUB_COM, githubSite, type SourceConfig, SourceError, sourceIdentity, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import type { BrowserSessions } from './browser-sessions.js';
-import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoices } from './repository-choice.js';
+import { choosesRepository, cookieWorkspaceChoices, deploymentGitHubUrl, type WorkspaceChoices } from './repository-choice.js';
 import { digest, random, recordLifetime as lifetime, type RecordStore, sealedElsewhere, type StoredRecord } from './record-store/index.js';
 
 export { seal, unseal } from './record-store/index.js';
@@ -19,25 +19,26 @@ export class CredentialRejected extends SourceError {
     super(message, 401);
   }
 }
-type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string; };
-/** The platform a sign-in goes to: the home repository's, or GitHub before a visitor has chosen a repository. */
-type ProviderSite = { type: 'github' | 'local'; } | { type: 'gitlab'; url: string; };
+type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string; /** github.com keeps the unscoped owner, credential id and realm-less records it always had; every other site is scoped by its realm. */ unscoped: boolean; };
+/** The platform a sign-in goes to: the home repository's, or GitHub before a visitor has chosen a repository (on the deployment's GitHub site, github.com unless it names one). */
+type ProviderSite = { type: 'github'; url?: string; } | { type: 'local'; } | { type: 'gitlab'; url: string; };
 /** The sign-in provider follows the home repository's platform and site. */
 function providerFor(source: ProviderSite): Provider {
   const type = source.type === 'gitlab' ? 'gitlab' : 'github';
-  const site = source.type === 'gitlab' ? source.url : 'https://github.com';
+  const url = source.type === 'local' ? undefined : source.url;
+  const site = url ?? GITHUB_COM;
   const clientId = process.env[type === 'gitlab' ? 'GITLAB_CLIENT_ID' : 'GITHUB_CLIENT_ID'];
   const clientSecret = process.env[type === 'gitlab' ? 'GITLAB_CLIENT_SECRET' : 'GITHUB_CLIENT_SECRET'];
-  return { type, site, clientId, clientSecret, realm: `${type}:${site}:${clientId || ''}`, authorize: `${site}${type === 'gitlab' ? '/oauth/authorize' : '/login/oauth/authorize'}`, token: `${site}${type === 'gitlab' ? '/oauth/token' : '/login/oauth/access_token'}`, user: type === 'gitlab' ? `${site}/api/v4/user` : 'https://api.github.com/user' };
+  return { type, site, clientId, clientSecret, realm: `${type}:${site}:${clientId || ''}`, authorize: `${site}${type === 'gitlab' ? '/oauth/authorize' : '/login/oauth/authorize'}`, token: `${site}${type === 'gitlab' ? '/oauth/token' : '/login/oauth/access_token'}`, user: type === 'gitlab' ? `${site}/api/v4/user` : `${githubSite(url).api}/user`, unscoped: type === 'github' && site === GITHUB_COM };
 }
 function matchesProvider(record: any, provider: Provider) {
-  return record?.realm === provider.realm || (!record?.realm && provider.type === 'github');
+  return record?.realm === provider.realm || (!record?.realm && provider.unscoped);
 }
 function ownerOf(session: any, provider: Provider): string | number {
-  return provider.type === 'github' ? session.userId : `${digest(provider.realm)}:${session.userId}`;
+  return provider.unscoped ? session.userId : `${digest(provider.realm)}:${session.userId}`;
 }
 function credentialId(userId: number, provider: Provider) {
-  return createHash('sha256').update(provider.type === 'github' ? `github-credential:${provider.clientId}:${userId}` : `${provider.realm}:credential:${userId}`).digest('base64url');
+  return createHash('sha256').update(provider.unscoped ? `github-credential:${provider.clientId}:${userId}` : `${provider.realm}:credential:${userId}`).digest('base64url');
 }
 async function saveCredential(store: RecordStore, session: StoredRecord, provider: Provider) {
   if (session.credential) return session.credential as string;
@@ -135,7 +136,10 @@ const providerSiteOf = (configSource: WorkspaceConfigSource) => async (req: Requ
   try {
     return (await configSource.settings(req)).home.source;
   } catch (error) {
-    if (error instanceof WorkspaceSetupError && error.reason === 'choose-repository') return { type: 'github' };
+    if (error instanceof WorkspaceSetupError && error.reason === 'choose-repository') {
+      const url = deploymentGitHubUrl();
+      return { type: 'github', ...(url ? { url } : {}) };
+    }
     throw error;
   }
 };

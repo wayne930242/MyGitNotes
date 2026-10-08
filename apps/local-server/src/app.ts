@@ -22,7 +22,7 @@ import { type AssetStorage, envAssetStorage } from './asset-storage.js';
 import { createR2AssetHandler } from './r2-assets.js';
 import { createR2ManagerRouter } from './r2-manager.js';
 import { createFileManagerRouter } from './file-manager.js';
-import { createGistRouter, gistToken, noteGist, syncGists } from './gists.js';
+import { createGistRouter, gistSite, gistToken, noteGist, syncGists } from './gists.js';
 import { isLoopbackHttpOrigin, type PiAgent } from './pi-agent.js';
 
 export function applicationRoot() {
@@ -128,7 +128,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     /** Pushes committed notes that name a Gist to it; notes that name none cost nothing. */
     const publishedGists = async (res: express.Response, notes: { path: string; content: string; metadata: Record<string, unknown>; }[]) => {
       const token = gistToken(res);
-      return token && notes.some(note => noteGist(note.metadata)) ? { gists: await syncGists(token, notes) } : {};
+      return token && notes.some(note => noteGist(note.metadata)) ? { gists: await syncGists(token, notes, gistSite(res)) } : {};
     };
     app.get('/api/workspace', async (req, res) => {
       try {
