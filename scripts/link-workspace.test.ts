@@ -15,7 +15,8 @@ const run = (...args: string[]) => spawnSync('pnpm', args, { cwd: core, env, enc
 const config = () => fs.readFileSync(path.join(core, '.env'), 'utf8');
 
 beforeEach(() => {
-  core = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-link-'));
+  // The script records real paths, and macOS's temporary directory is behind the /var symlink.
+  core = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-link-')));
   workspace = path.join(core, 'existing 筆記 # "quoted"');
   fs.mkdirSync(workspace);
   fs.writeFileSync(path.join(workspace, '.mygitnotes.yaml'), manifest());

@@ -67,7 +67,8 @@ it('commits a note and its new version together, naming the head it was made on 
   expect((await runGit(['rev-parse', 'HEAD^'], root)).stdout).toBe(before);
   const [version] = versionsOf('notes/ex/old.md');
   expect(version).toMatchObject({ parent: before, sequence: 1, date: '2026.10.07', name: 'Draft', blob: await worktreeBlob(root, 'notes/ex/old.md') });
-  expect((await runGit(['show', '-s', '--format=%aI', 'HEAD'], root)).stdout).toBe(new Date(version.authored).toISOString().replace('.000Z', '+00:00'));
+  // Git writes UTC as `+00:00` or `Z` depending on its version; the instant is what must match.
+  expect(Date.parse((await runGit(['show', '-s', '--format=%aI', 'HEAD'], root)).stdout)).toBe(Date.parse(version.authored));
   // Unrelated work stays uncommitted.
   expect((await listChanges(root)).map(file => file.path)).toEqual(['notes/ex/other.md']);
   const { entries } = await fileHistory(root, 'notes/ex/old.md', 1);
