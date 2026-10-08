@@ -66,6 +66,7 @@ The [deployment guide](docs/deploy.md) covers each path step by step:
 - [Docker Compose](docs/deploy.md#docker-compose-with-a-remote-repository) or [plain Docker](docs/deploy.md#plain-docker-with-a-remote-repository) with a remote repository, optionally [behind a reverse proxy](docs/deploy.md#public-access-behind-a-reverse-proxy)
 - [A local checkout inside a container](docs/deploy.md#local-checkout-inside-a-container)
 - [GitLab as the note source](docs/deploy.md#gitlab-source-overlay)
+- [GitHub Enterprise as the note source](docs/deploy.md#github-enterprise-source-overlay)
 - [Private R2 assets](docs/deploy.md#optional-private-r2-assets)
 
 ## Update

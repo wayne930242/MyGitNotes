@@ -12,7 +12,7 @@ Run MyGitNotes locally first with the [quick start](../README.md#quick-start), t
 
 - A Vercel project, GitHub repository containing the core and main branches, and an Upstash Redis database.
 - For GitHub sign-in, prepare a GitHub OAuth App and set the OAuth callback to `https://<your-project>.vercel.app/api/auth/github/callback`.
-- For GitLab sign-in, prepare the GitLab OAuth App described in [GitLab source overlay](#gitlab-source-overlay).
+- For GitLab sign-in, prepare the GitLab OAuth App described in [GitLab source overlay](#gitlab-source-overlay). For GitHub Enterprise, register the app on that site as described in [GitHub Enterprise source overlay](#github-enterprise-source-overlay).
 
 **Values to generate**
 
@@ -244,6 +244,40 @@ This subsection applies on top of [Vercel through GitHub Actions sparse checkout
 
 Keep the GitHub deployment settings from [Vercel through GitHub Actions sparse checkout](#vercel-through-github-actions-sparse-checkout-default) when using Actions; replace only the note-source and OAuth provider fields. GitLab writes require push access to main; public repositories support anonymous reads.
 
+## GitHub Enterprise source overlay
+
+This subsection applies on top of [Vercel through GitHub Actions sparse checkout](#vercel-through-github-actions-sparse-checkout-default), [Docker Compose](#docker-compose-with-a-remote-repository), or [plain Docker](#plain-docker-with-a-remote-repository). It keeps the notes in a repository on GitHub Enterprise Server (GHES) or GitHub Enterprise Cloud with data residency (GHE.com) instead of github.com.
+
+### GitHub Enterprise preparation
+
+**Accounts and services**
+
+- Register a GitHub OAuth App or GitHub App on the same Enterprise site, with callback `APP_URL`/api/auth/github/callback. Personal access token sign-in is not supported.
+- Ensure the deployment can reach and trust the site over HTTPS. The site's API must be reachable too: `https://<site>/api/v3` on GHES, `https://api.<host>` on GHE.com.
+- Keep `APP_URL`, `SESSION_SECRET`, and session storage from the selected base path.
+
+**Values to generate**
+
+- None beyond the selected base path.
+
+**Tools to install**
+
+- Use the tools from the selected base path.
+
+1. In .env.docker for Docker, or .env for Vercel, set `MYGITNOTES_SOURCE=github`, `MYGITNOTES_REPOSITORY=team/notes`, `MYGITNOTES_BRANCH=main`, `MYGITNOTES_GITHUB_URL=https://ghe.example.com` (`https://octocorp.ghe.com` on GHE.com; an installation subpath is accepted), and the `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` of the app registered on that site. `GITHUB_NOTES_GITHUB_URL` is read too. The setting is ignored unless `MYGITNOTES_SOURCE=github`; with it empty or `https://github.com`, nothing changes from a github.com deployment.
+2. For Vercel, import the updated .env fields with `pnpm env:vercel production`; Docker uses the .env.docker from the source configuration step.
+3. For Compose, continue at the build and start step; for plain Docker, continue at the image build and container start steps; for Vercel, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
+4. Open `APP_URL`; sign-in opens the Enterprise site and the Notes view loads.
+
+What follows the site: repository reads and writes, sign-in, the repository picker when `MYGITNOTES_REPOSITORY` is empty, the GitHub App installation link (`<site>/github-apps/<slug>/installations/new`), and Gist publishing (a note's **Open the Gist** link uses the address the site returned when the note was published, recorded as `gist_url` beside `gist` in its frontmatter). A notebook in another repository on the same site declares `source: { type: github, url: https://ghe.example.com, repository: team/design }`; without `url` it means github.com, a different site, and does not share the sign-in.
+
+Differences from github.com:
+
+- **Create from template**: github.com offers the starter template. An Enterprise site offers the create link only when `MYGITNOTES_STARTER_TEMPLATE` names a template on that site; otherwise people pick an existing repository.
+- **Core updates** keep following github.com and are not offered for a repository on an Enterprise site, so the site's token is never sent to github.com.
+- **Archive downloads** accept a redirect only to the site's own codeload (`https://codeload.<host>/…`, or `https://<host>/codeload/…` without subdomain isolation), over HTTPS on the default port.
+- The Pro service stays github.com only.
+
 ## Core updates
 
 Settings checks the repository's Core revision and the running build separately. Local updates require a clean product checkout on `core`; the workspace branch does not control this operation. After updating, run `pnpm migrate-workspace` with the updated Core and restart the server.
@@ -275,7 +309,7 @@ notebooks:
       branch: main
 ```
 
-`branch` defaults to `main`; GitLab also needs `url`. `root` and `assets` are relative to that repository. A hosted deployment reaches the repository with the signed-in account; phase one requires it on the home repository's platform and site. A local deployment maps it to a worktree in `mygitnotes.server.yaml`, with `path` relative to that file:
+`branch` defaults to `main`; GitLab also needs `url`, and a GitHub notebook on a GitHub Enterprise site names it with `url`. `root` and `assets` are relative to that repository. A hosted deployment reaches the repository with the signed-in account; phase one requires it on the home repository's platform and site. A local deployment maps it to a worktree in `mygitnotes.server.yaml`, with `path` relative to that file:
 
 ```yaml
 repositories:

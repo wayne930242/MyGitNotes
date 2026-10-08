@@ -12,7 +12,7 @@
 
 - Vercel 專案、含 core 與 main 分支的 GitHub 儲存庫，以及 Upstash Redis database。
 - 使用 GitHub 登入時，準備 GitHub OAuth App，並將 OAuth callback 設為 `https://<your-project>.vercel.app/api/auth/github/callback`。
-- 使用 GitLab 登入時，準備 [GitLab 來源設定](#gitlab-來源設定) 所述的 GitLab OAuth App。
+- 使用 GitLab 登入時，準備 [GitLab 來源設定](#gitlab-來源設定) 所述的 GitLab OAuth App。使用 GitHub Enterprise 時，依 [GitHub Enterprise 來源設定](#github-enterprise-來源設定) 在該站台註冊 App。
 
 **要產生的值**
 
@@ -244,6 +244,40 @@ Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存
 
 使用 Actions 部署時，保留 [Vercel sparse checkout 部署](#透過-github-actions-sparse-checkout-部署至-vercel預設) 的 GitHub 部署設定，只替換筆記來源與 OAuth provider 欄位。GitLab 寫入需要 main 的 push 權限；公開儲存庫支援匿名讀取。
 
+## GitHub Enterprise 來源設定
+
+本節疊加在 [Vercel sparse checkout 部署](#透過-github-actions-sparse-checkout-部署至-vercel預設)、[Docker Compose](#docker-compose-連接遠端儲存庫) 或 [Docker](#docker-連接遠端儲存庫) 之上，讓筆記放在 GitHub Enterprise Server（GHES）或 GitHub Enterprise Cloud 資料落地（GHE.com）的儲存庫，而不是 github.com。
+
+### GitHub Enterprise 來源準備
+
+**帳號與服務**
+
+- 在同一個 Enterprise 站台註冊 GitHub OAuth App 或 GitHub App，callback 為 `APP_URL`/api/auth/github/callback。不支援個人存取權杖（PAT）登入。
+- 確認部署環境能以 HTTPS 連線並信任該站台，API 也要連得到：GHES 為 `https://<站台>/api/v3`，GHE.com 為 `https://api.<主機>`。
+- `APP_URL`、`SESSION_SECRET` 與 session 儲存沿用所選基礎路徑。
+
+**需要產生的值**
+
+- 除了所選基礎路徑已有的值，不需要其他值。
+
+**需要安裝的工具**
+
+- 沿用所選基礎路徑的工具。
+
+1. 在 .env.docker（Docker）或 .env（Vercel）設定 `MYGITNOTES_SOURCE=github`、`MYGITNOTES_REPOSITORY=team/notes`、`MYGITNOTES_BRANCH=main`、`MYGITNOTES_GITHUB_URL=https://ghe.example.com`（GHE.com 為 `https://octocorp.ghe.com`，安裝在子路徑也可以），以及該站台上註冊之 App 的 `GITHUB_CLIENT_ID` 與 `GITHUB_CLIENT_SECRET`。`GITHUB_NOTES_GITHUB_URL` 同樣會被讀取。只有 `MYGITNOTES_SOURCE=github` 時才讀這個設定；留空或填 `https://github.com`，行為與 github.com 部署完全相同。
+2. Vercel 以 `pnpm env:vercel production` 匯入更新後的 .env 欄位；Docker 使用來源設定步驟的 .env.docker。
+3. Compose 接續建置與啟動步驟；單純 Docker 接續映像建置與容器啟動步驟；Vercel 執行 `gh workflow run deploy-vercel-sparse.yml --ref core`。
+4. 開啟 `APP_URL`：登入會前往 Enterprise 站台，筆記檢視成功載入。
+
+下列項目都跟著這個站台：儲存庫讀寫、登入、`MYGITNOTES_REPOSITORY` 留空時的儲存庫選擇器、GitHub App 安裝連結（`<站台>/github-apps/<slug>/installations/new`），以及 Gist 發佈（筆記的「開啟 Gist」連結使用發佈當時站台回傳的網址，記在 frontmatter 的 `gist_url`，與 `gist` 並列）。位於同一站台其他儲存庫的筆記本這樣宣告：`source: { type: github, url: https://ghe.example.com, repository: team/design }`；沒有 `url` 代表 github.com，是不同的站台，不會共用登入。
+
+與 github.com 的差異：
+
+- **從範本建立**：github.com 提供入門範本。Enterprise 站台只有在 `MYGITNOTES_STARTER_TEMPLATE` 指定該站台上的範本時才顯示建立連結；否則請使用者選擇既有儲存庫。
+- **Core 更新**仍然追蹤 github.com，Enterprise 站台的儲存庫不提供，站台的權杖也就不會送到 github.com。
+- **封存檔下載**只接受導向該站台自己的 codeload（`https://codeload.<主機>/…`，未啟用子網域隔離時為 `https://<主機>/codeload/…`），且必須是 HTTPS 預設連接埠。
+- Pro 服務仍然只支援 github.com。
+
 ## Core 更新
 
 「設定」頁會分別檢查儲存庫的 Core 版本與正在執行的 build。本機更新需要位於 `core` 的乾淨產品 checkout；工作區分支不影響此操作。更新後以新版 Core 執行 `pnpm migrate-workspace`，再重新啟動 server。
@@ -275,7 +309,7 @@ notebooks:
       branch: main
 ```
 
-`branch` 預設是 `main`；GitLab 另外要填 `url`。`root` 和 `assets` 都相對於那個儲存庫。線上部署會用登入的帳號存取它；第一階段要求它和主儲存庫在同一個平台和站台。本機部署則在 `mygitnotes.server.yaml` 設定對應的 worktree，`path` 相對於這個設定檔：
+`branch` 預設是 `main`；GitLab 另外要填 `url`，位於 GitHub Enterprise 站台的 GitHub 筆記本也用 `url` 指定站台。`root` 和 `assets` 都相對於那個儲存庫。線上部署會用登入的帳號存取它；第一階段要求它和主儲存庫在同一個平台和站台。本機部署則在 `mygitnotes.server.yaml` 設定對應的 worktree，`path` 相對於這個設定檔：
 
 ```yaml
 repositories:

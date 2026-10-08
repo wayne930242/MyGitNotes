@@ -66,6 +66,7 @@ Shell 環境變數仍優先於 `.env`。
 - 以 [Docker Compose](docs/deploy.zh-TW.md#docker-compose-連接遠端儲存庫) 或 [Docker](docs/deploy.zh-TW.md#docker-連接遠端儲存庫) 連接遠端儲存庫，可再加上 [reverse proxy](docs/deploy.zh-TW.md#公開連線使用-reverse-proxy)
 - [在容器中開啟本機 checkout](docs/deploy.zh-TW.md#在容器中開啟本機-checkout)
 - [以 GitLab 作為筆記來源](docs/deploy.zh-TW.md#gitlab-來源設定)
+- [以 GitHub Enterprise 作為筆記來源](docs/deploy.zh-TW.md#github-enterprise-來源設定)
 - [私有 R2 素材](docs/deploy.zh-TW.md#選用私有-r2-素材)
 
 ## 更新
