@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import type { NoteRef } from '@mygitnotes/core/note-query';
 import { Button } from '../Button.js';
 import { ApiError, publishGist, unpublishGist } from '../../lib/api.js';
 import { useTranslation } from '../../lib/i18n/index.js';
 import { useNoteLocation } from '../../lib/note-location.js';
+import { useNotePublish } from '../../lib/web-features.js';
 
 interface GistProps {
   /** The editor's current body and frontmatter; the Gist holds the body. */
@@ -18,6 +19,7 @@ interface GistProps {
 export function NoteInfoPanel({ note, ...gist }: { note: NoteRef; } & GistProps) {
   const { t } = useTranslation();
   const location = useNoteLocation(note);
+  const publishRows = useNotePublish();
   if (!location) return null;
   const rows: [string, string][] = [[t('editor.infoNotebook'), location.notebook], [t('editor.infoRepository'), location.repository], [t('editor.infoBranch'), location.branch], [t('editor.infoPath'), location.path]];
   return (
@@ -34,6 +36,7 @@ export function NoteInfoPanel({ note, ...gist }: { note: NoteRef; } & GistProps)
           <dd>{location.readOnly ? t(`editor.infoReadOnly.${location.readOnly}`) : t('editor.infoWritable')}</dd>
         </div>
         {location.gists && <NoteGist path={note.path} {...gist} />}
+        {location.gists && publishRows.map((render, index) => <Fragment key={index}>{render({ note, repository: location.repository, ...gist })}</Fragment>)}
       </dl>
     </section>
   );

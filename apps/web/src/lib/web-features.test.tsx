@@ -6,6 +6,8 @@ import { CreditCard } from 'lucide-react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { WebApp } from '../app/create-web-app.js';
 import { AuthControls } from '../components/AuthControls.js';
+import { NoteInfoPanel } from '../components/note-editor/NoteInfoPanel.js';
+import { NoteLocationProvider } from './note-location.js';
 import { SettingsModal } from '../components/SettingsModal.js';
 import { useAccountControls, useAgentEnabled, useCommitMessagePolish, useFeatureGate, type WebFeature, WebFeaturesProvider } from './web-features.js';
 
@@ -108,4 +110,21 @@ it('asks a remote deployment for an agent session only when an edition says its 
   expect(html([], true)).toBe('<span>false</span>');
   expect(html([{ id: 'quiet' }, { id: 'declined', agent: false }], true)).toBe('<span>false</span>');
   expect(html([{ id: 'quiet' }, { id: 'hosted-agent', agent: true }], true)).toBe('<span>true</span>');
+});
+
+it("renders an edition's rows in a writable note's info panel and none without features", () => {
+  const note = { notebookId: 'life', path: 'notes/life/a.md' };
+  const location = (gists: boolean) => ({ notebook: 'Life', repository: 'owner/home', branch: 'main', path: note.path, gists });
+  const panel = (features: WebFeature[], gists = true) =>
+    renderToStaticMarkup(
+      <WebFeaturesProvider features={features}>
+        <NoteLocationProvider locate={() => location(gists)}>
+          <NoteInfoPanel note={note} content='Body' metadata={{ publish: 'a' }} setMetadata={() => {}} locked={false} />
+        </NoteLocationProvider>
+      </WebFeaturesProvider>,
+    );
+  const pages: WebFeature = { id: 'pages', publish: ({ repository, metadata, locked }) => createElement('div', null, createElement('dt', null, 'Public page'), createElement('dd', null, `${repository} ${String(metadata.publish)} ${locked ? 'locked' : 'open'}`)) };
+  expect(panel([])).not.toContain('Public page');
+  expect(panel([pages])).toContain('<dt>Public page</dt><dd>owner/home a open</dd>');
+  expect(panel([pages], false)).not.toContain('Public page');
 });

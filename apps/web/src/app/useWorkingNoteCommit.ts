@@ -1,6 +1,6 @@
 import { readWorkingNotes, type WorkingNote, type WorkingNotes } from '../lib/working-notes.js';
 import { mergeNote, sameValue } from '../lib/merge-note.js';
-import { ApiError, commitRemoteNotes, fetchWorkspace, type GistSync, readNotes } from '../lib/api.js';
+import { ApiError, commitRemoteNotes, fetchWorkspace, type GistSync, type PublishSync, readNotes } from '../lib/api.js';
 import { draftScope, type WorkspaceRepository } from '../lib/workspace-repositories.js';
 import { readDocumentDraft, settleDocumentDraft, type WorkspaceDocumentClient } from '../lib/use-workspace-document.js';
 import { documentClientOf } from '../lib/workspace-document-clients.js';
@@ -37,7 +37,7 @@ interface CommitGroup {
 /** Commits selected drafts one repository at a time, one commit each, stopping at the first repository that fails. */
 export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote, clearCommittedDrafts, setRepositoryRevision, setActionError }: Params) {
   /** One repository's drafts, merged onto its latest revision and committed as one commit; answers the Gists it failed to update. */
-  const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string, version?: NewVersionRequest): Promise<GistSync[]> => {
+  const commitGroup = async ({ repository, entries, documents: sentDocuments }: CommitGroup, message: string, version?: NewVersionRequest): Promise<{ gists: GistSync[]; published: PublishSync[]; }> => {
     if (!repository.write) throw new Error('Sign in with write access to this workspace before committing.');
     const scope = draftScope(repository);
     const expected = repository.revision;
@@ -89,7 +89,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
       if (persisted) sent[entry.note.path] = persisted;
     }
     if (reviewRequired) throw new Error(t('changes.reviewRequired'));
-    if (!Object.keys(sent).length && !sentDocuments.length) return [];
+    if (!Object.keys(sent).length && !sentDocuments.length) return { gists: [], published: [] };
     const result = await commitRemoteNotes(repository.id, Object.values(sent).map(entry => entry.deleted ? { path: entry.note.path, delete: true as const } : { path: entry.note.path, content: entry.note.content, metadata: entry.note.metadata, createOnly: !entry.base }), expected, message, sentDocuments.map(({ path, page, base }) => ({ path, page, base })), version);
     for (const document of sentDocuments) {
       if (!settleDocumentDraft(document.client, repository.id, document, result.revision)) setActionError(t('changes.reviewRequired'));
@@ -98,7 +98,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     }
     clearCommittedDrafts(repository, sent);
     setRepositoryRevision(repository.id, result.revision);
-    return (result.gists ?? []).filter(gist => gist.error);
+    return { gists: (result.gists ?? []).filter(gist => gist.error), published: (result.published ?? []).filter(entry => entry.error || entry.notices?.length) };
   };
 
   /** Commits the selected changes, each named by its repository and path. */
@@ -127,9 +127,12 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
     }
     const committed: string[] = [];
     const failedGists: GistSync[] = [];
+    const publishReports: PublishSync[] = [];
     for (const group of groups.values()) {
       try {
-        failedGists.push(...await commitGroup(group, message, version));
+        const reports = await commitGroup(group, message, version);
+        failedGists.push(...reports.gists);
+        publishReports.push(...reports.published);
       } catch (error) {
         if (!committed.length) throw error;
         throw new Error(t('changes.partialCommit', { repositories: committed.join(', '), error: (error as Error).message }));
@@ -137,6 +140,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
       committed.push(group.repository.repository || group.repository.id);
     }
     if (failedGists.length) setActionError(t('editor.gistSyncFailed', { errors: failedGists.map(gist => `${gist.path}: ${gist.error}`).join('; ') }));
+    else if (publishReports.length) setActionError(t('editor.publishSyncReport', { details: publishReports.flatMap(entry => [...entry.error ? [entry.error] : [], ...entry.notices ?? []].map(detail => `${entry.path}: ${detail}`)).join('; ') }));
   };
 
   return { commitWorkingNotes };

@@ -844,6 +844,7 @@ export const en = {
   'editor.gistPublishHint': 'Publishes the note body as a secret Gist: anyone with the link can read it. Images are not included.',
   'editor.gistSyncHint': 'Each commit of this note updates the Gist. Commit to record publishing in the note.',
   'editor.gistSyncFailed': 'Committed, but some Gists were not updated: {errors}',
+  'editor.publishSyncReport': 'Committed. About the published pages: {details}',
   'editor.viewSettings': 'View settings',
   'editor.theme': 'Theme',
   'editor.fontSize': 'Text size',

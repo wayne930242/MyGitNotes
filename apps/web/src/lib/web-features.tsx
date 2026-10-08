@@ -1,5 +1,6 @@
 import { createContext, type ReactNode, useContext } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import type { NoteRef } from '@mygitnotes/core/note-query';
 import type { NoteChangeFacts } from './commit-summary.js';
 
 /** A top-level page an edition adds beside the workspace routes. */
@@ -47,6 +48,24 @@ export interface AgentWorkspaceRef {
  */
 export type RenderAgentWorkspaceSection = (props: { workspace: AgentWorkspaceRef; readOnly: boolean; }) => ReactNode;
 
+/** What a note's `publish` slot is given: the note, the editor's body and frontmatter, and where the note lives. */
+export interface NotePublishProps {
+  note: NoteRef;
+  /** The platform repository the note belongs to, as `owner/name`. */
+  repository: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  setMetadata: (metadata: Record<string, unknown>) => void;
+  /** The session accepts no edit right now. */
+  locked: boolean;
+}
+
+/**
+ * Renders rows of a note's info panel, below its Gist row, for a writable note of a GitHub repository, such as an
+ * edition's public page. Return `<div><dt>…</dt><dd>…</dd></div>` rows, which sit in the panel's `<dl>`.
+ */
+export type RenderNotePublish = (props: NotePublishProps) => ReactNode;
+
 /** The features an edition may gate; `WebFeature.gate` is asked about each by one of these ids. */
 export const FEATURE_IDS = { agent: 'agent', r2: 'r2', commitPolish: 'commit-polish' } as const;
 
@@ -71,6 +90,8 @@ export interface WebFeature {
   accountMenuItems?: RenderAccountMenuItems;
   /** Adds sections to the Agents page for the selected agent workspace; the community edition has none. */
   agentWorkspaceSections?: RenderAgentWorkspaceSection[];
+  /** Adds rows to every writable note's info panel, such as its public page; the community edition has none. */
+  publish?: RenderNotePublish;
   /** Adds an "AI polish" button to the commit dialog, beside "Generate message"; the last feature that sets it wins. */
   commitMessagePolish?: CommitMessagePolish;
   /**
@@ -111,6 +132,10 @@ export function useAgentWorkspaceSections(): RenderAgentWorkspaceSection[] {
 
 export function useAccountControls(): RenderAccountControls | undefined {
   return useContext(FeaturesContext).reduce<RenderAccountControls | undefined>((found, feature) => feature.accountControls ?? found, undefined);
+}
+
+export function useNotePublish(): RenderNotePublish[] {
+  return useContext(FeaturesContext).flatMap(feature => feature.publish ? [feature.publish] : []);
 }
 
 export function useCommitMessagePolish(): CommitMessagePolish | undefined {

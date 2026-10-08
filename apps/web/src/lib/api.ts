@@ -6,6 +6,14 @@ import type { WorkspaceAnswer } from './workspace-repositories.js';
 
 const API_BASE = '/api';
 /** The outcome of pushing one committed note to the Gist its `gist` frontmatter names. */
+/** What an edition's publishing service reports for one committed note (see the local server's `PublishSync`). */
+export interface PublishSync {
+  path: string;
+  url?: string;
+  error?: string;
+  notices?: string[];
+}
+
 export interface GistSync {
   path: string;
   gist: string;
@@ -13,8 +21,8 @@ export interface GistSync {
   reauthorize?: boolean;
 }
 
-/** Commits drafts of one repository as one commit on it; `gists` reports the published notes it pushed to their Gists. */
-export async function commitRemoteNotes(repository: RepositoryId, notes: ({ path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; } | { path: string; delete: true; })[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: NewVersionRequest): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; }> {
+/** Commits drafts of one repository as one commit on it; `gists` reports the published notes it pushed to their Gists, and `published` what an edition's publishing service did with them. */
+export async function commitRemoteNotes(repository: RepositoryId, notes: ({ path: string; content: string; metadata: Record<string, unknown>; createOnly?: boolean; } | { path: string; delete: true; })[], revision: string, message: string, documents: { path: string; page: unknown; base: unknown; }[] = [], version?: NewVersionRequest): Promise<{ revision: string; commit: { commitHash: string; }; gists?: GistSync[]; published?: PublishSync[]; }> {
   const res = await fetch(`${API_BASE}/notes/commit`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, notes, revision, message, documents, version }) });
   if (!res.ok) throw await responseError(res, 'Failed to commit notes');
   return res.json();
