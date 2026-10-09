@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { AlertCircle, ArrowDown, ArrowUp, Eye, EyeOff, FolderGit2, Star, Trash2 } from 'lucide-react';
+import { AlertCircle, ArrowDown, ArrowUp, Eye, EyeOff, FolderGit2, Plus, Star, Trash2 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { addMember, fetchMembers, type MembersAnswer, MembershipApiError, removeMember, reorderMembers, setDefaultMember, setMemberHidden, type WorkspaceMemberStatus } from '../lib/members-api.js';
 import { discardRepositoryDrafts, type DraftRepository, type RepositoryDraft, repositoryDrafts } from '../lib/repository-drafts.js';
 import type { WorkspaceRepository } from '../lib/workspace-repositories.js';
+import { useRepositoryNotices } from '../lib/web-features.js';
 import { Button } from './Button.js';
+import { limitReached, MembersLimitLine, RepositoryAddFlow } from './RepositoryAdd.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 
 export interface RepositoriesSettingsProps {
@@ -23,8 +25,10 @@ const location = (member: WorkspaceMemberStatus) => member.repository ? `${membe
 
 /**
  * Settings → Repositories: every member of the workspace, hidden ones included, read from the configuration without
- * opening a repository. Where the deployment lets this page change them (a local deployment), it adds, removes, hides,
- * shows, reorders and chooses the default; hiding or removing waits until this browser holds no drafts for it.
+ * opening a repository. Where the deployment lets this page change them, it adds (a worktree path in a local
+ * deployment, a repository from the picker where an account keeps the list), removes, hides, shows, reorders and
+ * chooses the default; hiding or removing waits until this browser holds no drafts for it, then asks first where an
+ * edition adds a notice. A visible-repository limit shows as a quiet line and keeps adding and showing past it.
  */
 export function RepositoriesSettings({ repositories, onMembershipChanged, onOpenChanges }: RepositoriesSettingsProps) {
   const { t } = useTranslation();
@@ -34,6 +38,11 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
   const [path, setPath] = useState('');
   const [folder, setFolder] = useState<string>();
   const [drafts, setDrafts] = useState<{ repository: DraftRepository; action: 'hide' | 'remove'; drafts: RepositoryDraft[]; }>();
+  const [confirm, setConfirm] = useState<{ member: WorkspaceMemberStatus; action: 'hide' | 'remove'; change: (revision: string) => Promise<unknown>; }>();
+  const [adding, setAdding] = useState(false);
+  // A change the limit refused reads as part of the limit line, not as an error.
+  const [limitRefusal, setLimitRefusal] = useState('');
+  const notices = useRepositoryNotices();
 
   const load = useCallback(async () => {
     try {
@@ -58,12 +67,16 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
     if (!answer?.revision) return;
     setBusy(true);
     setError('');
+    setLimitRefusal('');
     try {
       await change(answer.revision);
       await Promise.all([load(), onMembershipChanged()]);
       return true;
     } catch (cause) {
-      if (cause instanceof MembershipApiError && cause.code === 'stale') {
+      if (cause instanceof MembershipApiError && cause.code === 'visible-limit') {
+        setLimitRefusal(cause.message);
+        await load();
+      } else if (cause instanceof MembershipApiError && cause.code === 'stale') {
         setError(t('repositories.stale'));
         await load();
       } else if (cause instanceof MembershipApiError && cause.code === 'folder-required') setFolder('');
@@ -73,12 +86,21 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
       setBusy(false);
     }
   };
-  /** Hiding or removing a repository this browser holds drafts for waits until they are committed or discarded. */
+  /**
+   * Hiding or removing a repository this browser holds drafts for waits until they are committed or discarded; where an
+   * edition adds a notice (what becomes of published pages, say), the person confirms it first.
+   */
   const guarded = (member: WorkspaceMemberStatus, action: 'hide' | 'remove', change: (revision: string) => Promise<unknown>) => {
     const repository = draftsOf(member);
     const held = repositoryDrafts(repository);
     if (held.length) return setDrafts({ repository, action, drafts: held });
+    if (notices.length) return setConfirm({ member, action, change });
     void run(change);
+  };
+  /** Adding from the picker changed the list: reload it and the workspace, and close the picker. */
+  const added = async () => {
+    setAdding(false);
+    await Promise.all([load(), onMembershipChanged()]);
   };
   const add = async () => {
     if (await run(revision => addMember(path.trim(), revision, folder?.trim() || undefined))) {
@@ -97,6 +119,8 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
   }
   const { members, changeable } = answer;
   const visible = members.filter(member => !member.hidden);
+  const full = limitReached(answer.limit);
+  const fullReason = full ? t('repositories.limitReached') : undefined;
   /** Visible members whose notebooks share a local id with another visible member, and so `r2:<id>/` keys. */
   const sharedKeys = (member: WorkspaceMemberStatus) => {
     if (!answer.sharedAssetKeys || member.hidden) return [];
@@ -145,14 +169,14 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
                       <ArrowDown className='w-4 h-4' />
                     </Button>
                     {!member.default && (
-                      <Button size='small' disabled={busy} onClick={() => void run(revision => setDefaultMember(member.id, revision))}>
+                      <Button size='small' disabled={busy || (member.hidden && full)} title={member.hidden ? fullReason : undefined} onClick={() => void run(revision => setDefaultMember(member.id, revision))}>
                         <Star className='w-3.5 h-3.5' />
                         <span>{t('repositories.makeDefault')}</span>
                       </Button>
                     )}
                     {member.hidden
                       ? (
-                        <Button size='small' disabled={busy} onClick={() => void run(revision => setMemberHidden(member.id, false, revision))}>
+                        <Button size='small' disabled={busy || full} title={fullReason} onClick={() => void run(revision => setMemberHidden(member.id, false, revision))}>
                           <Eye className='w-3.5 h-3.5' />
                           <span>{t('repositories.show')}</span>
                         </Button>
@@ -183,7 +207,16 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
         })}
       </ul>
       {answer.hiddenUnnamed ? <p className='text-xs text-muted'>{t('repositories.hiddenUnnamed', { count: answer.hiddenUnnamed })}</p> : null}
-      {changeable && (
+      {answer.limit && <MembersLimitLine limit={answer.limit} refusal={limitRefusal} />}
+      {changeable && answer.adds === 'repository' && (
+        <div>
+          <Button variant='primary' disabled={busy || full} title={fullReason} onClick={() => setAdding(true)}>
+            <Plus className='w-3.5 h-3.5' />
+            <span>{t('repositories.add')}</span>
+          </Button>
+        </div>
+      )}
+      {changeable && answer.adds !== 'repository' && (
         <form
           className='flex flex-col gap-2 p-3 rounded-xl border border-line bg-surface'
           onSubmit={event => {
@@ -215,6 +248,38 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
           <AlertCircle className='w-4 h-4 shrink-0' />
           <span>{error}</span>
         </p>
+      )}
+      {adding && (
+        <WorkspaceDialog title={t('repositories.addTitle')} onClose={() => setAdding(false)}>
+          <p className='text-sm text-muted'>{t('repositories.addDescription')}</p>
+          <RepositoryAddFlow
+            members={answer}
+            onAdded={added}
+            onStale={load}
+            onShow={async id => {
+              if (await run(revision => setMemberHidden(id, false, revision))) setAdding(false);
+            }}
+          />
+        </WorkspaceDialog>
+      )}
+      {confirm && (
+        <WorkspaceDialog title={t(confirm.action === 'hide' ? 'repositories.confirmHideTitle' : 'repositories.confirmRemoveTitle', { alias: confirm.member.alias })} onClose={() => setConfirm(undefined)}>
+          <p className='text-sm'>{t(confirm.action === 'hide' ? 'repositories.confirmHideBody' : 'repositories.confirmRemoveBody')}</p>
+          {notices.map((render, index) => <div key={index} className='text-sm'>{render({ action: confirm.action, repository: { id: confirm.member.id, alias: confirm.member.alias, ...(confirm.member.repository ? { repository: confirm.member.repository } : {}) } })}</div>)}
+          <div className='workspace-dialog-actions'>
+            <Button onClick={() => setConfirm(undefined)}>{t('common.cancel')}</Button>
+            <Button
+              variant={confirm.action === 'remove' ? 'danger' : 'primary'}
+              onClick={() => {
+                const { change } = confirm;
+                setConfirm(undefined);
+                void run(change);
+              }}
+            >
+              {t(confirm.action === 'hide' ? 'repositories.hide' : 'repositories.remove')}
+            </Button>
+          </div>
+        </WorkspaceDialog>
       )}
       {drafts && (
         <WorkspaceDialog title={t(drafts.action === 'hide' ? 'repositories.draftsHideTitle' : 'repositories.draftsRemoveTitle', { alias: drafts.repository.alias })} onClose={() => setDrafts(undefined)}>

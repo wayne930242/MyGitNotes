@@ -122,3 +122,27 @@ it('walks a visitor through creating a repository on GitHub and selects it when 
   expect(button('visitor/my-notes').getAttribute('aria-pressed')).toBe('true');
   expect(container.textContent).not.toContain('Finish on GitHub');
 });
+
+it('opens the add flow for a signed-in person whose account keeps no repository yet, never the repository choice', async () => {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input);
+    requests.push({ url, init });
+    if (url === '/api/auth/session') return json({ authenticated: true, login: 'octo', repositoryChoice: true, accountMembers: true, workspace: null });
+    if (url === '/api/workspace/members' && !init?.method) return json({ members: [], changeable: true, revision: 'r0', sharedAssetKeys: false, adds: 'repository', limit: { visible: 0, max: 2, plan: 'Free' } });
+    if (url === '/api/workspace/members') return json({ revision: 'r1' });
+    if (url.startsWith('/api/repositories/available')) return json(available);
+    throw new Error(`Unexpected request ${url}`);
+  });
+  const assign = vi.fn();
+  vi.stubGlobal('location', { ...window.location, assign });
+  await render(createElement(WorkspaceGate, null, createElement('p', null, 'workspace')));
+  expect(container.textContent).toContain('Add your first repository');
+  expect(container.querySelector('[data-members-limit]')?.textContent).toContain('0 of 2 visible repositories on Free');
+  await act(async () => button('team/handbook').click());
+  await act(async () => button('Add repository').click());
+  await settle();
+  expect(JSON.parse(String(requests.find(request => request.url === '/api/workspace/members' && request.init?.method === 'POST')!.init!.body))).toEqual({ repository: 'team/handbook', revision: 'r0' });
+  expect(assign).toHaveBeenCalledWith('/');
+  expect(requests.some(request => request.url.startsWith('/api/workspace/choice'))).toBe(false);
+  vi.unstubAllGlobals();
+});

@@ -2,6 +2,9 @@ import { createContext, type ReactNode, useContext } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import type { NoteRef } from '@mygitnotes/core/note-query';
 import type { NoteChangeFacts } from './commit-summary.js';
+import { listAvailableRepositories, type RepositoryListSource } from './available-repositories.js';
+
+export type { AvailableRepositories, AvailableRepository, RepositoryListSource } from './available-repositories.js';
 
 /** A top-level page an edition adds beside the workspace routes. */
 export interface FeatureRoute {
@@ -66,6 +69,15 @@ export interface NotePublishProps {
  */
 export type RenderNotePublish = (props: NotePublishProps) => ReactNode;
 
+/** What a repository's hide or remove confirmation is about. */
+export interface RepositoryNoticeProps {
+  action: 'hide' | 'remove';
+  repository: { id: string; alias: string; /** The platform repository as `owner/name`; absent for a worktree. */ repository?: string; };
+}
+
+/** Renders extra text in the confirmation before a repository is hidden or removed, such as what becomes of its published pages. */
+export type RenderRepositoryNotice = (props: RepositoryNoticeProps) => ReactNode;
+
 /** The features an edition may gate; `WebFeature.gate` is asked about each by one of these ids. */
 export const FEATURE_IDS = { agent: 'agent', r2: 'r2', commitPolish: 'commit-polish' } as const;
 
@@ -93,6 +105,16 @@ export interface WebFeature {
   agentWorkspaceSections?: RenderAgentWorkspaceSection[];
   /** Adds rows to every writable note's info panel, such as its public page; the community edition has none. */
   publish?: RenderNotePublish;
+  /**
+   * Lists the repositories Settings' add picker offers, where the edition has its own source; the last feature that
+   * sets it wins, and without one the picker lists the deployment's `/api/repositories/available`.
+   */
+  repositoryList?: RepositoryListSource;
+  /**
+   * Adds text to a confirmation shown before a repository is hidden or removed in Settings → Repositories. With any
+   * feature setting it, hiding and removing ask first; without one they act at once, as the community edition does.
+   */
+  repositoryNotice?: RenderRepositoryNotice;
   /** Adds an "AI polish" button to the commit dialog, beside "Generate message"; the last feature that sets it wins. */
   commitMessagePolish?: CommitMessagePolish;
   /**
@@ -133,6 +155,14 @@ export function useAgentWorkspaceSections(): RenderAgentWorkspaceSection[] {
 
 export function useAccountControls(): RenderAccountControls | undefined {
   return useContext(FeaturesContext).reduce<RenderAccountControls | undefined>((found, feature) => feature.accountControls ?? found, undefined);
+}
+
+export function useRepositoryList(): RepositoryListSource {
+  return useContext(FeaturesContext).reduce<RepositoryListSource>((found, feature) => feature.repositoryList ?? found, listAvailableRepositories);
+}
+
+export function useRepositoryNotices(): RenderRepositoryNotice[] {
+  return useContext(FeaturesContext).flatMap(feature => feature.repositoryNotice ? [feature.repositoryNotice] : []);
 }
 
 export function useNotePublish(): RenderNotePublish[] {

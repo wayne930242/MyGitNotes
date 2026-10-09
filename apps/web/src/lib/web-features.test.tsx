@@ -116,6 +116,24 @@ it("adds an edition's entries to the signed-in account menu", async () => {
   vi.restoreAllMocks();
 });
 
+it('offers Switch repository in the account menu only where the visitor chose the repository, not where an account keeps the list', async () => {
+  const menu = async (session: Record<string, unknown>) => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ authenticated: true, login: 'octo', provider: 'github', repositoryChoice: true, ...session }), { headers: { 'Content-Type': 'application/json' } }));
+    const container = document.createElement('div');
+    root = createRoot(container);
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean; }).IS_REACT_ACT_ENVIRONMENT = true;
+    await act(async () => root!.render(createElement(AuthControls)));
+    await act(async () => new Promise(resolve => setTimeout(resolve, 0)));
+    const labels = [...container.querySelectorAll('.header-user-popover button')].map(button => button.textContent);
+    act(() => root!.unmount());
+    root = undefined;
+    vi.restoreAllMocks();
+    return labels;
+  };
+  expect(await menu({})).toContain('Switch repository');
+  expect(await menu({ accountMembers: true })).not.toContain('Switch repository');
+});
+
 it('opens every feature without gates, and shows the first denial otherwise', () => {
   function Probe({ id }: { id: string; }) {
     const gate = useFeatureGate(id);

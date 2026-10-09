@@ -28,7 +28,7 @@ async function requestGrant(url: string, fallback: TranslationKey, init?: Reques
   }
 }
 
-type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string; storage?: 'stored' | 'cookie'; repositoryChoice?: boolean; };
+type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string; storage?: 'stored' | 'cookie'; repositoryChoice?: boolean; accountMembers?: boolean; };
 /** `source`: a grant made before grants reached every visible repository, which reaches that one repository only. */
 type Grant = { id: string; name: string; write: boolean; source?: string; site?: string; createdAt: number; expiresAt: null; };
 function useSession() {
@@ -58,7 +58,8 @@ export function AuthControls({ local = false, connection = false }: { local?: bo
         <div className='header-user-popover'>
           <span>{session.login}</span>
           {menuItems.map((render, index) => <div key={index} className='header-user-items'>{render({ close })}</div>)}
-          {session.repositoryChoice && (
+          {/* A list an account keeps changes in Settings → Repositories, not by choosing again. */}
+          {session.repositoryChoice && !session.accountMembers && (
             <button
               onClick={async () => {
                 const response = await fetch('/api/workspace/choice', { method: 'DELETE' });

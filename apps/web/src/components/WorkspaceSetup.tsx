@@ -1,8 +1,12 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, ExternalLink, GitBranch, Languages, ListTree, Lock, LogOut, Network, Plus, RefreshCw, Search, ShieldCheck } from 'lucide-react';
+import { type ReactNode, useEffect, useState } from 'react';
+import { ArrowLeftRight, GitBranch, Languages, ListTree, LogOut, Network, ShieldCheck } from 'lucide-react';
 import { Button } from './Button.js';
 import { AuthControls, ConnectionState } from './AuthControls.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { RepositoryAddFlow } from './RepositoryAdd.js';
+import { RepositoryChooser } from './RepositoryChooser.js';
+import type { AvailableRepository } from '../lib/available-repositories.js';
+import { fetchMembers, type MembersAnswer } from '../lib/members-api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { Select } from './Select.js';
 import { useTheme } from '../app/useTheme.js';
@@ -10,27 +14,17 @@ import { updateWorkspaceConfig } from '../lib/api.js';
 import type { WorkspaceConfig } from '../lib/types.js';
 import YAML from 'yaml';
 
-/** What `/api/auth/session` says about the visitor; `repositoryChoice` deployments let each visitor pick a repository. */
+/**
+ * What `/api/auth/session` says about the visitor; `repositoryChoice` deployments have each visitor bring a repository:
+ * picked through repository choices, or, with `accountMembers`, added to the list their account keeps.
+ */
 export interface SessionProbe {
   authenticated?: boolean;
   login?: string;
   storage?: 'stored' | 'cookie';
   repositoryChoice?: boolean;
+  accountMembers?: boolean;
   workspace?: { repository: string; branch: string; } | null;
-}
-interface AvailableRepository {
-  fullName: string;
-  defaultBranch: string;
-  private: boolean;
-  updatedAt: string;
-}
-interface AvailableAnswer {
-  repositories: AvailableRepository[];
-  total: number;
-  githubApp: boolean;
-  installUrl: string | null;
-  /** GitHub's page for a new repository from the starter template; absent on an Enterprise site that names no template. */
-  newRepositoryUrl: string | null;
 }
 
 const FEATURES = [{ icon: ListTree, key: 'setup.featureNotes' }, { icon: Network, key: 'setup.featureGraph' }, { icon: GitBranch, key: 'setup.featureGit' }] as const;
@@ -102,174 +96,60 @@ async function signOut() {
 /** Lists the repositories the visitor may open and stores the one they pick. */
 export function RepositoryPicker({ login }: { login?: string; }) {
   const { t } = useTranslation();
-  const [query, setQuery] = useState('');
-  const [answer, setAnswer] = useState<AvailableAnswer | null>(null);
-  const [selected, setSelected] = useState<AvailableRepository | null>(null);
-  const [branch, setBranch] = useState('');
-  // Listing and opening fail separately, so a list that loads again does not hide why opening failed.
-  const [listError, setListError] = useState('');
-  const [openError, setOpenError] = useState('');
-  const [busy, setBusy] = useState(false);
-  // While a visitor creates a repository on GitHub: the unfiltered list from before, so the one that appears can be selected.
-  const creation = useRef<{ before: Set<string> | null; } | null>(null);
-  const [creating, setCreating] = useState(false);
-  const [reload, setReload] = useState(0);
-  useEffect(() => {
-    if (!creating) return;
-    // Returning from the GitHub tab lists the repositories again.
-    const refresh = () => setReload(count => count + 1);
-    window.addEventListener('focus', refresh);
-    return () => window.removeEventListener('focus', refresh);
-  }, [creating]);
-  useEffect(() => {
-    const controller = new AbortController();
-    // Typing settles before the list is asked for, so each keystroke does not list the account again.
-    const timer = setTimeout(() => {
-      fetch(`/api/repositories/available?query=${encodeURIComponent(query)}`, { signal: controller.signal }).then(async response => {
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error || t('setup.listFailed'));
-        setAnswer(body);
-        setListError('');
-        const pending = creation.current;
-        if (pending && !query) {
-          const names = (body as AvailableAnswer).repositories.map(repository => repository.fullName);
-          const created = pending.before && (body as AvailableAnswer).repositories.find(repository => !pending.before!.has(repository.fullName));
-          if (!pending.before) pending.before = new Set(names);
-          else if (created) {
-            setSelected(created);
-            setBranch('');
-            creation.current = null;
-            setCreating(false);
-          }
-        }
-      }).catch((reason: Error) => {
-        if (reason.name !== 'AbortError') setListError(reason.message);
-      });
-    }, query ? 250 : 0);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [query, reload, t]);
-  const startCreating = () => {
-    if (!answer?.newRepositoryUrl) return;
-    window.open(answer.newRepositoryUrl, '_blank', 'noopener');
-    // A filtered list is not a full picture of what existed, so the next unfiltered one becomes the baseline.
-    creation.current = { before: query ? null : new Set(answer.repositories.map(repository => repository.fullName)) };
-    setQuery('');
-    setCreating(true);
+  const open = async (selected: AvailableRepository, branch: string | undefined) => {
+    const response = await fetch('/api/workspace/choice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: selected.fullName, branch }) });
+    const body = await response.json();
+    if (!response.ok) throw new Error(body.error || t('setup.chooseFailed'));
+    window.location.assign('/');
   };
-  const stopCreating = () => {
-    creation.current = null;
-    setCreating(false);
-  };
-  const open = async () => {
-    if (!selected) return;
-    setBusy(true);
-    setOpenError('');
-    try {
-      const response = await fetch('/api/workspace/choice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: selected.fullName, branch: branch.trim() || undefined }) });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error || t('setup.chooseFailed'));
-      window.location.assign('/');
-    } catch (reason) {
-      setOpenError((reason as Error).message);
-      setBusy(false);
-    }
-  };
-  const error = openError || listError;
   return (
     <SetupCard>
       <h2 className='font-serif text-xl font-semibold mb-2'>{t('setup.chooseTitle')}</h2>
       <p className='mb-4 text-sm text-muted'>{t('setup.chooseDescription')}</p>
-      <label className='flex items-center gap-2 px-3 py-2 rounded-lg border border-line mb-3'>
-        <Search size={16} aria-hidden='true' className='text-muted' />
-        <input aria-label={t('setup.searchRepositories')} placeholder={t('setup.searchRepositories')} value={query} onChange={event => setQuery(event.target.value)} className='flex-1 min-w-0 bg-transparent focus:outline-none' />
-      </label>
-      {!answer && !listError && <LoadingStatus className='mb-3'>{t('setup.loadingRepositories')}</LoadingStatus>}
-      {answer && (
-        <ul className='flex flex-col gap-1 max-h-80 overflow-y-auto mb-3' aria-label={t('setup.repositories')}>
-          {answer.repositories.map(repository => (
-            <li key={repository.fullName}>
-              <button
-                type='button'
-                aria-pressed={selected?.fullName === repository.fullName}
-                onClick={() => setSelected(repository)}
-                className={`w-full flex items-center justify-between gap-3 px-3 py-2 rounded-lg border text-left transition ${selected?.fullName === repository.fullName ? 'border-primary bg-primary-soft/40' : 'border-line hover:bg-fg/5'}`}
-              >
-                <span className='font-mono text-sm truncate'>{repository.fullName}</span>
-                <span className='flex items-center gap-2 shrink-0 text-xs text-muted'>
-                  {repository.private && (
-                    <span className='inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-sidebar'>
-                      <Lock size={12} aria-hidden='true' />
-                      {t('setup.private')}
-                    </span>
-                  )}
-                  {new Date(repository.updatedAt).toLocaleDateString()}
-                </span>
-              </button>
-            </li>
-          ))}
-          {!answer.repositories.length && <li className='px-3 py-2 text-sm text-muted'>{t('setup.noRepositories')}</li>}
-        </ul>
-      )}
-      {answer && answer.total > answer.repositories.length && <p className='text-xs text-muted mb-3'>{t('setup.moreRepositories', { count: answer.total - answer.repositories.length })}</p>}
-      {answer?.newRepositoryUrl && !creating && (
-        <button type='button' onClick={startCreating} className='w-full flex items-center justify-center gap-2 mb-3 px-3 py-2 rounded-lg border border-dashed border-line text-sm text-muted hover:text-fg hover:bg-fg/5 transition'>
-          <Plus size={16} aria-hidden='true' />
-          {t('setup.createRepository')}
-        </button>
-      )}
-      {answer?.newRepositoryUrl && creating && (
-        <section aria-label={t('setup.createSteps')} className='mb-3 p-3 rounded-lg bg-sidebar text-sm'>
-          <h3 className='font-semibold mb-2'>{t('setup.createSteps')}</h3>
-          <ol className='list-decimal pl-5 flex flex-col gap-2'>
-            <li>
-              {t('setup.createStepGitHub')}{' '}
-              <a href={answer.newRepositoryUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-1 text-primary'>
-                {t('setup.reopenGitHub')}
-                <ExternalLink size={12} aria-hidden='true' />
-              </a>
-            </li>
-            {answer.githubApp && answer.installUrl && (
-              <li>
-                {t('setup.createStepGrant')}{' '}
-                <a href={answer.installUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-1 text-primary'>
-                  {t('setup.grantNew')}
-                  <ExternalLink size={12} aria-hidden='true' />
-                </a>
-              </li>
-            )}
-            <li>{t('setup.createStepReturn')}</li>
-          </ol>
-          <div className='flex items-center gap-3 mt-3'>
-            <Button onClick={() => setReload(count => count + 1)}>
-              <RefreshCw size={14} aria-hidden='true' />
-              {t('setup.refreshList')}
-            </Button>
-            <button type='button' onClick={stopCreating} className='text-sm text-muted hover:text-fg'>{t('common.cancel')}</button>
-          </div>
-        </section>
-      )}
-      {selected && (
-        <label className='flex flex-col gap-1 mb-3 text-sm'>
-          <span>{t('setup.branch')}</span>
-          <input value={branch} onChange={event => setBranch(event.target.value)} placeholder={selected.defaultBranch} className='px-3 py-2 rounded-lg border border-line bg-transparent font-mono text-sm' />
-        </label>
-      )}
-      {error && <p role='alert' className='mb-3 text-sm text-danger'>{error}</p>}
-      <div className='flex flex-wrap items-center gap-3'>
-        <Button variant='primary' disabled={!selected || busy} onClick={() => void open()}>{busy ? t('setup.opening') : t('setup.open')}</Button>
-        {answer?.installUrl && (
-          <a href={answer.installUrl} target='_blank' rel='noreferrer' className='inline-flex items-center gap-1 text-sm text-primary'>
-            {t('setup.grantMore')}
-            <ExternalLink size={14} aria-hidden='true' />
-          </a>
-        )}
-        <button type='button' onClick={() => void signOut()} className='ml-auto inline-flex items-center gap-1 text-sm text-muted hover:text-fg'>
-          <LogOut size={14} aria-hidden='true' />
-          {login ? t('setup.signOutAs', { login }) : t('auth.signOut')}
-        </button>
+      <RepositoryChooser actionLabel={t('setup.open')} busyLabel={t('setup.opening')} onChoose={open} footer={<SignOutButton login={login} />} />
+    </SetupCard>
+  );
+}
+
+function SignOutButton({ login }: { login?: string; }) {
+  const { t } = useTranslation();
+  return (
+    <button type='button' onClick={() => void signOut()} className='ml-auto inline-flex items-center gap-1 text-sm text-muted hover:text-fg'>
+      <LogOut size={14} aria-hidden='true' />
+      {login ? t('setup.signOutAs', { login }) : t('auth.signOut')}
+    </button>
+  );
+}
+
+/**
+ * Where each person keeps their own repositories (an edition's account list): the add flow for someone who has none
+ * yet, which opens the workspace once the first one is added.
+ */
+function FirstRepository({ login }: { login?: string; }) {
+  const { t } = useTranslation();
+  const [members, setMembers] = useState<MembersAnswer>();
+  const [error, setError] = useState('');
+  const load = async () => {
+    try {
+      setMembers(await fetchMembers());
+    } catch (cause) {
+      setError((cause as Error).message);
+    }
+  };
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMembers().then(answer => !cancelled && setMembers(answer), (cause: Error) => !cancelled && setError(cause.message));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  return (
+    <SetupCard>
+      <h2 className='font-serif text-xl font-semibold mb-2'>{t('setup.addFirstTitle')}</h2>
+      <p className='mb-4 text-sm text-muted'>{t('setup.addFirstDescription')}</p>
+      {members ? <RepositoryAddFlow members={members} onAdded={() => window.location.assign('/')} onStale={load} /> : error ? <p role='alert' className='mb-3 text-sm text-danger'>{error}</p> : <LoadingStatus className='mb-3'>{t('repositories.loading')}</LoadingStatus>}
+      <div className='flex mt-3'>
+        <SignOutButton login={login} />
       </div>
     </SetupCard>
   );
@@ -293,7 +173,7 @@ export function WorkspaceGate({ children }: { children: ReactNode; }) {
   }
   if (!session.repositoryChoice || (session.authenticated && session.workspace)) return children;
   if (!session.authenticated) return <SignIn storage={session.storage} />;
-  return <RepositoryPicker login={session.login} />;
+  return session.accountMembers ? <FirstRepository login={session.login} /> : <RepositoryPicker login={session.login} />;
 }
 
 /** Offers to commit the manifest derived for a repository that has none, so its layout is kept and editable in Settings; `config` names notebooks by local id, as the file keeps them. */
