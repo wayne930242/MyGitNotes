@@ -54,7 +54,7 @@ it('persists a study events and memory state and rejects stale writes', async ()
   expect(diff.status).toBe(200);
   expect((await diff.json()).diff).toContain(`+++ ${STUDY_FILE}`);
 });
-it('passes a stored notebook id that is no local id through both ways, and refuses a bare id or another repository\'s key', async () => {
+it("passes a stored notebook id that is no local id through both ways, and refuses a bare id or another repository's key", async () => {
   const odd = { ...storedStudy, notes: storedStudy.notes.map(item => ({ ...item, notebookId: 'my.notes' })) };
   await writeFile(path.join(root, STUDY_FILE), stringify(odd));
   const read = await fetch(url);

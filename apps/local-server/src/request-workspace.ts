@@ -138,10 +138,14 @@ export async function requestCatalog(res: express.Response, revisions: unknown, 
   const workspace = workspaceOf(res);
   const [{ config }, repositories] = await Promise.all([workspace.manifest(), workspace.all()]);
   const available = repositories.filter((repository): repository is AvailableRepository<RepositoryHandle> => 'handle' in repository);
-  return workspaceCatalog(config, available.map(repository => {
-    const notebooks = repository.notebooks.map(localNotebook);
-    return { id: repository.ref.id, alias: repository.alias, notebooks, catalog: open(repository.handle, notebooks) };
-  }), expected);
+  return workspaceCatalog(
+    config,
+    available.map(repository => {
+      const notebooks = repository.notebooks.map(localNotebook);
+      return { id: repository.ref.id, alias: repository.alias, notebooks, catalog: open(repository.handle, notebooks) };
+    }),
+    expected,
+  );
 }
 
 /** The repository a workspace-level request names, or the home repository when it names none; with the manifest scope that repository serves. */

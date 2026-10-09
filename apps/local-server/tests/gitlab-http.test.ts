@@ -100,7 +100,7 @@ describe('GitLab HTTP and MCP integration', () => {
     expect(await fetch(`${base}/api/study`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true });
     expect((await fetch(`${base}/api/agent-resources`, { headers: { Cookie: cookie } }).then(r => r.json())).files.find((file: any) => file.kind === 'instructions').path).toBe('AGENTS.md');
   });
-  it('commits a Focus draft named by key with the local id, and refuses a bare id or another repository\'s key', async () => {
+  it("commits a Focus draft named by key with the local id, and refuses a bare id or another repository's key", async () => {
     await login();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
     const focus = (notebookId: string) => ({ path: '.github-notes-focus.yaml', base: { version: 1, focuses: [] }, page: { version: 1, focuses: [{ id: 'weekly', notebookId, name: 'Weekly', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/a.md' }] }] }] } });

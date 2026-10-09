@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse } from 'yaml';
-import { ApplyLegacyOutlineImportSchema, BOOKMARKS_DOCUMENT, BOOKMARKS_FILE, keyedItem, BOOKMARKS_MAX_BYTES, type BookmarksPage, BookmarksPageSchema, type LegacyOutlineImportRequest, LegacyOutlineImportSchema, PathTraversalError, planLegacyOutlineImport, SourceError, SymlinkEscapeError } from '@mygitnotes/core';
+import { ApplyLegacyOutlineImportSchema, BOOKMARKS_DOCUMENT, BOOKMARKS_FILE, BOOKMARKS_MAX_BYTES, type BookmarksPage, BookmarksPageSchema, keyedItem, type LegacyOutlineImportRequest, LegacyOutlineImportSchema, PathTraversalError, planLegacyOutlineImport, SourceError, SymlinkEscapeError } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { keyedDocument, namedRepository, notebookRepository, workspaceOf } from './request-workspace.js';
 import { regularPath, revisionOf } from './workspace-files.js';
