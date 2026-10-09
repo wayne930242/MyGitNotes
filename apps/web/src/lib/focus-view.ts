@@ -27,9 +27,13 @@ export interface FocusViewState {
   dock: { left: number; top: number; collapsed: boolean; };
 }
 
-/** Where this device keeps the Focus view of the notebook named by `notebookKey`. */
-export function focusViewStorageKey(notebookKey: string): string {
-  return `github-notes:focus-view:${notebookKey}`;
+/**
+ * Where this device keeps the Focus view of the notebook `notebookKey` served by the repository `repositoryId`. An alias
+ * is unique only within one workspace, so two repositories of the same name on one origin (two visitors' `notes`, or two
+ * worktrees in folders of the same name) keep views of their own.
+ */
+export function focusViewStorageKey(repositoryId: string, notebookKey: string): string {
+  return `github-notes:focus-view:${repositoryId}:${notebookKey}`;
 }
 
 /**
@@ -37,8 +41,8 @@ export function focusViewStorageKey(notebookKey: string): string {
  * view scope and the notebook's local id, is copied to it once; one that cannot be read is dropped by readFocusView.
  * `scope` is null for a notebook that view does not belong to: one its local id, as an old URL, does not stand for.
  */
-export function adoptedFocusViewKey(scope: string | null, notebookKey: string): string {
-  const key = focusViewStorageKey(notebookKey);
+export function adoptedFocusViewKey(repositoryId: string, scope: string | null, notebookKey: string): string {
+  const key = focusViewStorageKey(repositoryId, notebookKey);
   const localId = parseNotebookKey(notebookKey)?.localId;
   try {
     if (scope !== null && localId && localStorage.getItem(key) === null) {
@@ -50,9 +54,9 @@ export function adoptedFocusViewKey(scope: string | null, notebookKey: string): 
 }
 
 /** Whether this device has ever recorded Focus-view state for this notebook: the signal for "has this device already made its own choice." */
-export function hasStoredFocusView(scope: string | null, notebookKey: string): boolean {
+export function hasStoredFocusView(repositoryId: string, scope: string | null, notebookKey: string): boolean {
   try {
-    return localStorage.getItem(adoptedFocusViewKey(scope, notebookKey)) !== null;
+    return localStorage.getItem(adoptedFocusViewKey(repositoryId, scope, notebookKey)) !== null;
   } catch {
     return false;
   }

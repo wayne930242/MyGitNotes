@@ -8,6 +8,8 @@ import { activatePane, adoptedFocusViewKey, browseTarget, CURRENT_FOCUS, emptyFo
 interface NoteFocusOptions {
   page: FocusPageController;
   notebookId: string;
+  /** The repository serving the notebook; its id scopes where this device keeps the view. */
+  repository: string;
   /** The workspace's view-state scope before notebook keys, from which this notebook's earlier view is adopted; null when that view is not this notebook's. */
   scope: string | null;
   /** The `focus` URL parameter. */
@@ -39,8 +41,8 @@ const notePaths = (keys: (string | null)[]) => keys.map(notePath).filter((path):
 const noteKeys = (notebookId: string, keys: (string | null)[]) => notePaths(keys).map(path => noteRefKey({ notebookId, path }));
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
-export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = false, defaultFocus = null, writable, flushEditors }: NoteFocusOptions) {
-  const key = adoptedFocusViewKey(scope, notebookId);
+export function useNoteFocus({ page, notebookId, repository, scope, focusKey, restoreLast = false, defaultFocus = null, writable, flushEditors }: NoteFocusOptions) {
+  const key = adoptedFocusViewKey(repository, scope, notebookId);
   const [stored, setStored] = useState(() => ({ key, view: loadView(key) }));
   const view = stored.key === key ? stored.view : loadView(key);
   const viewRef = useRef(view);

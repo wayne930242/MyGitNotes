@@ -9,8 +9,8 @@ import { CURRENT_FOCUS } from './focus-view.js';
 import { focusDocumentClient, type FocusPageController } from './use-focus-page.js';
 import type { WorkspaceDocumentClient } from './use-workspace-document.js';
 
-const SCOPE = 'use-note-focus-test', NOTEBOOK = 'kb~life';
-const storageKey = `github-notes:focus-view:${NOTEBOOK}`;
+const SCOPE = 'use-note-focus-test', REPOSITORY = 'github:owner/kb@main', NOTEBOOK = 'kb~life';
+const storageKey = `github-notes:focus-view:${REPOSITORY}:${NOTEBOOK}`;
 
 function fakeController(): FocusPageController {
   return { client: focusDocumentClient as WorkspaceDocumentClient<unknown>, repository: 'local:/workspace', file: '.github-notes-focus.yaml', page: emptyFocusPage(), change: () => {}, save: async () => {}, reload: async () => {}, refresh: async () => {}, loading: false, saving: false, dirty: false, error: '', writable: true, setError: () => {}, diff: '' };
@@ -31,7 +31,7 @@ describe('useNoteFocus place', () => {
     const layout: FocusLayout = { division: 'single', panes: [{ tabs: Array.from({ length: FOCUS_MAX_TABS }, (_, index) => tab(`compilation-${index}`)) }] };
     localStorage.setItem(storageKey, JSON.stringify({ current: layout, entries: {}, last: null, dock: { left: 320, bottom: 280, collapsed: false } }));
 
-    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, repository: REPOSITORY, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
     await waitFor(() => expect(result.current.layout?.panes[0]?.tabs.length).toBe(FOCUS_MAX_TABS));
 
     const attempt = result.current.place(CURRENT_FOCUS, tab('compilation-new'), 0);
@@ -42,7 +42,7 @@ describe('useNoteFocus place', () => {
   });
 
   it('still resolves true when the Focus has room', async () => {
-    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, repository: REPOSITORY, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
     await waitFor(() => expect(result.current.layout).not.toBeNull());
 
     await expect(result.current.place(CURRENT_FOCUS, tab('compilation-a'), 0)).resolves.toBe(true);
@@ -55,7 +55,7 @@ describe('useNoteFocus mutationError', () => {
 
   it('records a failed change, and clears it on dismiss and when another Focus is shown', async () => {
     localStorage.setItem(storageKey, JSON.stringify({ current: fullLayout(FOCUS_MAX_TABS), entries: {}, last: null }));
-    const { result, rerender } = renderHook(({ focusKey }: { focusKey: string | null; }) => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey, writable: true, flushEditors: async () => true }), { wrapper, initialProps: { focusKey: CURRENT_FOCUS as string | null } });
+    const { result, rerender } = renderHook(({ focusKey }: { focusKey: string | null; }) => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, repository: REPOSITORY, scope: SCOPE, focusKey, writable: true, flushEditors: async () => true }), { wrapper, initialProps: { focusKey: CURRENT_FOCUS as string | null } });
     await waitFor(() => expect(result.current.layout).not.toBeNull());
 
     const fail = () => result.current.place(CURRENT_FOCUS, tab(`compilation-${FOCUS_MAX_TABS}`), 0).catch(() => {});
@@ -77,6 +77,7 @@ describe('useNoteFocus mutationError', () => {
       useNoteFocus({
         page: fakeController(),
         notebookId: NOTEBOOK,
+        repository: REPOSITORY,
         scope: SCOPE,
         focusKey: CURRENT_FOCUS,
         writable: true,
@@ -104,7 +105,7 @@ describe('useNoteFocus openNote', () => {
   const twoColumns: FocusLayout = { division: 'columns-2', panes: [{ tabs: [tab('compilation-a')] }, { tabs: [tab('compilation-b')] }] };
   const render = () => {
     localStorage.setItem(storageKey, JSON.stringify({ current: twoColumns, entries: {}, last: null }));
-    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
+    const { result } = renderHook(() => useNoteFocus({ page: fakeController(), notebookId: NOTEBOOK, repository: REPOSITORY, scope: SCOPE, focusKey: CURRENT_FOCUS, writable: true, flushEditors: async () => true }), { wrapper });
     return result;
   };
 
