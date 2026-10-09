@@ -56,14 +56,20 @@ export function createMCPServer(productRoot: string, configSource: WorkspaceConf
       } else {
         const workspace = createWorkspaceRepositories<{ kind: 'local'; id: string; root: string; }>({
           members: visibleMembers(settings),
-          manifest: (member, handle) => settings.manifest(member, () => localManifest(handle.root, stageAndCommit, WORKSPACE_CONFIG_FILENAME)),
+          // As in the local server: a mapped platform repository creates its first manifest at its root, a local source under notes/.
+          manifest: (member, handle) => settings.manifest(member, () => localManifest(handle.root, stageAndCommit, member.ref.source.type === 'local' ? undefined : WORKSPACE_CONFIG_FILENAME)),
           async openRepository({ ref, localPath }) {
-            if (!localPath || !fs.existsSync(path.join(localPath, '.git'))) return { reason: 'unmapped', message: `No Git worktree is mapped for ${ref.id}.` };
+            if (!localPath) return { reason: 'unmapped', message: `No Git worktree is mapped for ${ref.id}.` };
+            // A local source is its directory, which may lie inside a worktree; a platform repository is the worktree that checks it out.
+            if (ref.source.type === 'local' ? !fs.statSync(localPath, { throwIfNoEntry: false })?.isDirectory() : !fs.existsSync(path.join(localPath, '.git'))) return { reason: 'unmapped', message: `${localPath} is not ${ref.source.type === 'local' ? 'a directory' : 'a Git worktree'}.` };
             return { kind: 'local', id: ref.id, root: localPath };
           },
         });
         const root = workspace.default?.localPath;
         if (!root) throw new Error('This workspace has no default repository yet.');
+        // A default repository that cannot be opened fails every tool with its reason; one whose manifest cannot be read stays open so it can be fixed.
+        const opened = (await workspace.all()).find(entry => entry.member.default);
+        if (opened && 'unavailable' in opened && opened.unavailable.reason !== 'invalid-manifest') throw new Error(opened.unavailable.message);
         const ctx: ToolContext = { repoRoot: root, workspace, productRoot };
         result = await dispatchLocalTool(ctx, name, args);
       }

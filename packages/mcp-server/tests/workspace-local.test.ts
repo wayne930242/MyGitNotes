@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { deriveAlias, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { deploymentConfigSource, deriveAlias, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createMCPServer } from '../src/server.js';
 
 const roots: string[] = [];
@@ -99,5 +99,49 @@ it('names notebooks by key, accepts a bare id by the rule old URLs follow, and n
   } finally {
     await client.close();
     await server.close();
+  }
+});
+
+/** A client connected to a stdio server whose workspace comes from the deployment environment `env`. */
+async function deploymentClient(productRoot: string, env: NodeJS.ProcessEnv) {
+  const server = createMCPServer(productRoot, deploymentConfigSource(productRoot, env));
+  const client = new Client({ name: 'fixture', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const result = await client.callTool({ name, arguments: args }) as { isError?: boolean; content: { text: string; }[]; };
+    return { isError: result.isError, data: JSON.parse(result.content[0].text) };
+  };
+  return {
+    call,
+    close: async () => {
+      await client.close();
+      await server.close();
+    },
+  };
+}
+
+it('serves a local source that is a folder inside a Git worktree, as the examples workspace is', async () => {
+  const root = worktree({ 'sub/.mygitnotes.yaml': manifest('life', 'notes/life'), 'sub/notes/life/note.md': '# Life\n' });
+  const { call, close } = await deploymentClient(root, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: path.join(root, 'sub') });
+  try {
+    expect((await call('list_notebooks', {})).data.notebooks.map((notebook: { id: string; }) => notebook.id)).toEqual(['life']);
+    expect((await call('get_workspace_config', {})).data.config.workspace.default_notebook).toBe('sub~life');
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'life' })).data.note.content).toContain('Life');
+  } finally {
+    await close();
+  }
+});
+
+it('fails every tool with the reason when the local source does not exist, instead of listing no notebooks', async () => {
+  const root = worktree({ 'README.md': '# Product\n' });
+  const { call, close } = await deploymentClient(root, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: path.join(root, 'missing') });
+  try {
+    const listed = await call('list_notebooks', {});
+    expect(listed.isError).toBe(true);
+    expect(listed.data.error).toContain('missing');
+  } finally {
+    await close();
   }
 });
