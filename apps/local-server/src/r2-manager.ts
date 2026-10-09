@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, notebookKey, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
 import { type AssetScope, type AssetStorage, inAssetScope, resolveAssetScope } from './asset-storage.js';
-import { eachRepository, notebookRepository, type RepositoryHandle } from './request-workspace.js';
+import { eachRepository, notebookRepository, type RepositoryHandle, requestMembers } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { writeFileAtomicSync } from './workspace-files.js';
@@ -22,6 +22,19 @@ interface RepositoryNotes {
   notes: () => Promise<Map<string, string>>;
   /** Persists rewritten notes as one mutation of this repository, rejecting when a note changed since `read`. */
   commit: (changes: Map<string, string>, read: Map<string, string>) => Promise<void>;
+}
+/** A hidden repository whose notes a delete or move cannot check, since hidden repositories are never read. */
+interface UncheckedRepository {
+  id: string;
+  alias: string;
+  repository?: string;
+  path?: string;
+}
+/** A delete or move asked without confirming that hidden repositories go unchecked. */
+class HiddenUncheckedError extends SourceError {
+  constructor(readonly repositories: UncheckedRepository[]) {
+    super(`Hidden repositories are not checked for references: ${repositories.map(repository => repository.alias).join(', ')}. Confirm to go ahead.`, 409);
+  }
 }
 /** A note of one repository that references R2 objects. */
 interface ReferencingNote {
@@ -106,7 +119,13 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     /** Tells the storage about a size change; a failure ends the request, so a quota never drifts silently. */
     const record = (key: string, deltaBytes: number) => storage.record?.(scope, key, deltaBytes) ?? Promise.resolve();
     const moved = storage.moved && ((from: string, to: string, bytes: number) => storage.moved!(scope, from, to, bytes));
-    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, moved, authorize };
+    // Hidden repositories are never read, so where every repository shares the bucket root their references go unchecked (decision C7).
+    const unchecked: UncheckedRepository[] = scope.prefix === '' ? requestMembers(res).filter(member => member.hidden).map(member => ({ id: member.ref.id, alias: member.alias, ...(member.ref.source.type === 'local' ? { path: member.localPath } : { repository: member.ref.source.repository }) })) : [];
+    /** A delete or move goes ahead with hidden repositories unchecked only once the person confirmed it. */
+    const confirmUnchecked = (input: Record<string, unknown>) => {
+      if (unchecked.length && input.confirmHidden !== true) throw new HiddenUncheckedError(unchecked);
+    };
+    return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, moved, authorize, unchecked, confirmUnchecked };
   };
   /** A well-formed key inside the scope; a key outside it is not found, whatever it names. */
   const bucketKey = (scope: AssetScope, value: unknown) => {
@@ -137,7 +156,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     } catch (error) {
       const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
       if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
-      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}) });
+      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}), ...(error instanceof HiddenUncheckedError ? { code: 'hidden-unchecked', hidden: error.repositories } : {}) });
     }
   };
 
@@ -198,16 +217,17 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
   router.get(
     '/api/r2/references',
     handle(async (req, res) => {
-      const { repositories, scope } = await context(req, res, req.query);
+      const { repositories, scope, unchecked } = await context(req, res, req.query);
       const objects = (await affected(scope, bucketKey(scope, req.query.key), req.query.directory === '1')).map(object => object.key);
       const notes = (await Promise.all((await repositories()).map(async repository => referencing(repository, await repository.notes(), objects)))).flat().sort(byPath);
-      res.json({ objects, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })) });
+      res.json({ objects, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })), hidden: unchecked });
     }),
   );
   router.post(
     '/api/r2/move',
     handle(async (req, res) => {
-      const { repositories, scope, settings, record, moved } = await context(req, res, req.body);
+      const { repositories, scope, settings, record, moved, confirmUnchecked } = await context(req, res, req.body);
+      confirmUnchecked(req.body);
       const key = bucketKey(scope, req.body.key), destination = bucketKey(scope, req.body.destination);
       if (withinPath(destination, key)) throw new SourceError('Choose a destination outside the moved item.', 400);
       const found = await affected(scope, key, req.body.directory === true);
@@ -261,7 +281,8 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
   router.post(
     '/api/r2/delete',
     handle(async (req, res) => {
-      const { scope, settings, record } = await context(req, res, req.body);
+      const { scope, settings, record, confirmUnchecked } = await context(req, res, req.body);
+      confirmUnchecked(req.body);
       const objects = await affected(scope, bucketKey(scope, req.body.key), req.body.directory === true);
       for (const object of objects) {
         await deleteR2Object(settings, object.key);

@@ -107,3 +107,9 @@ export function watchWorktrees(worktrees: { id: string; root: string; }[], onCha
 
 /** Worktrees currently watched, for tests. */
 export const watchedWorktreeCount = () => watchers.size;
+
+/** Subscribers watching one worktree, for tests; 0 when nothing watches it. */
+export function worktreeSubscriberCount(root: string): number {
+  const shared = watchers.get(path.resolve(root));
+  return shared ? shared.listeners.files.size + shared.listeners.commits.size : 0;
+}

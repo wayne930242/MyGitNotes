@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, RepositoryUnavailableError, sameSite, SourceError, SUPPORTED_SCHEMA_VERSION, visibleMembers, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, RepositoryUnavailableError, sameSite, SourceError, SUPPORTED_SCHEMA_VERSION, visibleMembers, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceMember, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -39,9 +39,9 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
   if (settings.site.type === 'local') {
     return createWorkspaceRepositories<RepositoryHandle>({
       members,
-      // A mapped platform repository creates its first manifest at its root, where every notebook root is relative to;
-      // a local source keeps creating it under notes/, as it did as the home repository.
-      manifest: (member, handle) => settings.manifest(member, () => localManifest((handle as LocalHandle).root, stageAndCommit, member.ref.source.type === 'local' ? undefined : WORKSPACE_CONFIG_FILENAME)),
+      // A repository added beside the deployment's own creates its first manifest at its root, where every notebook root
+      // is relative to; the deployment's own source keeps creating it under notes/, as it did as the home repository.
+      manifest: (member, handle) => settings.manifest(member, () => localManifest((handle as LocalHandle).root, stageAndCommit, member.editable === 'environment' ? undefined : WORKSPACE_CONFIG_FILENAME)),
       async openRepository(member) {
         const worktree = member.localPath;
         if (!worktree) return { reason: 'unmapped', message: `No worktree is mapped for ${member.ref.id}. Add it under repositories in mygitnotes.server.yaml.` };
@@ -98,8 +98,16 @@ export function requestWorkspace(auth: SessionServices, configSource: WorkspaceC
     res.locals.workspace = openWorkspace(settings, token, cache, { fresh: req.query.fresh === '1' });
     res.locals.token = token;
     res.locals.site = settings.site;
+    res.locals.members = settings.members;
     next();
   };
+}
+
+/** Every member of the request's workspace, hidden ones included, as its settings list them; nothing is opened. */
+export function requestMembers(res: express.Response): WorkspaceMember[] {
+  const members = res.locals.members as WorkspaceMember[] | undefined;
+  if (!members) throw new SourceError('Workspace unavailable.', 503);
+  return members;
 }
 
 /** The signed-in platform token of the request, for calls outside its repositories such as Gists. */

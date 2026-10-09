@@ -25,6 +25,7 @@ import { createFileManagerRouter } from './file-manager.js';
 import { createGistRouter, gistSite, gistToken, noteGist, syncGists } from './gists.js';
 import { isLoopbackHttpOrigin, type PiAgent } from './pi-agent.js';
 import { type PublishingService, publishNotes } from './publishing.js';
+import { createWorkspaceMembersRouter } from './workspace-members.js';
 
 export function applicationRoot() {
   let dir = path.dirname(fileURLToPath(import.meta.url));
@@ -103,6 +104,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // Core updates act on the product repository, not on the workspace, so they open no repository of it.
   if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
+  // The member list opens no repository, so it works while every repository is hidden or unreachable.
+  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));

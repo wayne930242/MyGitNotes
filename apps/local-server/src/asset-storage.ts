@@ -29,6 +29,12 @@ export interface AssetStorage {
    * and an undone move calls nothing, because the quota never changed.
    */
   moved?(scope: AssetScope, from: string, to: string, bytes: number): Promise<void>;
+  /**
+   * Whether every repository of the request's workspace reaches one key space, so notebooks with the same local id in
+   * two repositories share `r2:<localId>/` keys and a hidden repository's references cannot be checked. Absent means
+   * each repository has a key space of its own.
+   */
+  sharedKeys?(req: Request, res: Response): Promise<boolean>;
 }
 
 /** The community behavior: the bucket comes from the deployment's environment, every key is allowed, and nothing is metered. */
@@ -38,6 +44,8 @@ export function envAssetStorage(env: NodeJS.ProcessEnv = process.env): AssetStor
       const settings = r2SettingsFromEnv(env);
       return settings && { settings, prefix: '', limits: { maxObjectBytes: R2_MAX_OBJECT_BYTES } };
     },
+    // One bucket root for every repository.
+    sharedKeys: async () => Boolean(r2SettingsFromEnv(env)),
   };
 }
 

@@ -107,6 +107,41 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
+describe('R2 management with a hidden repository (decision C7)', () => {
+  /** Adds a hidden member, which is never read, so its references cannot be checked. */
+  const hideAnother = () => {
+    const hidden = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-hidden-'));
+    fs.writeFileSync(path.join(root, 'mygitnotes.server.yaml'), `repositories:\n  - { type: local, path: ${hidden}, alias: archive, hidden: true }\n`);
+    return hidden;
+  };
+
+  it('names the hidden repositories it did not check and deletes or moves only once the person confirms', async () => {
+    await startLocal();
+    const hidden = hideAnother();
+    try {
+      const references = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/keep.pdf`).then(r => r.json());
+      expect(references.hidden).toEqual([{ id: `local:${hidden}`, alias: 'archive', path: hidden }]);
+      const refused = await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf' });
+      expect(refused.status).toBe(409);
+      expect(await refused.json()).toMatchObject({ code: 'hidden-unchecked', hidden: [{ alias: 'archive' }] });
+      expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/keep.pdf', destination: 'ex/moved.pdf' })).status).toBe(409);
+      expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
+      expect(bucket.requests.filter(request => request.startsWith('DELETE') || request.startsWith('PUT'))).toEqual([]);
+      expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/keep.pdf', destination: 'ex/moved.pdf', confirmHidden: true })).status).toBe(200);
+      expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/moved.pdf', confirmHidden: true })).status).toBe(200);
+      expect([bucket.objects.has('ex/keep.pdf'), bucket.objects.has('ex/moved.pdf')]).toEqual([false, false]);
+    } finally {
+      fs.rmSync(hidden, { recursive: true, force: true });
+    }
+  });
+
+  it('asks nothing while every repository is visible', async () => {
+    await startLocal();
+    expect((await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/keep.pdf`).then(r => r.json())).hidden).toEqual([]);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf' })).status).toBe(200);
+  });
+});
+
 describe('R2 management on a local workspace', () => {
   it('signs the declared Content-Length into a direct upload and refuses an upload without one', async () => {
     await startLocal();
