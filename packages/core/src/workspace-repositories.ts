@@ -2,8 +2,10 @@ import path from 'node:path';
 import { SourceError } from './github-api.js';
 import { deriveAlias, isBareNotebookId, type NotebookKey, notebookKey, parseNotebookKey, repositoryName } from './notebook-key.js';
 import { type RepositoryId, type RepositoryRef, repositoryRef, type RepositoryScope, type UnavailableReason } from './repository.js';
+import { notebookRepositoryManifest, type RepositoryManifest, type RepositoryManifestFile } from './repository-manifest.js';
 import type { NotebookConfig, WorkspaceConfig } from './types.js';
 import type { ManifestStore } from './workspace-config-source.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from './workspace-preferences.js';
 
 /** A notebook as its repository's manifest declares it (`id` is the local id), with its workspace key. */
 export type KeyedNotebook = NotebookConfig & { key: NotebookKey; };
@@ -31,8 +33,15 @@ export type WorkspaceRepository<H> = AvailableRepository<H> | UnavailableReposit
 export interface WorkspaceRepositories<H> {
   /** The home repository, available without loading the manifest. */
   readonly home: { ref: RepositoryRef; alias: string; handle: H; };
+  /** The home manifest, which declares every notebook of the workspace. */
   manifest(): Promise<{ config: WorkspaceConfig; revision: string; derived?: boolean; }>;
-  saveManifest(yaml: string, revision: string): Promise<{ config: WorkspaceConfig; revision: string; }>;
+  /**
+   * One repository's own manifest: its title, where it opens, its preferences and the revision a save sends back.
+   * The home repository's is the home manifest; another repository's is the file it keeps, if any.
+   */
+  manifestOf(id: RepositoryId): Promise<RepositoryManifest>;
+  /** Saves one repository's own manifest, refusing a revision that is no longer current with 409. */
+  saveManifest(id: RepositoryId, yaml: string, revision: string): Promise<{ revision: string; }>;
   /** The manifest as the workspace names it: each notebook's `id` and `workspace.default_notebook` are notebook keys. */
   keyedConfig(): Promise<WorkspaceConfig>;
   /** Every repository of the workspace, the home repository first, each opened or marked unavailable. */
@@ -64,6 +73,8 @@ export interface WorkspaceRepositoriesOptions<H> {
   openRepository?(ref: RepositoryRef, scope: RepositoryScope): Promise<H | Unavailability>;
   /** Whether a declared notebook repository is the home repository by another name, such as a mapping onto the home worktree. */
   isHome?(ref: RepositoryRef): boolean;
+  /** The manifest file a notebook repository keeps of its own. Without it, only the home repository's manifest can be read or saved. */
+  repositoryManifest?(ref: RepositoryRef, handle: H): RepositoryManifestFile;
 }
 
 interface Group {
@@ -137,18 +148,39 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
     throw new SourceError(`${names ? `${names}: ` : ''}${found.unavailable.message}`, 503);
   };
   const all = async () => Promise.all((await groups()).map(entry));
+  const keyedConfig = (config: WorkspaceConfig): WorkspaceConfig => {
+    const keys = new Map<string, NotebookKey>();
+    for (const found of group(config)) for (const notebook of found.notebooks) keys.set(notebook.id, notebook.key);
+    // One manifest declares every notebook, so its local ids are unique here.
+    const key = (id: string) => keys.get(id) ?? id;
+    return { ...config, workspace: { ...config.workspace, default_notebook: key(config.workspace.default_notebook) }, notebooks: config.notebooks.map(notebook => ({ ...notebook, id: key(notebook.id) })) };
+  };
+  const notebookRepository = async (id: RepositoryId): Promise<Group> => {
+    const found = (await groups()).find(candidate => candidate.ref.id === id);
+    if (!found) throw new SourceError('Repository is not part of this workspace.', 404);
+    return found;
+  };
+  const manifestFile = (found: AvailableRepository<H>): RepositoryManifestFile => {
+    if (!options.repositoryManifest) throw new SourceError(`The manifest of ${found.ref.id} cannot be read here.`, 501);
+    return options.repositoryManifest(found.ref, found.handle);
+  };
   return {
     home: { ref: homeRef, alias: homeAlias, handle: homeHandle },
     manifest: () => manifest.load(),
-    saveManifest: (yaml, revision) => manifest.save(yaml, revision),
-    async keyedConfig() {
-      const { config } = await manifest.load();
-      const keys = new Map<string, NotebookKey>();
-      for (const found of group(config)) for (const notebook of found.notebooks) keys.set(notebook.id, notebook.key);
-      // One manifest declares every notebook, so its local ids are unique here.
-      const key = (id: string) => keys.get(id) ?? id;
-      return { ...config, workspace: { ...config.workspace, default_notebook: key(config.workspace.default_notebook) }, notebooks: config.notebooks.map(notebook => ({ ...notebook, id: key(notebook.id) })) };
+    async manifestOf(id) {
+      if (id === homeRef.id) {
+        const { config, revision, derived } = await manifest.load();
+        return { config, revision, derived: Boolean(derived), title: config.workspace.title, defaultNotebook: keyedConfig(config).workspace.default_notebook, preferences: { ...DEFAULT_WORKSPACE_PREFERENCES, ...config.preferences } };
+      }
+      const found = await entry(await notebookRepository(id));
+      const served = found.notebooks.map(withoutKey);
+      return notebookRepositoryManifest('handle' in found ? await manifestFile(found).read() : null, repositoryName(found.ref.source), found.alias, served);
     },
+    async saveManifest(id, yaml, revision) {
+      if (id === homeRef.id) return { revision: (await manifest.save(yaml, revision)).revision };
+      return manifestFile(available(await entry(await notebookRepository(id)))).save(yaml, revision);
+    },
+    keyedConfig: async () => keyedConfig((await manifest.load()).config),
     all,
     async forNotebook(key) {
       const parsed = parseNotebookKey(key);
@@ -173,11 +205,7 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
       const [{ found, notebook }] = matches;
       return { ...available(await entry(found)), notebook };
     },
-    async byId(id) {
-      const found = (await groups()).find(candidate => candidate.ref.id === id);
-      if (!found) throw new SourceError('Repository is not part of this workspace.', 404);
-      return available(await entry(found));
-    },
+    byId: async id => available(await entry(await notebookRepository(id))),
     scope,
   };
 }

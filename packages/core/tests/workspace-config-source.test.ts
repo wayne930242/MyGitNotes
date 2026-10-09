@@ -5,8 +5,10 @@ import path from 'node:path';
 import { deploymentConfigSource, WorkspaceSetupError } from '../src/workspace-config-source.js';
 import { createWorkspaceRepositories } from '../src/workspace-repositories.js';
 import { repositoryRef } from '../src/repository.js';
-import { localManifest } from '../src/local-manifest.js';
+import { localManifest, MISSING_MANIFEST_REVISION } from '../src/local-manifest.js';
 import type { WorkspaceConfig } from '../src/types.js';
+import type { ManifestRead } from '../src/repository-manifest.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '../src/workspace-preferences.js';
 
 const request = { headers: {} };
 const manifest = (title: string) => `schema_version: 1\nworkspace:\n  title: ${title}\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n`;
@@ -71,10 +73,54 @@ describe('a local manifest store', () => {
     const commit = vi.fn(async () => undefined);
     const store = localManifest(root, commit);
     await expect(store.load()).rejects.toMatchObject({ status: 422 });
-    const saved = await store.save(manifest('Fresh'), '');
+    await expect(store.read()).resolves.toEqual({ state: 'missing', revision: MISSING_MANIFEST_REVISION });
+    const saved = await store.save(manifest('Fresh'), MISSING_MANIFEST_REVISION);
     expect(saved.config.workspace.title).toBe('Fresh');
     expect(fs.readFileSync(path.join(root, 'notes/.mygitnotes.yaml'), 'utf8')).toContain('Fresh');
     expect(commit).toHaveBeenCalledWith(root, ['notes/.mygitnotes.yaml'], 'chore(workspace): update configuration');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('revises the manifest by its content and refuses a save from a revision the file no longer has', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-local-manifest-'));
+    fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), manifest('First'));
+    const commit = vi.fn(async () => undefined);
+    const store = localManifest(root, commit);
+    const { revision } = await store.load();
+    expect(revision).toMatch(/^sha256:[0-9a-f]{64}$/);
+    expect((await store.load()).revision).toBe(revision);
+    // Another editor changes the file after this one read it.
+    fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), manifest('Elsewhere'));
+    await expect(store.save(manifest('Mine'), revision)).rejects.toMatchObject({ status: 409 });
+    await expect(store.save(manifest('Mine'), '')).rejects.toMatchObject({ status: 409 });
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toContain('Elsewhere');
+    expect(commit).not.toHaveBeenCalled();
+    const current = (await store.load()).revision;
+    expect(current).not.toBe(revision);
+    const saved = await store.save(manifest('Mine'), current);
+    expect(saved.config.workspace.title).toBe('Mine');
+    expect(saved.revision).not.toBe(current);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('refuses to create a manifest that appeared since the worktree was read without one', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-local-manifest-'));
+    const store = localManifest(root, vi.fn(async () => undefined), '.mygitnotes.yaml');
+    const { revision } = await store.read();
+    fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), manifest('Appeared'));
+    await expect(store.save(manifest('Created'), revision)).rejects.toMatchObject({ status: 409 });
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toContain('Appeared');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reads an invalid manifest as its text and error, and replaces it on save', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-local-manifest-'));
+    fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), 'schema_version: 3\nworkspace: [broken\n');
+    const store = localManifest(root, vi.fn(async () => undefined));
+    const read = await store.read();
+    expect(read).toMatchObject({ state: 'invalid', text: 'schema_version: 3\nworkspace: [broken\n' });
+    await store.save(manifest('Fixed'), read.revision);
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toContain('Fixed');
     fs.rmSync(root, { recursive: true, force: true });
   });
 });
@@ -141,6 +187,44 @@ describe('notebook repositories', () => {
   it('marks notebook repositories unmapped when nothing opens them', async () => {
     const [, trpgEntry] = await open().all();
     expect(trpgEntry).toMatchObject({ unavailable: { reason: 'unmapped' } });
+  });
+
+  it("reads each repository's own manifest for its title, default and preferences, and saves it in that repository", async () => {
+    const trpgId = 'github:owner/trpg@main';
+    const file = { read: vi.fn(async (): Promise<ManifestRead> => ({ state: 'missing', revision: 'r1' })), save: vi.fn(async () => ({ revision: 'r2' })) };
+    const homeSave = vi.fn(async () => ({ config, revision: 'h2' }));
+    const repositories = createWorkspaceRepositories<unknown>({ home, openHome: scope => ({ scope }), manifest: () => ({ load, save: homeSave }), openRepository: async (_ref, scope) => ({ scope }), repositoryManifest: () => file });
+    expect(await repositories.manifestOf(home.id)).toMatchObject({ title: 'Test', defaultNotebook: 'home~life', revision: 'a'.repeat(40), derived: false, preferences: DEFAULT_WORKSPACE_PREFERENCES });
+    // Without a file the repository is shown by its name and would create a manifest of the notebooks it serves.
+    const derived = await repositories.manifestOf(trpgId);
+    expect(derived).toMatchObject({ title: 'trpg', defaultNotebook: 'trpg~trpg', revision: 'r1', derived: true, preferences: DEFAULT_WORKSPACE_PREFERENCES });
+    expect(derived.config?.notebooks).toEqual([expect.objectContaining({ id: 'trpg', root: 'notes' })]);
+    expect(derived.config?.notebooks[0]).not.toHaveProperty('source');
+    // Its own file names it and sets its preferences; a default it does not serve falls back to its first notebook.
+    const own = { schema_version: 3, workspace: { title: 'Campaign', default_notebook: 'elsewhere' }, notebooks: [{ id: 'elsewhere', title: 'Elsewhere', root: 'x' }], preferences: { ...DEFAULT_WORKSPACE_PREFERENCES, defaultShowLineNumbers: true } };
+    file.read.mockResolvedValueOnce({ state: 'file', config: own, revision: 'r3' });
+    expect(await repositories.manifestOf(trpgId)).toMatchObject({ title: 'Campaign', defaultNotebook: 'trpg~trpg', unservedDefault: 'elsewhere', preferences: { defaultShowLineNumbers: true }, revision: 'r3', derived: false });
+    file.read.mockResolvedValueOnce({ state: 'file', config: { ...own, workspace: { title: 'Campaign', default_notebook: 'trpg' } }, revision: 'r4' });
+    expect(await repositories.manifestOf(trpgId)).not.toHaveProperty('unservedDefault');
+    // A file that does not parse keeps the repository open and reports its text.
+    file.read.mockResolvedValueOnce({ state: 'invalid', text: 'workspace: [', error: 'bad YAML', revision: 'r5' });
+    expect(await repositories.manifestOf(trpgId)).toMatchObject({ title: 'trpg', config: null, error: { message: 'bad YAML', text: 'workspace: [' }, revision: 'r5', preferences: DEFAULT_WORKSPACE_PREFERENCES });
+    expect((await repositories.forNotebook('trpg~trpg')).ref.id).toBe(trpgId);
+
+    expect(await repositories.saveManifest(trpgId, 'yaml', 'r1')).toEqual({ revision: 'r2' });
+    expect(file.save).toHaveBeenCalledWith('yaml', 'r1');
+    expect(homeSave).not.toHaveBeenCalled();
+    expect(await repositories.saveManifest(home.id, 'home yaml', 'h1')).toEqual({ revision: 'h2' });
+    expect(homeSave).toHaveBeenCalledWith('home yaml', 'h1');
+    await expect(repositories.manifestOf('github:owner/none@main')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('names an unreachable repository without reading it and refuses to save its manifest', async () => {
+    const read = vi.fn();
+    const repositories = createWorkspaceRepositories<unknown>({ home, openHome: scope => ({ scope }), manifest: () => ({ load, save: vi.fn() }), openRepository: async () => ({ reason: 'no-access', message: 'Repository unavailable.' }), repositoryManifest: () => ({ read, save: vi.fn() }) });
+    expect(await repositories.manifestOf('github:owner/trpg@main')).toMatchObject({ title: 'trpg', config: null, revision: '', defaultNotebook: 'trpg~trpg' });
+    expect(read).not.toHaveBeenCalled();
+    await expect(repositories.saveManifest('github:owner/trpg@main', 'yaml', '')).rejects.toMatchObject({ status: 503 });
   });
 
   it('refuses overlapping roots once a source resolves to the home repository', async () => {

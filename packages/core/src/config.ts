@@ -1,7 +1,8 @@
 import YAML from 'yaml';
 import path from 'node:path';
 import fs from 'node:fs';
-import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig, WorkspacePreferences, YouTubeDisplayMode } from './types.js';
+import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig } from './types.js';
+import { normalizePreferences } from './workspace-preferences.js';
 import { parseSourceConfig, type RemoteSourceConfig, sourceIdentity } from './source-config.js';
 import { NOTEBOOK_ID_PATTERN } from './notebook-key.js';
 
@@ -24,14 +25,6 @@ export class ConfigValidationError extends Error {
   }
 }
 
-const YOUTUBE_DISPLAY_MODES: YouTubeDisplayMode[] = ['thumbnail', 'medium', 'theater'];
-
-/** Normalizes the optional `preferences` block, casting invalid values to their defaults rather than throwing, matching `default_view`'s lenient style. */
-function normalizePreferences(raw: unknown): WorkspacePreferences {
-  const prefs = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  return { defaultYoutubeDisplayMode: YOUTUBE_DISPLAY_MODES.includes(prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode) ? prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode : 'thumbnail', defaultShowLineNumbers: typeof prefs.defaultShowLineNumbers === 'boolean' ? prefs.defaultShowLineNumbers : false, defaultFocusMode: typeof prefs.defaultFocusMode === 'boolean' ? prefs.defaultFocusMode : false };
-}
-
 /** A notebook's declared platform repository; `branch` defaults to `main` and GitLab requires `url`. */
 function notebookSource(item: Record<string, unknown>, schemaVersion: number): RemoteSourceConfig | undefined {
   if (item.source === undefined) return undefined;
@@ -44,6 +37,11 @@ function notebookSource(item: Record<string, unknown>, schemaVersion: number): R
   } catch (error) {
     throw new ConfigValidationError(`Notebook '${item.id}' source is invalid: ${(error as Error).message}`);
   }
+}
+
+/** `files.hide_dotfiles` no longer does anything; a manifest that sets it keeps it, so a save writes it back unchanged. */
+function obsoleteFiles(files: unknown): Pick<WorkspaceConfig, 'files'> {
+  return files && typeof files === 'object' && 'hide_dotfiles' in files ? { files: { hide_dotfiles: Boolean(files.hide_dotfiles) } } : {};
 }
 
 /**
@@ -231,7 +229,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
     throw new ConfigValidationError(`default_notebook '${ws.default_notebook}' does not match any configured notebook ID`);
   }
 
-  return { schema_version: raw.schema_version as number, workspace: { title: ws.title as string, default_notebook: ws.default_notebook as string }, notebooks: validatedNotebooks, files: { hide_dotfiles: raw.files && typeof raw.files === 'object' && 'hide_dotfiles' in (raw.files as Record<string, unknown>) ? Boolean((raw.files as Record<string, unknown>).hide_dotfiles) : true }, preferences: normalizePreferences(raw.preferences) };
+  return { schema_version: raw.schema_version as number, workspace: { title: ws.title as string, default_notebook: ws.default_notebook as string }, notebooks: validatedNotebooks, ...obsoleteFiles(raw.files), preferences: normalizePreferences(raw.preferences) };
 }
 
 /**
@@ -307,8 +305,11 @@ export function attachTsconfigPaths(parsed: WorkspaceConfig, repoRoot: string, a
   return parsed;
 }
 
+/** Where a worktree keeps a manifest in the legacy example layout, whose notebook roots are relative to it. */
+const EXAMPLE_WORKSPACE_DIR = 'examples/workspace';
+
 /**
- * Parses the manifest text of the file `relativeFile` (repository-relative, as `resolveWorkspaceConfigPath` returns it)
+ * Parses the manifest text of the file `relativeFile` (repository-relative, as `loadedWorkspaceConfigFile` returns it)
  * the way `loadWorkspaceConfig` would load it from disk: notebook roots become repository-relative and tsconfig aliases attach.
  * Migration reads a manifest it has not written yet through this, so it sees the notebooks where the loaded manifest does.
  */
@@ -326,8 +327,22 @@ export function parseWorkspaceConfigAt(repoRoot: string, relativeFile: string, c
       }
       return { ...nb, root };
     });
+  } else if (relativeFile.startsWith(`${EXAMPLE_WORKSPACE_DIR}/`)) {
+    parsed.notebooks = parsed.notebooks.map((nb) => nb.source ? nb : { ...nb, root: path.posix.join(EXAMPLE_WORKSPACE_DIR, nb.root) });
   }
   return attachTsconfigPaths(parsed, repoRoot);
+}
+
+/**
+ * The repository-relative manifest file `loadWorkspaceConfig` loads from a worktree, or null when it has none:
+ * the notes root first, then the repository root, then the legacy example path; the standard name before the legacy one.
+ */
+export function loadedWorkspaceConfigFile(repoRoot: string): string | null {
+  for (const dir of ['notes', '', EXAMPLE_WORKSPACE_DIR]) {
+    const filename = existingConfigFilename(path.join(repoRoot, dir));
+    if (filename) return dir ? path.posix.join(dir, filename) : filename;
+  }
+  return null;
 }
 
 /**
@@ -335,35 +350,8 @@ export function parseWorkspaceConfigAt(repoRoot: string, relativeFile: string, c
  * Accepts the standard `.mygitnotes.yaml` name and falls back to the legacy `.github-notes.yaml` name.
  */
 export function loadWorkspaceConfig(repoRoot: string): WorkspaceConfig | null {
-  // 1. Primary: Look in notes/ root directly (e.g. notes/.mygitnotes.yaml)
-  const notesDir = path.join(repoRoot, 'notes');
-  const notesFilename = existingConfigFilename(notesDir);
-  if (notesFilename) {
-    const notesConfigPath = path.join(notesDir, notesFilename);
-    const content = fs.readFileSync(notesConfigPath, 'utf-8');
-    return parseWorkspaceConfigAt(repoRoot, path.posix.join('notes', notesFilename), content);
-  }
-
-  // 2. Secondary: Look in repository root (.mygitnotes.yaml)
-  const rootFilename = existingConfigFilename(repoRoot);
-  if (rootFilename) {
-    const rootConfigPath = path.join(repoRoot, rootFilename);
-    const content = fs.readFileSync(rootConfigPath, 'utf-8');
-    return attachTsconfigPaths(parseWorkspaceConfig(content), repoRoot);
-  }
-
-  // 3. Fallback: Legacy example path if present
-  const exampleDir = path.join(repoRoot, 'examples/workspace');
-  const exampleFilename = existingConfigFilename(exampleDir);
-  if (exampleFilename) {
-    const exampleConfig = path.join(exampleDir, exampleFilename);
-    const content = fs.readFileSync(exampleConfig, 'utf-8');
-    const parsed = parseWorkspaceConfig(content);
-    parsed.notebooks = parsed.notebooks.map((nb) => nb.source ? nb : { ...nb, root: path.posix.join('examples/workspace', nb.root) });
-    return attachTsconfigPaths(parsed, repoRoot);
-  }
-
-  return null;
+  const file = loadedWorkspaceConfigFile(repoRoot);
+  return file ? parseWorkspaceConfigAt(repoRoot, file, fs.readFileSync(path.join(repoRoot, file), 'utf-8')) : null;
 }
 
 /**

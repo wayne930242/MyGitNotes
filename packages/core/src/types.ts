@@ -42,6 +42,7 @@ export interface WorkspaceConfig {
   schema_version: number;
   workspace: { title: string; default_notebook: string; };
   notebooks: NotebookConfig[];
+  /** Obsolete: `hide_dotfiles` is still accepted so older manifests load, and kept when present, but nothing reads it. */
   files?: { hide_dotfiles?: boolean; };
   preferences?: WorkspacePreferences;
 }

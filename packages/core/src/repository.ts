@@ -2,6 +2,7 @@ import { SourceError } from './github-api.js';
 import type { NotebookKey } from './notebook-key.js';
 import { type SourceConfig, sourceIdentity } from './source-config.js';
 import type { WorkspaceConfig } from './types.js';
+import type { ResolvedPreferences } from './workspace-preferences.js';
 import type { UnavailableRepository } from './workspace-repositories.js';
 
 /** Stable identity of one repository and branch, as `sourceIdentity` spells it. */
@@ -76,6 +77,22 @@ export interface RepositoryStatus {
   /** Keys of the notebooks this repository serves. */
   notebooks: NotebookKey[];
   unavailable?: UnavailableRepository['unavailable'];
+  /** The repository's display name: its manifest's `workspace.title`, or the repository's name when it keeps no manifest. */
+  title: string;
+  /** Where opening this repository lands; null only before the home repository has its first manifest. */
+  defaultNotebook: NotebookKey | null;
+  /** The preferences of this repository's notebooks; a device's own choices still win in the browser. */
+  preferences: ResolvedPreferences;
+  /** The manifest as this repository stores it (local ids), or the one "create manifest" would write; null when it cannot be read. */
+  config: WorkspaceConfig | null;
+  /** The manifest's revision, sent back when saving it; empty when it cannot be saved. */
+  configRevision: string;
+  /** `derived`: the repository keeps no manifest yet, and `config` is what saving it creates. */
+  manifest?: 'derived';
+  /** Why this repository's own manifest cannot be read, with its text so Settings can fix it. */
+  manifestError?: { message: string; text: string; };
+  /** The manifest's `default_notebook` when it names no notebook this repository serves; `defaultNotebook` is its first one instead. */
+  unservedDefault?: string;
 }
 /** The answer of `GET /api/workspace`. */
 export interface WorkspaceStatus {
@@ -83,15 +100,11 @@ export interface WorkspaceStatus {
   config: WorkspaceConfig | null;
   /** `config` as the workspace names it: each notebook's `id` and `workspace.default_notebook` are notebook keys. */
   keyedConfig: WorkspaceConfig | null;
-  /** The manifest's own revision, sent back when saving it; empty for a worktree. */
-  configRevision: string;
   local: boolean;
   home: RepositoryId;
   repositories: RepositoryStatus[];
   /** The home worktree, in a local workspace. */
   repoRoot?: string;
-  /** `derived`: the home repository has no manifest yet and `config` was derived from its folders. */
-  manifest?: 'derived';
   /** The deployment lets each visitor choose their repository, so the app offers to switch it. */
   repositoryChoice?: boolean;
 }

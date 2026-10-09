@@ -85,6 +85,8 @@ describe('canonical starter workspace CLI', () => {
     const config = parseWorkspaceConfig(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8'));
     expect(config.notebooks.map(notebook => notebook.id)).toEqual(['personal']);
     expect(config.workspace.default_notebook).toBe('personal');
+    // files.hide_dotfiles is obsolete, so a new workspace no longer writes it.
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).not.toContain('hide_dotfiles');
     expect(fs.existsSync(path.join(root, 'notes/example'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'notes/learning'))).toBe(false);
     expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(false);

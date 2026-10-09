@@ -13,8 +13,6 @@ notebooks:
     root: notes/personal
     assets: assets
     default_view: list
-files:
-  hide_dotfiles: true
 `;
 
 // Deployment settings live in GitHub and Vercel, so bootstrap prints the commands and never handles tokens.

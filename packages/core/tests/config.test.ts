@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ConfigValidationError, LEGACY_WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
+import { ConfigValidationError, LEGACY_WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
 
 describe('Workspace Config Parser', () => {
   it('parses a valid multi-notebook configuration', () => {
@@ -35,6 +35,16 @@ files:
     expect(config.notebooks[1].default_view).toBe('kanban');
     expect(config.files?.hide_dotfiles).toBe(true);
     expect(config.preferences).toEqual({ defaultYoutubeDisplayMode: 'thumbnail', defaultShowLineNumbers: false, defaultFocusMode: false });
+  });
+
+  it('keeps the obsolete files.hide_dotfiles only where a manifest sets it, so saving never adds it', () => {
+    const base = 'schema_version: 3\nworkspace:\n  title: T\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n';
+    const without = parseWorkspaceConfig(base);
+    expect(without.files).toBeUndefined();
+    expect(serializeWorkspaceConfig(without)).not.toContain('hide_dotfiles');
+    const kept = parseWorkspaceConfig(`${base}files:\n  hide_dotfiles: false\n`);
+    expect(kept.files).toEqual({ hide_dotfiles: false });
+    expect(parseWorkspaceConfig(serializeWorkspaceConfig(kept)).files).toEqual({ hide_dotfiles: false });
   });
 
   it('rejects duplicate notebook IDs', () => {

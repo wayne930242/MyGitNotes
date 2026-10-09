@@ -15,6 +15,10 @@
       "types": "./dist/notebook-key.d.ts",
       "import": "./dist/notebook-key.js"
     },
+    "./workspace-preferences": {
+      "types": "./dist/workspace-preferences.d.ts",
+      "import": "./dist/workspace-preferences.js"
+    },
     "./repository": {
       "types": "./dist/repository.d.ts",
       "import": "./dist/repository.js"
