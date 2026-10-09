@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -35,6 +35,8 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
       openHome: () => ({ kind: 'local', id: home.id, root }),
       manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)),
       isHome: ref => sameDirectory(mapped(ref), root),
+      // A notebook repository creates its first manifest at its root, where every notebook root is relative to.
+      repositoryManifest: (_ref, handle) => localManifest((handle as LocalHandle).root, stageAndCommit, WORKSPACE_CONFIG_FILENAME),
       async openRepository(ref) {
         const worktree = mapped(ref);
         if (!worktree) return { reason: 'unmapped', message: `No worktree is mapped for ${ref.id}. Add it under repositories in mygitnotes.server.yaml.` };
@@ -48,6 +50,7 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
     home,
     openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }),
     manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)),
+    repositoryManifest: (_ref, handle) => new RemoteManifest((handle as RemoteHandle).reader),
     async openRepository(ref, scope) {
       if (ref.source.type === 'local' || !sharesCredential(source, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the home repository's platform and site.` };
       const reader = createRemoteSource(ref.source, token, fetch, cache, scope);

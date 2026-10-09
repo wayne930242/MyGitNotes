@@ -1,8 +1,9 @@
 import { Request, Response, Router } from 'express';
-import { type RepositoryStatus, SourceError, type WorkspaceStatus } from '@mygitnotes/core';
+import { DEFAULT_WORKSPACE_PREFERENCES, MISSING_MANIFEST_REVISION, repositoryManifestStatus, repositoryName, type RepositoryStatus, SourceError, type WorkspaceStatus } from '@mygitnotes/core';
 import { getCurrentBranch, getGitStatus } from '@mygitnotes/git';
 import { type LocalHandle, workspaceOf } from './request-workspace.js';
 import { openEventStream } from './event-stream.js';
+import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { watchWorktrees } from './worktree-watch.js';
 
 /** Every available worktree of the request's workspace; the home worktree alone before its first manifest. */
@@ -34,14 +35,16 @@ export function createLocalWorkspaceRouter(): Router {
         throw error;
       });
       const entries = config ? await workspace.all() : [{ ...workspace.home, notebooks: [] }];
+      // Before its first manifest the home worktree is named by its directory, and a save creates the file.
+      const manifestOf = async (id: string) => config ? repositoryManifestStatus(await workspace.manifestOf(id)) : { title: repositoryName(workspace.home.ref.source), defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: MISSING_MANIFEST_REVISION };
       const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus & { gitStatus?: unknown; }> => {
-        const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, revision: '', alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
+        const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, revision: '', alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key), ...await manifestOf(entry.ref.id) };
         if (!('handle' in entry)) return { ...base, branch: '', write: false, unavailable: entry.unavailable };
         const { root } = entry.handle as LocalHandle;
         const branch = await getCurrentBranch(root);
         return { ...base, branch, write: branch === 'main', gitStatus: await getGitStatus(root) };
       }));
-      const body: WorkspaceStatus = { config, keyedConfig: config ? await workspace.keyedConfig() : null, configRevision: '', local: true, home: workspace.home.ref.id, repositories, repoRoot: (workspace.home.handle as LocalHandle).root };
+      const body: WorkspaceStatus = { config, keyedConfig: config ? await workspace.keyedConfig() : null, local: true, home: workspace.home.ref.id, repositories, repoRoot: (workspace.home.handle as LocalHandle).root };
       res.json(body);
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });
@@ -50,14 +53,20 @@ export function createLocalWorkspaceRouter(): Router {
 
   router.get('/events', streamWorktreeChanges);
 
-  // Update workspace config
+  // Saves one repository's manifest while the revision its editor started from is still current.
   router.put('/config', async (req: Request, res: Response) => {
     try {
-      const { configYaml } = req.body;
-      const { config } = await workspaceOf(res).saveManifest(configYaml, '');
-      res.json({ success: true, config, configRevision: '' });
+      const { repository, configYaml, configRevision } = req.body;
+      if (typeof repository !== 'string' || !repository) throw new SourceError('repository is required.');
+      if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
+      if (typeof configRevision !== 'string') throw new SourceError('configRevision is required.');
+      const workspace = workspaceOf(res);
+      // The home worktree is reachable before its first manifest; another repository is found through it.
+      const { root } = (repository === workspace.home.ref.id ? workspace.home.handle : (await workspace.byId(repository)).handle) as LocalHandle;
+      const saved = await serializeWorkspaceMutation(root, () => workspace.saveManifest(repository, configYaml, configRevision));
+      res.json({ success: true, configRevision: saved.revision });
     } catch (err: unknown) {
-      res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+      res.status(err instanceof SourceError ? err.status : 400).json({ error: err instanceof Error ? err.message : String(err) });
     }
   });
 

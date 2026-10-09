@@ -364,7 +364,8 @@ describe('real HTTP local boundaries', () => {
     git('add', '.');
     git('commit', '-m', 'legacy root manifest');
     const updated = 'schema_version: 1\nworkspace:\n  title: Renamed\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
-    const response = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml: updated }) });
+    const { repositories: [home] } = await (await fetch(`${base}/api/workspace`)).json();
+    const response = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: home.id, configYaml: updated, configRevision: home.configRevision }) });
     expect(response.status).toBe(200);
     expect(fs.readFileSync(path.join(root, '.github-notes.yaml'), 'utf8')).toContain('Renamed');
     expect(fs.existsSync(path.join(root, '.mygitnotes.yaml'))).toBe(false);
@@ -375,7 +376,10 @@ describe('real HTTP local boundaries', () => {
     git('add', '.');
     git('commit', '-m', 'remove manifest');
     const configYaml = 'schema_version: 1\nworkspace:\n  title: Fresh\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
-    const response = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml }) });
+    const { config, repositories: [home] } = await (await fetch(`${base}/api/workspace`)).json();
+    expect(config).toBeNull();
+    expect(home).toMatchObject({ configRevision: 'none', config: null, defaultNotebook: null });
+    const response = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: home.id, configYaml, configRevision: home.configRevision }) });
     expect(response.status).toBe(200);
     expect(fs.readFileSync(path.join(root, 'notes/.mygitnotes.yaml'), 'utf8')).toContain('Fresh');
   });

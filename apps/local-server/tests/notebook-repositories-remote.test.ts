@@ -97,3 +97,18 @@ it('commits to the notebook repository a request names', async () => {
   expect(writes.length).toBeGreaterThan(0);
   expect(new Set(writes.map(write => write.repository))).toEqual(new Set(['owner/trpg']));
 });
+
+it("reports each repository's own manifest and commits a manifest to the repository it names", async () => {
+  const { body } = await get('/api/workspace');
+  const [home, trpg] = body.repositories;
+  expect(home).toMatchObject({ title: 'Hosted', defaultNotebook: 'home~life', configRevision: 'a'.repeat(40) });
+  expect(trpg).toMatchObject({ title: 'trpg', manifest: 'derived', configRevision: 'b'.repeat(40), config: { notebooks: [{ id: 'trpg', root: 'notes/life' }] } });
+  const put = (configRevision: string) => fetch(`${base}/api/workspace/config`, { method: 'PUT', headers, body: JSON.stringify({ repository: 'github:owner/trpg@main', configRevision, configYaml: 'schema_version: 3\nworkspace:\n  title: Campaign\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n' }) });
+  // A revision the repository no longer holds is refused before anything is written.
+  expect((await put('e'.repeat(40))).status).toBe(409);
+  expect(writes).toEqual([]);
+  const saved = await put('b'.repeat(40));
+  expect(saved.status).toBe(200);
+  expect(writes.length).toBeGreaterThan(0);
+  expect(new Set(writes.map(write => write.repository))).toEqual(new Set(['owner/trpg']));
+});

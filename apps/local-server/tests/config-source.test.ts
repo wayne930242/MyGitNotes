@@ -62,7 +62,8 @@ describe('a replaceable configuration source', () => {
     expect((await workspace('beta')).config.workspace.title).toBe('Beta');
     expect((await note('alpha')).note.content).toContain('Alpha note');
     expect((await note('beta')).note.content).toContain('Beta note');
-    const saved = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-tenant': 'beta' }, body: JSON.stringify({ configYaml: 'schema_version: 1\nworkspace:\n  title: Beta renamed\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n' }) });
+    const { repositories: [betaHome] } = await workspace('beta');
+    const saved = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-tenant': 'beta' }, body: JSON.stringify({ repository: betaHome.id, configRevision: betaHome.configRevision, configYaml: 'schema_version: 1\nworkspace:\n  title: Beta renamed\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n' }) });
     expect(saved.status).toBe(200);
     expect(fs.readFileSync(path.join(beta, 'notes/.mygitnotes.yaml'), 'utf8')).toContain('Beta renamed');
     expect(fs.readFileSync(path.join(alpha, 'notes/.mygitnotes.yaml'), 'utf8')).toContain('title: Alpha');

@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -151,15 +151,16 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         const fresh = req.query.fresh === '1';
         // The manifest is read from the home repository, so a fresh answer reloads it first.
         if (fresh) await remoteHome(res).reader.getSnapshot(true);
-        const [{ config, revision: configRevision, derived }, keyedConfig, entries] = await Promise.all([workspace.manifest(), workspace.keyedConfig(), workspace.all()]);
+        const [{ config }, keyedConfig, entries] = await Promise.all([workspace.manifest(), workspace.keyedConfig(), workspace.all()]);
         const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
           const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
-          if (!('handle' in entry)) return { ...base, branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, unavailable: entry.unavailable };
+          if (!('handle' in entry)) return { ...base, ...repositoryManifestStatus(await workspace.manifestOf(entry.ref.id)), branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, unavailable: entry.unavailable };
           const handle = entry.handle as RemoteHandle;
+          // The repository's own manifest is read from the snapshot this answer reports, fresh when asked.
           const snapshot = await handle.reader.getSnapshot(fresh && entry.ref.id !== workspace.home.ref.id);
-          return { ...base, branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot) };
+          return { ...base, ...repositoryManifestStatus(await workspace.manifestOf(entry.ref.id)), branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot) };
         }));
-        const body: WorkspaceStatus = { config, keyedConfig, configRevision, local: false, home: workspace.home.ref.id, repositories, ...(derived ? { manifest: 'derived' as const } : {}), ...(choosesRepository() ? { repositoryChoice: true } : {}) };
+        const body: WorkspaceStatus = { config, keyedConfig, local: false, home: workspace.home.ref.id, repositories, ...(choosesRepository() ? { repositoryChoice: true } : {}) };
         res.json(body);
       } catch (error) {
         fail(res, error);
@@ -168,10 +169,11 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     app.put('/api/workspace/config', async (req, res) => {
       try {
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit the workspace manifest.', 403);
-        const { configYaml, configRevision } = req.body;
+        const { repository, configYaml, configRevision } = req.body;
+        if (typeof repository !== 'string' || !repository) throw new SourceError('repository is required.');
         if (typeof configYaml !== 'string') throw new SourceError('configYaml is required.');
-        const saved = await workspaceOf(res).saveManifest(configYaml, String(configRevision || ''));
-        res.json({ success: true, config: saved.config, configRevision: saved.revision });
+        const saved = await workspaceOf(res).saveManifest(repository, configYaml, String(configRevision || ''));
+        res.json({ success: true, configRevision: saved.revision });
       } catch (error) {
         fail(res, error);
       }

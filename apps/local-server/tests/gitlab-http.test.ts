@@ -89,7 +89,7 @@ describe('GitLab HTTP and MCP integration', () => {
     await login();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
     expect(workspace).toMatchObject({ local: false, repositories: [{ id: workspace.home, type: 'gitlab', branch: 'main', revision: fixture.head, write: true, alias: 'project', notebooks: [nb('ex')] }] });
-    expect(workspace.configRevision).toBe(fixture.head);
+    expect(workspace.repositories[0].configRevision).toBe(fixture.head);
     const notes = await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json());
     expect(notes.notes).toHaveLength(2);
     const note = notes.notes.find((n: any) => n.title === 'Alpha');
