@@ -12,13 +12,15 @@ function fixture(two = true, otherRoot = 'notes/shared') {
   const config = { schema_version: 3, workspace: { title: 'Test', default_notebook: 'home' }, notebooks: [{ id: 'home', title: 'Home', root: 'notes/shared' }, ...(two ? [{ id: 'other', title: 'Other', root: otherRoot, source: other }] : [])] } as WorkspaceConfig;
   const heads: Record<string, string> = { [a]: sha('a'), [b]: sha('b') };
   const writes: string[] = [];
+  const note = (id: string) => ({ id: id, path: 'notes/shared/note.md', notebookId: id === a ? 'home' : 'other', title: id, metadata: {}, content: id, tags: [], revision: heads[id], size: 10 });
   const reader = (id: string, scope: () => Promise<WorkspaceConfig>) =>
     ({
       config: scope,
       getSnapshot: async () => ({ sha: heads[id], entries: [{ path: 'notes/shared/note.md', type: 'blob', mode: '100644', size: 12 }, { path: 'notes/shared', type: 'tree', mode: '040000' }, { path: 'AGENTS.md', type: 'blob', mode: '100644', size: 4 }] }),
       notePaths: async () => ['notes/shared/note.md'],
       prefetchFiles: async () => {},
-      note: async () => ({ id: id, path: 'notes/shared/note.md', notebookId: id === a ? 'home' : 'other', title: id, metadata: {}, content: id, tags: [], revision: heads[id], size: 10 }),
+      note: async () => note(id),
+      notes: async () => [note(id)],
       readFile: async (file: string) => Buffer.from(file === 'AGENTS.md' ? id : id),
       save: async (_path: string, _content: string, _metadata: unknown, revision: string) => {
         if (revision !== heads[id]) throw new StaleRevisionError([id], `Stale repository ${id}`);
@@ -70,4 +72,20 @@ it('distinguishes same paths by notebook, merges listing and forbids cross-repos
   await expect(callWorkspaceRemoteTool(split.workspace, 'mv', { source: 'notes/shared/note.md', destination: 'notes/other/note.md', revision: encodeWorkspaceRevision({ [a]: sha('a'), [b]: sha('b') }) }, true)).rejects.toThrow(/cannot cross repositories/);
   const prompt = await callWorkspaceRemoteTool(workspace, 'get_system_prompt', { notebookId: 'other' }, false);
   expect(prompt.files).toEqual([{ path: 'AGENTS.md', content: b }]);
+});
+
+it('names notebooks by key in results, takes a key or a bare id and refuses an unknown key', async () => {
+  const { workspace } = fixture();
+  const byKey = await callWorkspaceRemoteTool(workspace, 'read_note', { path: 'notes/shared/note.md', notebookId: 'other~other' }, false);
+  expect(byKey.note).toMatchObject({ notebookId: 'other~other', content: b });
+  const byBareId = await callWorkspaceRemoteTool(workspace, 'read_note', { path: 'notes/shared/note.md', notebookId: 'other' }, false);
+  expect(byBareId.note).toMatchObject({ notebookId: 'other~other', content: b });
+  await expect(callWorkspaceRemoteTool(workspace, 'read_note', { path: 'notes/shared/note.md', notebookId: 'nope~other' }, false)).rejects.toThrow('Notebook is not configured.');
+
+  const listed = await callWorkspaceRemoteTool(workspace, 'list_notes', {}, false);
+  expect((listed.notes as { notebookId: string; }[]).map(note => note.notebookId).sort()).toEqual(['home~home', 'other~other']);
+  const narrowed = await callWorkspaceRemoteTool(workspace, 'list_notes', { notebookId: 'home' }, false);
+  expect((narrowed.notes as { notebookId: string; }[]).map(note => note.notebookId)).toEqual(['home~home']);
+  const found = await callWorkspaceRemoteTool(workspace, 'search_notes', { query: 'github' }, false);
+  expect((found.matches as { notebookId: string; }[]).map(match => match.notebookId).sort()).toEqual(['home~home', 'other~other']);
 });

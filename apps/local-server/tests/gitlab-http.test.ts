@@ -100,6 +100,23 @@ describe('GitLab HTTP and MCP integration', () => {
     expect(await fetch(`${base}/api/study`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ writable: true });
     expect((await fetch(`${base}/api/agent-resources`, { headers: { Cookie: cookie } }).then(r => r.json())).files.find((file: any) => file.kind === 'instructions').path).toBe('AGENTS.md');
   });
+  it('commits a Focus draft named by key with the local id, and refuses a bare id or another repository\'s key', async () => {
+    await login();
+    const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
+    const focus = (notebookId: string) => ({ path: '.github-notes-focus.yaml', base: { version: 1, focuses: [] }, page: { version: 1, focuses: [{ id: 'weekly', notebookId, name: 'Weekly', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/a.md' }] }] }] } });
+    const commit = (notebookId: string) => fetch(`${base}/api/notes/commit`, post({ repository: workspace.home, notes: [], documents: [focus(notebookId)], revision: fixture.head, message: 'docs: focus' }));
+    for (const refused of ['ex', 'other~ex']) {
+      const response = await commit(refused);
+      expect(response.status).toBe(400);
+      expect((await response.json()).error).toBe(`Notebook ${refused} does not belong to this repository.`);
+    }
+    expect(fixture.writes).toBe(0);
+    expect((await commit(nb('ex'))).status).toBe(200);
+    expect(fixture.writes).toBe(1);
+    const stored = [...fixture.files].find(([file]) => file.endsWith('.github-notes-focus.yaml'))?.[1];
+    expect(stored).toContain('notebookId: ex\n');
+    expect(stored).not.toContain('~');
+  });
   it('answers note queries, facets and lookups over the remote source', async () => {
     await login();
     const headers = { Cookie: cookie };
