@@ -1,7 +1,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { getCurrentBranch, runGit, stageAndCommit } from '../packages/git/src/index.js';
-import { CORE_UPSTREAM_REPOSITORY, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
+import { CORE_UPSTREAM_REPOSITORY, GITHUB_COM, loadWorkspaceConfig, normalizeGitHubUrl, resolveSafePath, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
 
 const EMPTY_WORKSPACE_CONFIG = `schema_version: ${SUPPORTED_SCHEMA_VERSION}
 workspace:
@@ -23,6 +23,8 @@ const VERCEL_DEPLOY_STEPS = `
   2. Disconnect the project's Git integration in Vercel (Settings -> Git).
   3. Import runtime settings: pnpm env:vercel production
      The deployment reads notes from 'main': MYGITNOTES_SOURCE=github, MYGITNOTES_BRANCH=main.
+     It offers Core updates only with MYGITNOTES_PRODUCT_REPOSITORY, the repository carrying 'core' and 'main',
+     which the same command imports from .env.
   4. Configure the GitHub repository:
      gh variable set VERCEL_ORG_ID --body <orgId>
      gh variable set VERCEL_PROJECT_ID --body <projectId>
@@ -53,11 +55,55 @@ async function adoptCoreUpstream(productRoot: string): Promise<'renamed' | 'adde
   return 'added';
 }
 
-/** Points the Core checkout's local server at the workspace worktree, keeping the rest of .env. */
-function writeLocalPath(productRoot: string, workspace: string) {
+/**
+ * The `owner/name` a GitHub remote URL names, on github.com or the deployment's GitHub site (`MYGITNOTES_GITHUB_URL`):
+ * scp-like `git@host:owner/name.git`, `ssh://git@host/owner/name.git` or `https://host/owner/name.git`.
+ */
+function githubRepositoryOf(remoteUrl: string, githubUrl?: string): string | undefined {
+  const sites = [GITHUB_COM, ...(githubUrl ? [normalizeGitHubUrl(githubUrl) ?? GITHUB_COM] : [])].map(site => new URL(site));
+  const scp = /^[^@/\s]+@([^:/\s]+):(?!\/)(.+)$/.exec(remoteUrl);
+  let host: string;
+  let repository: string;
+  if (scp) [host, repository] = [scp[1], scp[2]];
+  else {
+    let url: URL;
+    try {
+      url = new URL(remoteUrl);
+    } catch {
+      return undefined;
+    }
+    if (!['https:', 'http:', 'ssh:', 'git+ssh:'].includes(url.protocol)) return undefined;
+    host = url.hostname;
+    repository = url.pathname;
+    // An https remote of a GitHub Enterprise Server installed under a path starts with that path.
+    if (url.protocol.startsWith('http')) {
+      const root = sites.find(site => site.hostname === host.toLowerCase())?.pathname.replace(/\/+$/, '') ?? '';
+      if (root && !repository.startsWith(`${root}/`)) return undefined;
+      repository = repository.slice(root.length);
+    }
+  }
+  if (!sites.some(site => site.hostname === host.toLowerCase())) return undefined;
+  const name = repository.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\.git$/, '');
+  return /^[\w.-]+\/[\w.-]+$/.test(name) ? name : undefined;
+}
+
+/** The Core checkout's own GitHub repository from its 'origin' remote, which Core updates of a deployment act on. */
+async function productRepositoryOf(productRoot: string, githubUrl: string | undefined): Promise<string | undefined> {
+  if (!(await git(['remote'], productRoot)).split('\n').includes('origin')) return undefined;
+  const repository = githubRepositoryOf(await git(['config', '--get', 'remote.origin.url'], productRoot), githubUrl);
+  // MyGitNotes itself is never this deployment's product repository.
+  return repository?.toLowerCase() === CORE_UPSTREAM_REPOSITORY.toLowerCase() ? undefined : repository;
+}
+
+/**
+ * Points the Core checkout's local server at the workspace worktree and names its product repository, keeping the
+ * rest of .env. An existing product repository stays, so a deliberate setting outlives a rerun.
+ */
+async function writeCoreEnv(productRoot: string, workspace: string) {
   const envFile = path.join(productRoot, '.env');
   const relative = path.relative(fs.realpathSync(productRoot), fs.realpathSync(workspace)).split(path.sep).join('/');
   const lines = fs.existsSync(envFile) ? fs.readFileSync(envFile, 'utf8').split('\n') : [];
+  const get = (key: string) => lines.find(line => line.startsWith(`${key}=`))?.slice(key.length + 1).trim().replace(/^(["'])(.*)\1$/, '$2') || undefined;
   const set = (key: string, value: string) => {
     const index = lines.findIndex(line => line.startsWith(`${key}=`));
     if (index >= 0) lines[index] = `${key}=${value}`;
@@ -65,9 +111,12 @@ function writeLocalPath(productRoot: string, workspace: string) {
   };
   set('MYGITNOTES_SOURCE', 'local');
   set('MYGITNOTES_LOCAL_PATH', relative);
+  const origin = await productRepositoryOf(productRoot, process.env.MYGITNOTES_GITHUB_URL || get('MYGITNOTES_GITHUB_URL'));
+  const existing = get('MYGITNOTES_PRODUCT_REPOSITORY');
+  if (origin && !existing) set('MYGITNOTES_PRODUCT_REPOSITORY', origin);
   if (lines.at(-1) !== '') lines.push('');
   fs.writeFileSync(envFile, lines.join('\n'));
-  return relative;
+  return { localPath: relative, productRepository: existing ?? origin, origin };
 }
 
 async function bootstrapWorkspace() {
@@ -175,11 +224,14 @@ async function bootstrapWorkspace() {
     console.log(`[bootstrap] Workspace files already up to date.`);
   }
 
-  const localPath = writeLocalPath(productRoot, repoRoot);
+  const { localPath, productRepository, origin } = await writeCoreEnv(productRoot, repoRoot);
+  if (productRepository && origin && productRepository !== origin) console.log(`[bootstrap] Kept MYGITNOTES_PRODUCT_REPOSITORY=${productRepository} in .env, though 'origin' is ${origin}.`);
+  if (!productRepository) console.log("[bootstrap] 'origin' names no GitHub repository, so .env names no product repository; set MYGITNOTES_PRODUCT_REPOSITORY=owner/name in .env for a deployment to offer Core updates.");
 
   console.log(`\n======================================================`);
   console.log(`✅ MyGitNotes workspace ready on branch 'main' at ${repoRoot}!`);
   console.log(`   - .env: MYGITNOTES_LOCAL_PATH=${localPath}`);
+  if (productRepository) console.log(`   - .env: MYGITNOTES_PRODUCT_REPOSITORY=${productRepository}`);
   console.log(`   - Config: ${WORKSPACE_CONFIG_FILENAME}`);
   console.log(`   - Default Notebook: ${config.workspace.default_notebook}`);
   console.log(`   - Next steps: Run 'pnpm dev' here (the Core checkout) to launch the application.`);

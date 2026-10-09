@@ -284,7 +284,7 @@ Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存
 
 「設定」頁會分別檢查儲存庫的 Core 版本與正在執行的 build。本機更新需要位於 `core` 的乾淨產品 checkout；工作區分支不影響此操作。更新後以新版 Core 執行 `pnpm migrate-workspace`，再重新啟動 server。
 
-線上部署只為它的產品儲存庫提供 Core 更新，也就是它部署的 `core` 分支所在的儲存庫。用 `MYGITNOTES_PRODUCT_REPOSITORY`（`owner/name`）或 `mygitnotes.server.yaml` 的 `product_repository: owner/name` 指定；它在部署的 GitHub 站台上（`MYGITNOTES_GITHUB_URL`，未設定時是 github.com）。fork-model 部署的筆記儲存庫同時帶著 `core`，就指定同一個儲存庫。沒有指定時，「設定」頁不顯示 Core 更新，更新路由直接回 404，不會向 provider 發出請求。
+線上部署只為它的產品儲存庫提供 Core 更新，也就是它部署的 `core` 分支所在的儲存庫。用 `MYGITNOTES_PRODUCT_REPOSITORY`（`owner/name`）或 `mygitnotes.server.yaml` 的 `product_repository: owner/name` 指定；它在部署的 GitHub 站台上（`MYGITNOTES_GITHUB_URL`，未設定時是 github.com）。fork-model 部署的筆記儲存庫同時帶著 `core`，就指定同一個儲存庫；`pnpm bootstrap-workspace` 會依 GitHub 上的 `origin` 把它寫進 Core checkout 的 .env（已有值則保留），`pnpm env:vercel` 再把它匯入。沒有指定時，「設定」頁不顯示 Core 更新，更新路由直接回 404，不會向 provider 發出請求。
 
 GitHub 工作區在「設定」頁提示缺少 workflow 時，先按 **Install Core sync**，再按 **Update Core**。bootstrap 也會把 [canonical workflow](../packages/core/assets/mygitnotes-core-sync.yml) 安裝到 `main` 的 `.github/workflows/mygitnotes-core-sync.yml`；預設分支不是 `main` 的儲存庫，可透過「設定」頁安裝到該分支。workflow 會抓取 MyGitNotes upstream，並 push `core` 的 fast-forward。「設定」頁會追蹤對應的 run，確認更新後的 revision 才回報成功。既有 workflow 檔案會保留。
 

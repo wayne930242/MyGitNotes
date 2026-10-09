@@ -186,6 +186,33 @@ describe('canonical starter workspace CLI', () => {
     expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`GEMINI_API_KEY=x\nMYGITNOTES_LOCAL_PATH=workspace\nMYGITNOTES_SOURCE=local\n`);
   });
 
+  it.each([['an ssh', 'git@github.com:someone/notes.git', '', 'someone/notes'], ['an ssh:// URL', 'ssh://git@github.com/someone/notes', '', 'someone/notes'], ['an https', 'https://github.com/someone/notes.git', '', 'someone/notes'], ['a GitHub Enterprise https', 'https://ghe.example.com/team/notes.git', 'MYGITNOTES_GITHUB_URL=https://ghe.example.com\n', 'team/notes']])('names the product repository from %s origin for Core updates', (_form, origin, env, repository) => {
+    if (env) write('.env', env, core);
+    coreGit('remote', 'add', 'origin', origin);
+    const output = bootstrap().toString();
+    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe(`${env}MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=workspace\nMYGITNOTES_PRODUCT_REPOSITORY=${repository}\n`);
+    expect(output).toContain(`   - .env: MYGITNOTES_PRODUCT_REPOSITORY=${repository}\n`);
+    expect(output).toContain('MYGITNOTES_PRODUCT_REPOSITORY, the repository carrying');
+    expect(output).not.toContain('names no product repository');
+  });
+
+  it('keeps a product repository .env already names that differs from origin', () => {
+    write('.env', 'MYGITNOTES_PRODUCT_REPOSITORY=other/core\n', core);
+    coreGit('remote', 'add', 'origin', 'git@github.com:someone/notes.git');
+    const output = bootstrap().toString();
+    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe('MYGITNOTES_PRODUCT_REPOSITORY=other/core\nMYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=workspace\n');
+    expect(output).toContain("Kept MYGITNOTES_PRODUCT_REPOSITORY=other/core in .env, though 'origin' is someone/notes.");
+    expect(output).toContain('   - .env: MYGITNOTES_PRODUCT_REPOSITORY=other/core\n');
+  });
+
+  it.each([['no', undefined], ['a GitLab', 'git@gitlab.com:someone/notes.git'], ['an unconfigured GitHub Enterprise', 'https://ghe.example.com/team/notes.git']])('names no product repository with %s origin and says how to set it', (_kind, origin) => {
+    if (origin) coreGit('remote', 'add', 'origin', origin);
+    const output = bootstrap().toString();
+    expect(fs.readFileSync(path.join(core, '.env'), 'utf8')).toBe('MYGITNOTES_SOURCE=local\nMYGITNOTES_LOCAL_PATH=workspace\n');
+    expect(output).toContain("'origin' names no GitHub repository, so .env names no product repository; set MYGITNOTES_PRODUCT_REPOSITORY=owner/name in .env");
+    expect(output).not.toContain('.env: MYGITNOTES_PRODUCT_REPOSITORY');
+  });
+
   it('uses exactly the default statuses and valid relative tutorial links', () => {
     const template = path.join(core, 'examples/demo-workspace');
     const config = parseWorkspaceConfig(fs.readFileSync(path.join(template, '.mygitnotes.yaml'), 'utf8'));

@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
+import { execFileSync } from 'node:child_process';
 import { createApp } from './app.js';
 
 const realFetch = globalThis.fetch;
@@ -75,6 +76,32 @@ describe('remote Core HTTP routes', () => {
     vi.stubEnv('VERCEL', '');
     temp = fs.mkdtempSync(path.join(os.tmpdir(), 'core-route-'));
     expect(() => createApp(temp!)).toThrow(/each visitor chooses a repository/);
+  });
+  it('keeps the local Core update on the checkout when .env also names a product repository, as bootstrap writes it', async () => {
+    temp = fs.mkdtempSync(path.join(os.tmpdir(), 'core-route-'));
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: 'pipe' }).trim();
+    const upstream = path.join(temp, 'upstream'), checkout = path.join(temp, 'checkout');
+    fs.mkdirSync(upstream);
+    git(upstream, 'init', '-b', 'core');
+    git(upstream, '-c', 'user.name=Core', '-c', 'user.email=core@example.com', 'commit', '--allow-empty', '-m', 'core');
+    git(temp, 'clone', upstream, checkout);
+    git(upstream, '-c', 'user.name=Core', '-c', 'user.email=core@example.com', 'commit', '--allow-empty', '-m', 'newer core');
+    fs.mkdirSync(path.join(checkout, 'workspace'));
+    vi.stubEnv('MYGITNOTES_PRODUCT_REPOSITORY', 'someone/notes');
+    vi.stubEnv('MYGITNOTES_SOURCE', 'local');
+    vi.stubEnv('MYGITNOTES_LOCAL_PATH', path.join(checkout, 'workspace'));
+    vi.stubEnv('MYGITNOTES_REPOSITORY', '');
+    vi.stubEnv('VERCEL', '');
+    vi.stubGlobal('fetch', () => {
+      throw new Error('Unexpected provider call');
+    });
+    server = createServer(createApp(checkout));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Missing server port');
+    const status = await realFetch(`http://127.0.0.1:${address.port}/api/core/status`);
+    expect(status.status).toBe(200);
+    expect((await status.json()).status).toMatchObject({ state: 'update_available', upstream: 'origin/core', current: { behind: 1 } });
   });
   it('answers 404 without a product repository, before any provider request', async () => {
     const base = await start('github');
