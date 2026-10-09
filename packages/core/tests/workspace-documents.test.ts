@@ -28,6 +28,13 @@ describe('workspace documents', () => {
     expect(() => validateWorkspaceDocument(focus, 'x'.repeat(focus.maxBytes + 1))).toThrow('Focus YAML is required.');
     expect(() => validateWorkspaceDocument(focus, undefined)).toThrow('Focus YAML is required.');
   });
+  it('refuses a stored Focus or study that names a notebook by key, the last guard against writing keys into a repository', () => {
+    const [study, focus] = [documents().get(STUDY_FILE)!, documents().get(FOCUS_PAGE_FILE)!];
+    expect(() => validateWorkspaceDocument(workspaceDocument(STUDY_FILE)!, study)).not.toThrow();
+    expect(() => validateWorkspaceDocument(workspaceDocument(FOCUS_PAGE_FILE)!, focus)).not.toThrow();
+    expect(() => validateWorkspaceDocument(workspaceDocument(STUDY_FILE)!, study.replace('notebookId: a\n', 'notebookId: kb~a\n'))).toThrow('Invalid study YAML.');
+    expect(() => validateWorkspaceDocument(workspaceDocument(FOCUS_PAGE_FILE)!, focus.replace('notebookId: a\n', 'notebookId: kb~a\n'))).toThrow('Invalid Focus YAML.');
+  });
   it('relocates one notebook across every document and leaves unchanged files untouched', () => {
     const files = documents();
     relocateWorkspaceDocuments(files, notebooks[0], move);

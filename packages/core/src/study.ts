@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { type Card, createEmptyCard, fsrs, type Grade } from 'ts-fsrs';
 import { type Familiarity, nextStudyStage, type StudyProgression } from './study-stages.js';
 import { splitNotePages } from './note-pages.js';
-import { NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
+import { KEY_SEPARATOR, NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const STUDY_FILE = '.github-notes-study.yaml';
@@ -90,7 +90,7 @@ export const STUDY_DOCUMENT: WorkspaceDocument<StudyWorkspace> = {
   scopes: ['study', 'study-transition', 'folders', 'files'],
   schema: StudyWorkspaceSchema,
   // As stored, every note names its notebook by local id.
-  fileSchema: StudyWorkspaceSchema.refine(study => study.notes.every(note => note.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH), 'A stored study names its notebook by local id.'),
+  fileSchema: StudyWorkspaceSchema.refine(study => study.notes.every(note => note.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH && !note.notebookId.includes(KEY_SEPARATOR)), 'A stored study names its notebook by local id, never by key.'),
   empty: emptyStudyWorkspace,
   // Relocation rewrites the stored object so unrelated fields keep their stored form.
   read: value => {

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
+import { KEY_SEPARATOR, NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const FOCUS_PAGE_FILE = '.github-notes-focus.yaml';
@@ -280,6 +280,6 @@ export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; 
 }
 
 /** The Focus file as stored: every Focus names its notebook by local id. */
-const FocusFileSchema = FocusPageSchema.refine(page => page.focuses.every(focus => focus.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH), 'A stored Focus names its notebook by local id.');
+const FocusFileSchema = FocusPageSchema.refine(page => page.focuses.every(focus => focus.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH && !focus.notebookId.includes(KEY_SEPARATOR)), 'A stored Focus names its notebook by local id, never by key.');
 
 export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusFileSchema, empty: emptyFocusPage, read: readFocusPage, relocate: (page, notebook, move) => relocateFocusPaths(page, notebook.id, move), own: ownFocusPage, mapNotebookIds: (page, map) => ({ ...page, focuses: page.focuses.map(focus => ({ ...focus, notebookId: map(focus.notebookId) })) }) };
