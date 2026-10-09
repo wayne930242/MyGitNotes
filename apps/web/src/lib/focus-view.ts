@@ -34,13 +34,14 @@ export function focusViewStorageKey(notebookKey: string): string {
 
 /**
  * The storage key of a notebook's Focus view. A view this device kept before notebook keys, under the workspace's
- * draft scope and the notebook's local id, is copied to it once; one that cannot be read is dropped by readFocusView.
+ * view scope and the notebook's local id, is copied to it once; one that cannot be read is dropped by readFocusView.
+ * `scope` is null for a notebook that view does not belong to: one its local id, as an old URL, does not stand for.
  */
-export function adoptedFocusViewKey(scope: string, notebookKey: string): string {
+export function adoptedFocusViewKey(scope: string | null, notebookKey: string): string {
   const key = focusViewStorageKey(notebookKey);
   const localId = parseNotebookKey(notebookKey)?.localId;
   try {
-    if (localId && localStorage.getItem(key) === null) {
+    if (scope !== null && localId && localStorage.getItem(key) === null) {
       const legacy = localStorage.getItem(`github-notes:focus-view:${scope}:${localId}`);
       if (legacy !== null) localStorage.setItem(key, legacy);
     }
@@ -49,7 +50,7 @@ export function adoptedFocusViewKey(scope: string, notebookKey: string): string 
 }
 
 /** Whether this device has ever recorded Focus-view state for this notebook: the signal for "has this device already made its own choice." */
-export function hasStoredFocusView(scope: string, notebookKey: string): boolean {
+export function hasStoredFocusView(scope: string | null, notebookKey: string): boolean {
   try {
     return localStorage.getItem(adoptedFocusViewKey(scope, notebookKey)) !== null;
   } catch {

@@ -5,6 +5,7 @@ import { useNoteEditorRegistry } from '../lib/note-editing.js';
 import { type FocusTab } from '@mygitnotes/core/focus-page';
 import { useNoteFocus } from '../lib/use-note-focus.js';
 import { CURRENT_FOCUS, displayedPanes, hasStoredFocusView } from '../lib/focus-view.js';
+import { parseNotebookKey } from '@mygitnotes/core/notebook-key';
 import { usePaneCapacity } from '../components/FocusArea.js';
 import { isDocumentTool, usePanelContext } from '../lib/panel-context.js';
 import { isCompilationPath } from '@mygitnotes/core/compilation';
@@ -26,12 +27,15 @@ interface Params {
   navigate: ReturnType<typeof useNavigate>;
   editorRoute: ReturnType<typeof parseWorkspaceRoute>;
   config: WorkspaceState['config'];
+  resolveBareNotebook: WorkspaceState['resolveBareNotebook'];
 }
 
-export function useFocusPanes({ selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, editorRoute, config }: Params) {
+export function useFocusPanes({ selectedNotebookId, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, editorRoute, config, resolveBareNotebook }: Params) {
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
-  const focusScope = remote ? sourceId : `local:${repoRoot}`;
+  // A view kept before notebook keys belongs to the notebook its local id stands for, as an old URL's does.
+  const localId = parseNotebookKey(selectedNotebookId)?.localId;
+  const focusScope = localId && resolveBareNotebook(localId) === selectedNotebookId ? remote ? sourceId : `local:${repoRoot}` : null;
   // A Notes page whose URL names no Focus shows the one it displayed last, decided while rendering so the list never paints first.
   const defaultFocus = config?.preferences?.defaultFocusMode && !hasStoredFocusView(focusScope, selectedNotebookId) ? CURRENT_FOCUS : null;
   const noteFocus = useNoteFocus({ page: focusPage, notebookId: selectedNotebookId, scope: focusScope, focusKey: activeTab === 'notes' ? route.focus : null, restoreLast: activeTab === 'notes' && !editorRoute.note, defaultFocus, writable: canWrite, flushEditors: editorRegistry.flushEditors });

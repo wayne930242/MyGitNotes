@@ -211,4 +211,10 @@ describe('hasStoredFocusView', () => {
     adoptedFocusViewKey('local:repo', 'kb~life');
     expect(JSON.parse(localStorage.getItem(focusViewStorageKey('kb~life'))!)).toEqual(emptyFocusView());
   });
+
+  it('leaves a view kept before notebook keys to the notebook its local id stands for', () => {
+    localStorage.setItem('github-notes:focus-view:local:repo:life', JSON.stringify(emptyFocusView()));
+    expect(hasStoredFocusView(null, 'other~life')).toBe(false);
+    expect(localStorage.getItem(focusViewStorageKey('other~life'))).toBeNull();
+  });
 });

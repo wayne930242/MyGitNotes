@@ -8,8 +8,8 @@ import { activatePane, adoptedFocusViewKey, browseTarget, CURRENT_FOCUS, emptyFo
 interface NoteFocusOptions {
   page: FocusPageController;
   notebookId: string;
-  /** The workspace's view-state scope before notebook keys, from which this notebook's earlier view is adopted. */
-  scope: string;
+  /** The workspace's view-state scope before notebook keys, from which this notebook's earlier view is adopted; null when that view is not this notebook's. */
+  scope: string | null;
   /** The `focus` URL parameter. */
   focusKey: string | null;
   /** With no `focus` in the URL, show the Focus displayed last, else `defaultFocus`; the URL is left as it is. */
