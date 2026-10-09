@@ -8,10 +8,13 @@ import { SourceError } from './github-api.js';
 import { deriveAlias, repositoryName } from './notebook-key.js';
 import { type RepositoryId, repositoryRef } from './repository.js';
 import { normalizeNotebookFolder, serverConfigFile } from './source-config.js';
-import { type DeploymentMembers, environmentSetting, type MembershipStore, type NewMember, readDeploymentMembers, sameMember, type WorkspaceMember } from './workspace-config-source.js';
+import { type DeploymentMembers, environmentSetting, type MembershipLimit, type MembershipStore, type NewMember, readDeploymentMembers, sameMember, type WorkspaceMember } from './workspace-config-source.js';
 
-/** Why a membership change was refused; the browser tells a stale read (`stale`) from a refusal. */
-export type MembershipErrorCode = 'stale' | 'not-member' | 'duplicate' | 'default-hidden' | 'default-removed' | 'environment' | 'not-worktree' | 'folder-required' | 'folder-unused' | 'invalid';
+/**
+ * Why a membership change was refused; the browser tells a stale read (`stale`), a missing folder (`folder-required`)
+ * and a reached limit (`visible-limit`, a quiet note rather than an error) from a refusal.
+ */
+export type MembershipErrorCode = 'stale' | 'not-member' | 'duplicate' | 'default-hidden' | 'default-removed' | 'environment' | 'not-worktree' | 'folder-required' | 'folder-unused' | 'invalid-manifest' | 'visible-limit' | 'invalid';
 
 export class MembershipError extends SourceError {
   constructor(readonly code: MembershipErrorCode, message: string, status = 422) {
@@ -87,6 +90,21 @@ export function withMemberFolder(members: WorkspaceMember[], id: RepositoryId, f
     throw new MembershipError('invalid', (error as Error).message, 400);
   }
   return members.map(other => other === member ? { ...other, folder: normalized } : other);
+}
+
+/** How many members are visible. */
+export const visibleCount = (members: readonly WorkspaceMember[]) => members.filter(member => !member.hidden).length;
+
+/**
+ * Refuses a change from `before` to `after` that shows more members than `limit` allows: adding, showing, or making a
+ * hidden member the default, once the visible count would pass `max`. A change that shows no more members passes
+ * whatever the count, so a workspace above a lowered limit keeps every visible member and can still hide and remove
+ * (Pro decision P1). Without a limit every change passes.
+ */
+export function assertVisibleLimit(before: readonly WorkspaceMember[], after: readonly WorkspaceMember[], limit: Pick<MembershipLimit, 'max' | 'plan'> | null | undefined): void {
+  if (!limit) return;
+  const visible = visibleCount(after);
+  if (visible > visibleCount(before) && visible > limit.max) throw new MembershipError('visible-limit', `This workspace shows at most ${limit.max} ${limit.max === 1 ? 'repository' : 'repositories'}${limit.plan ? ` on ${limit.plan}` : ''}. Hide one first.`, 403);
 }
 
 /** A server configuration's revision: a hash of its text, or `none` while there is no file. */
@@ -206,6 +224,7 @@ export function serverFileMembership(base: string, env: NodeJS.ProcessEnv = proc
     });
   };
   return {
+    adds: 'worktree',
     revision: async () => serverConfigRevision(readText(readDeploymentMembers(base, env).file)),
     async add(candidate: NewMember, revision) {
       const worktree = worktreePath(candidate.localPath);

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deploymentConfigSource, type WorkspaceMember } from '../src/workspace-config-source.js';
-import { MembershipError, serverConfigRevision, withDefaultMember, withMemberAdded, withMemberHidden, withMemberRemoved, withMembersReordered } from '../src/workspace-membership.js';
+import { assertVisibleLimit, MembershipError, serverConfigRevision, withDefaultMember, withMemberAdded, withMemberHidden, withMemberRemoved, withMembersReordered } from '../src/workspace-membership.js';
 import { folderManifest } from '../src/folder-manifest.js';
 import { localManifest, MISSING_MANIFEST_REVISION } from '../src/local-manifest.js';
 import { repositoryRef } from '../src/repository.js';
@@ -114,6 +114,26 @@ describe('membership changes', () => {
     const members = [member('kb', { default: true }), member('trpg')];
     expect(withMembersReordered(members, [ref('trpg').id, ref('kb').id]).map(entry => entry.alias)).toEqual(['trpg', 'kb']);
     expect(() => withMembersReordered(members, [ref('trpg').id])).toThrow(MembershipError);
+  });
+
+  it('refuses only a change that shows more members than the limit, never counting hidden ones (Pro decision P1)', () => {
+    const limit = { max: 2, plan: 'Free' };
+    const atLimit = [member('kb', { default: true }), member('trpg'), member('vault', { hidden: true })];
+    const refusal = expect.objectContaining({ code: 'visible-limit', status: 403, message: expect.stringContaining('at most 2 repositories on Free') });
+    // Adding, showing and making a hidden member the default each show a third.
+    expect(() => assertVisibleLimit(atLimit, withMemberAdded(atLimit, { ref: ref('journal'), editable: 'account' }).members, limit)).toThrow(refusal);
+    expect(() => assertVisibleLimit(atLimit, withMemberHidden(atLimit, ref('vault').id, false), limit)).toThrow(refusal);
+    expect(() => assertVisibleLimit(atLimit, withDefaultMember(atLimit, ref('vault').id), limit)).toThrow(refusal);
+    // Hidden members do not count, and a change that shows no more passes whatever the count.
+    const hidden = withMemberHidden(atLimit, ref('trpg').id, true);
+    expect(() => assertVisibleLimit(atLimit, hidden, limit)).not.toThrow();
+    expect(() => assertVisibleLimit(hidden, withMemberAdded(hidden, { ref: ref('journal'), editable: 'account' }).members, limit)).not.toThrow();
+    // Above a lowered limit nothing is refused but showing more: hiding, removing, reordering and a visible default pass.
+    const lowered = { max: 1 };
+    expect(() => assertVisibleLimit(atLimit, withMemberHidden(atLimit, ref('trpg').id, true), lowered)).not.toThrow();
+    expect(() => assertVisibleLimit(atLimit, withMemberRemoved(atLimit, ref('trpg').id), lowered)).not.toThrow();
+    expect(() => assertVisibleLimit(atLimit, withDefaultMember(atLimit, ref('trpg').id), lowered)).not.toThrow();
+    expect(() => assertVisibleLimit(atLimit, withMemberAdded(atLimit, { ref: ref('journal'), editable: 'account' }).members, null)).not.toThrow();
   });
 });
 

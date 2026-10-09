@@ -59,6 +59,22 @@ export interface NewMember {
   ref?: RepositoryRef;
   localPath?: string;
   folder?: string;
+  /**
+   * For a platform repository: the person's sign-in token, with which the members route already checked that the
+   * repository and branch are reachable and read whether it keeps a manifest, for a store that needs more about it.
+   */
+  token?: string;
+}
+/** How many visible repositories a workspace may have, where its store limits them; hidden ones never count. */
+export interface MembershipLimit {
+  /** Visible members now. */
+  visible: number;
+  /** The most visible members adding or showing one may reach. */
+  max: number;
+  /** The plan the limit comes from, as Settings names it. */
+  plan?: string;
+  /** Where a person raises the limit. */
+  upgradeUrl?: string;
 }
 /**
  * Changes one request's workspace membership. Every change names the `revision` it was read at and is refused with 409
@@ -66,6 +82,11 @@ export interface NewMember {
  * browser's, which owns drafts; a store checks the default rule, uniqueness and the site.
  */
 export interface MembershipStore {
+  /**
+   * What `add` takes: a worktree path on this computer (`worktree`, a local deployment), or a platform repository the
+   * members route has checked with the person's sign-in (`repository`, an edition that keeps membership per person).
+   */
+  readonly adds: 'worktree' | 'repository';
   /** The membership's current revision. */
   revision(): Promise<string>;
   /** Adds a repository, deriving its alias; a repository is a member once. */
@@ -82,6 +103,11 @@ export interface MembershipStore {
   setFolder(id: RepositoryId, folder: string, revision: string): Promise<{ revision: string; }>;
   /** The setting that names the member Settings cannot remove (`editable: 'environment'`), for Settings to say so. */
   environment?(): string;
+  /**
+   * The visible-repository limit, where there is one. Adding, showing or making a hidden member the default is refused
+   * with `visible-limit` when it would pass `max` (see `assertVisibleLimit`); nothing is ever hidden to meet it.
+   */
+  limit?(): Promise<MembershipLimit | null>;
 }
 /** Configuration of the workspace serving one request. */
 export interface WorkspaceSettings {
