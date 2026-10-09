@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AlertCircle, AlertTriangle, Check, Save } from 'lucide-react';
 import YAML from 'yaml';
 import type { RepositoryId } from '@mygitnotes/core/repository';
-import { updateWorkspaceConfig } from '../lib/api.js';
+import { ApiError, updateWorkspaceConfig } from '../lib/api.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceRepository } from '../lib/workspace-repositories.js';
 import { Button } from './Button.js';
@@ -13,7 +13,7 @@ export interface ManifestSettingsProps {
   repositories: WorkspaceRepository[];
   /** The home repository, whose manifest declares every notebook of the workspace. */
   homeRepository: RepositoryId;
-  /** The repository the editor opens on: the current notebook's, or the default repository's. */
+  /** The repository the editor shows until the person chooses one: the current notebook's, or the default repository's. */
   initialRepository: RepositoryId;
   /** Keeps the revision a save answered, since a refetch may still answer from the snapshot before it. */
   onManifestRevision: (repository: RepositoryId, revision: string) => void;
@@ -26,21 +26,33 @@ const manifestText = (repository: WorkspaceRepository | undefined) => repository
 /** Settings → Manifest: each repository's own `.mygitnotes.yaml`, edited and committed in that repository. */
 export function ManifestSettings({ repositories, homeRepository, initialRepository, onManifestRevision, onRefreshWorkspace }: ManifestSettingsProps) {
   const { t } = useTranslation();
-  const [selected, setSelected] = useState(initialRepository);
+  const [chosen, setChosen] = useState<RepositoryId | null>(null);
+  const selected = chosen ?? initialRepository;
   const repository = repositories.find(candidate => candidate.id === selected) ?? repositories.find(candidate => candidate.id === homeRepository);
   const [yamlContent, setYamlContent] = useState(() => manifestText(repository));
+  /** The person changed the text since it was last loaded or saved. */
+  const [edited, setEdited] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
 
-  // The editor restarts from the repository's manifest whenever another repository is chosen or its manifest changes,
-  // such as after its own save; the outcome of a save stays shown until another repository is chosen.
-  const source = repository ? [repository.id, repository.configRevision, manifestText(repository)].join('\n') : '';
-  const [loaded, setLoaded] = useState({ source, repository: repository?.id });
-  if (loaded.source !== source) {
-    setLoaded({ source, repository: repository?.id });
-    setYamlContent(manifestText(repository));
-    if (loaded.repository !== repository?.id) setStatusMessage(null);
+  // The editor restarts from the manifest when another repository is chosen, and follows its manifest text when that
+  // changes while the person has not edited it. A revision that moves alone (a note committed in the repository) changes
+  // nothing here; a save always sends the latest revision. The outcome of a save stays shown until another repository is chosen.
+  const text = manifestText(repository);
+  const [loaded, setLoaded] = useState({ repository: repository?.id, text });
+  if (loaded.repository !== repository?.id) {
+    setLoaded({ repository: repository?.id, text });
+    setYamlContent(text);
+    setEdited(false);
+    setStatusMessage(null);
+  } else if (loaded.text !== text) {
+    setLoaded({ repository: repository?.id, text });
+    if (!edited) setYamlContent(text);
   }
+  const editYaml = (value: string) => {
+    setYamlContent(value);
+    setEdited(true);
+  };
 
   const onCore = repository?.branch === 'core';
   const canWrite = Boolean(repository?.write && !repository.unavailable && !onCore);
@@ -50,11 +62,17 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
     setStatusMessage(null);
     try {
       const saved = await updateWorkspaceConfig(repository.id, yamlContent, repository.configRevision);
+      // Saved, the editor follows the manifest the refresh brings back.
+      setEdited(false);
       if (saved.configRevision) onManifestRevision(repository.id, saved.configRevision);
       await onRefreshWorkspace();
       setStatusMessage({ type: 'success', text: t('settings.saved') });
     } catch (err: unknown) {
-      setStatusMessage({ type: 'error', text: err instanceof Error ? err.message : String(err) });
+      if (err instanceof ApiError && err.status === 409) {
+        // The manifest moved since it was read: refresh to its current revision and keep the person's text to re-apply and save.
+        setStatusMessage({ type: 'error', text: t('settings.manifestConflict') });
+        await onRefreshWorkspace().catch(() => undefined);
+      } else setStatusMessage({ type: 'error', text: err instanceof Error ? err.message : String(err) });
     } finally {
       setIsSaving(false);
     }
@@ -75,7 +93,7 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
       {repositories.length > 1 && (
         <label className='flex flex-col gap-1 text-xs'>
           <span className='font-semibold text-fg'>{t('settings.manifestRepository')}</span>
-          <Select aria-label={t('settings.manifestRepository')} value={repository?.id ?? ''} onValueChange={setSelected} options={repositories.map(candidate => ({ value: candidate.id, label: `${candidate.title} · ${candidate.repository ?? candidate.id}` }))} />
+          <Select aria-label={t('settings.manifestRepository')} value={repository?.id ?? ''} onValueChange={setChosen} options={repositories.map(candidate => ({ value: candidate.id, label: `${candidate.title} · ${candidate.repository ?? candidate.id}` }))} />
         </label>
       )}
       <p className='text-xs text-muted'>{t('settings.manifestHint')}{onCore && <span className='block mt-1 text-warning text-[11px]'>{t('settings.coreBranchManifestWarning')}</span>}</p>
@@ -94,7 +112,7 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
           <span>{t('settings.manifestUnservedDefault', { notebook: repository.unservedDefault })}</span>
         </p>
       )}
-      {repository && !repository.unavailable && <WorkspaceManifestEditor key={repository.id} yamlContent={yamlContent} onChange={setYamlContent} readOnly={!canWrite} />}
+      {repository && !repository.unavailable && <WorkspaceManifestEditor key={repository.id} yamlContent={yamlContent} onChange={editYaml} readOnly={!canWrite} />}
       {statusMessage && (
         <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${statusMessage.type === 'success' ? 'bg-success-soft text-success border border-success/40' : 'bg-danger-soft text-danger border border-danger/40'}`}>
           {statusMessage.type === 'success' ? <Check className='w-4 h-4 text-success' /> : <AlertCircle className='w-4 h-4 text-danger' />}

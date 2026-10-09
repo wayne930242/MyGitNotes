@@ -1252,6 +1252,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'settings.manifestInvalid': '這個 repository 的 manifest 無法讀取：{error}。筆記仍可開啟；請在下方修正 YAML 後儲存。',
   'settings.manifestNotebooksFromHome': '這個 repository 提供哪些筆記本，目前仍由 home manifest 的 source 項目決定；這裡的筆記本清單要等 pnpm convert-sources 搬移後（之後的更新）才會生效。',
   'settings.manifestDerivedRepository': '這個 repository 還沒有 manifest。儲存後會依下方設定在其中建立 .mygitnotes.yaml。',
+  'settings.manifestConflict': '你打開之後，伺服器上的這份 manifest 已經變更。你的內容保留著，再存一次會用它取代伺服器上的版本；存之前請確認它沒有漏掉那邊做的修改。',
   'settings.manifestUnservedDefault': 'default_notebook 指向 {notebook}，但這個 repository 不提供這個筆記本，所以改從它的第一個筆記本開啟。',
   'settings.manifestPreferences': '編輯器預設值',
   'settings.manifestYoutubeMode': '預設 YouTube 顯示模式',

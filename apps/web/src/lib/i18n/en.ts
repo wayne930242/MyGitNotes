@@ -1251,6 +1251,7 @@ export const en = {
   'settings.manifestInvalid': "This repository's manifest cannot be read: {error}. Its notes still open; fix the YAML below and save.",
   'settings.manifestNotebooksFromHome': "Which notebooks this repository serves still comes from the home manifest's source entries; the notebook list here takes effect once pnpm convert-sources moves them (a later update).",
   'settings.manifestDerivedRepository': 'This repository has no manifest yet. Saving creates .mygitnotes.yaml in it with the settings below.',
+  'settings.manifestConflict': 'This manifest changed on the server since you opened it. Your text is kept, and saving again replaces the server version with it; check that it still includes the changes made there.',
   'settings.manifestUnservedDefault': 'default_notebook names {notebook}, which this repository does not serve, so it opens at its first notebook instead.',
   'settings.manifestPreferences': 'Editor Defaults',
   'settings.manifestYoutubeMode': 'Default YouTube Display Mode',
