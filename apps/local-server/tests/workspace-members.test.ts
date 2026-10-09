@@ -135,9 +135,14 @@ describe('Settings → Repositories in a local deployment', () => {
     expect(worktreeSubscriberCount(trpg)).toBe(1);
     const { revision } = await members();
     expect((await call('PATCH', '/api/workspace/members', { repository: await idOf('trpg'), hidden: true, revision })).status).toBe(200);
-    // The server ended the stream; a page's EventSource reconnects and watches only what is visible.
-    let done = false;
-    while (!done) done = (await first.reader.read()).done;
+    // The server told the page and ended the stream; a page's EventSource reconnects and watches only what is visible.
+    let done = false, received = '';
+    while (!done) {
+      const chunk = await first.reader.read();
+      done = chunk.done;
+      received += new TextDecoder().decode(chunk.value ?? new Uint8Array());
+    }
+    expect(received).toContain('event: change\ndata: {"membership":true}\n\n');
     await settle();
     expect(worktreeSubscriberCount(trpg)).toBe(0);
     const second = await open();

@@ -12,7 +12,7 @@ import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace, openWorkspac
 import { clearCommittedNotes, readStoredWorkingNotes, readWorkingNotes, updateWorkingNote, type WorkingNote, type WorkingNotes } from './working-notes.js';
 import { isNotebookKey, resolveBareId } from './notebook-keys.js';
 import { sameValue } from './merge-note.js';
-import { invalidateNoteQueries } from './use-note-queries.js';
+import { invalidateNoteQueries, NOTE_QUERY_KEY } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
 import { setNotebookPreferences } from './notebook-preferences.js';
 import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
@@ -23,6 +23,15 @@ import { noteRefKey } from '@mygitnotes/core/note-query';
 export interface UseWorkspaceSyncOptions {
   routeNotebook?: string;
   onStageNote?: (note: NoteItem) => void;
+}
+
+/** Whether a workspace `change` event says the members changed, rather than files in a worktree. */
+function membershipEvent(event: Event): boolean {
+  try {
+    return (JSON.parse(String((event as MessageEvent).data)) as { membership?: unknown; } | null)?.membership === true;
+  } catch {
+    return false;
+  }
 }
 
 export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
@@ -205,18 +214,25 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     };
   }, [refreshWorkspace]);
 
+  /** After a membership change, here or in another tab: the workspace again, and no cached result of a repository that left or was hidden. */
+  const membershipChanged = useCallback(async () => {
+    await refreshWorkspace(true);
+    await queryClient.resetQueries({ queryKey: NOTE_QUERY_KEY });
+  }, [refreshWorkspace, queryClient]);
+
   // A local workspace hears of files changed outside the app (an editor, an agent, Git) from the
   // server's watcher; it reconnects when its repositories change, so a newly mapped worktree is watched.
+  // A membership change made in any tab arrives here too, so every tab drops a repository that was hidden or removed.
   const watchedRepositories = remote || !sourceId ? '' : repositories.map(repository => repository.id).join('\n');
   useEffect(() => {
     if (!watchedRepositories) return;
     const events = openWorkspaceEvents();
-    events.addEventListener('change', () => {
+    events.addEventListener('change', event => {
       announceWorkspaceFilesChanged();
-      void refreshWorkspace();
+      void (membershipEvent(event) ? membershipChanged() : refreshWorkspace());
     });
     return () => events.close();
-  }, [watchedRepositories, refreshWorkspace]);
+  }, [watchedRepositories, refreshWorkspace, membershipChanged]);
 
   useEffect(() => {
     if (!sourceId || !config) return;
@@ -239,5 +255,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, defaultRepository, defaultRepositoryBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, repositoryChoice, coreUpdate, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, defaultRepository, defaultRepositoryBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, repositoryChoice, coreUpdate, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, membershipChanged, stageWorkingNote };
 }

@@ -5,13 +5,30 @@ const HEARTBEAT_MS = 25_000;
 
 /** Every open stream, so a membership change can end them all. */
 const open = new Set<Response>();
+/** Counts membership changes, so a stream whose request read the members before the latest one never subscribes. */
+let generation = 0;
+/** Tells a page that the members changed: it reloads the workspace and drops results of repositories that left. */
+const MEMBERSHIP_EVENT = `event: change\ndata: ${JSON.stringify({ membership: true })}\n\n`;
 
 /**
- * Ends every open event stream. A browser's `EventSource` reconnects on its own, and its new stream subscribes to the
- * workspace as it is now; a membership change ends them so no stream keeps watching a repository that left or was hidden.
+ * The membership generation a request starts under; `requestWorkspace` records it in `res.locals.membershipGeneration`
+ * before reading the members, so a change made while they are read is noticed.
+ */
+export function membershipGeneration(): number {
+  return generation;
+}
+
+/**
+ * Tells every open event stream that the membership changed, then ends it. A browser's `EventSource` reconnects on its
+ * own, and its new stream subscribes to the workspace as it is now; ending them means no stream keeps watching a
+ * repository that left or was hidden, and the event means every page reloads its repositories without waiting for that.
  */
 export function endEventStreams(): void {
-  for (const res of open) res.end();
+  generation++;
+  for (const res of open) {
+    res.write(MEMBERSHIP_EVENT);
+    res.end();
+  }
 }
 
 /**
@@ -20,6 +37,7 @@ export function endEventStreams(): void {
  * `prepare` failing answers with `fail`; `subscribe` returns its unsubscribe and writes events through `write`.
  */
 export async function openEventStream<T>(res: Response, prepare: () => Promise<T>, fail: (error: unknown) => void, subscribe: (prepared: T, write: (chunk: string) => void) => () => void): Promise<void> {
+  const startedUnder = typeof res.locals.membershipGeneration === 'number' ? res.locals.membershipGeneration as number : generation;
   let closed = false;
   let stop: (() => void) | undefined;
   /** Unsubscribes once, whether the client left or the server ended the stream. */
@@ -43,6 +61,12 @@ export async function openEventStream<T>(res: Response, prepare: () => Promise<T
   if (closed || res.destroyed) return;
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   res.write('retry: 3000\n\n');
+  // The members changed after this request read them: what `prepare` read may include a repository that left or was
+  // hidden, so the page is told to reload and reconnect instead.
+  if (generation !== startedUnder) {
+    res.end(MEMBERSHIP_EVENT);
+    return;
+  }
   const unsubscribe = subscribe(prepared, chunk => res.write(chunk));
   const heartbeat = setInterval(() => res.write(': heartbeat\n\n'), HEARTBEAT_MS);
   stop = () => {

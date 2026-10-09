@@ -4,6 +4,7 @@ import type express from 'express';
 import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, RepositoryUnavailableError, sameSite, SourceError, SUPPORTED_SCHEMA_VERSION, visibleMembers, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceMember, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
+import { membershipGeneration } from './event-stream.js';
 import { regularPath } from './workspace-files.js';
 
 export interface LocalHandle {
@@ -77,6 +78,8 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */
 export function requestWorkspace(auth: SessionServices, configSource: WorkspaceConfigSource, cache?: RemoteCache): express.RequestHandler {
   return async (req, res, next) => {
+    // Recorded before the members are read, so an event stream opened from them knows when a change came meanwhile.
+    res.locals.membershipGeneration = membershipGeneration();
     let settings: WorkspaceSettings;
     try {
       settings = await configSource.settings(req);
