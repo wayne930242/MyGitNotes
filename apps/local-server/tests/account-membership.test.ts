@@ -8,7 +8,8 @@ import type { NewMember, WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 import type { PiAgent } from '../src/pi-agent.js';
 import { storedSessions } from '../src/browser-sessions.js';
-import { membershipStoreContract, memoryAccountSource } from '../src/membership-store-contract.js';
+import { membershipStoreContract } from '../src/membership-store-contract.js';
+import { memoryAccountSource } from '../src/memory-account-source.js';
 import { createRecordStore } from '../src/record-store/index.js';
 
 /** The person a test request belongs to: the grant's, else the `x-person` header's. */

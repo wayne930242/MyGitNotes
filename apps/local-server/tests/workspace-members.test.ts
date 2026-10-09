@@ -249,7 +249,7 @@ describe('Settings → Repositories on a hosted community deployment', () => {
     fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: secret-owner/hidden-diary, branch: main, hidden: true }\n');
     for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'secret-owner/private-notes', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
     await listen(createApp(product));
-    for (const headers of [{}, { Cookie: `gh_notes_session=${'d'.repeat(43)}` }]) {
+    for (const headers of [{}, { Cookie: `gh_notes_session=${'d'.repeat(43)}` }] as Record<string, string>[]) {
       const response = await fetch(`${base}/api/workspace/members`, { headers });
       const text = await response.text();
       expect([response.status, JSON.parse(text).code]).toEqual([401, 'sign-in']);
