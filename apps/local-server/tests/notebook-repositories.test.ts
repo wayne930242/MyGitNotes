@@ -166,6 +166,19 @@ describe("each repository's own manifest", () => {
     expect(await repository(trpgId)).not.toHaveProperty('manifestError');
   });
 
+  it('keeps the workspace answering when a repository manifest cannot be read, reporting it on that repository only', async () => {
+    const { trpg } = await serve();
+    fs.mkdirSync(path.join(trpg, '.mygitnotes.yaml'));
+    const answer = await get('/api/workspace');
+    expect(answer.status).toBe(200);
+    const [home, unread] = answer.body.repositories;
+    expect(home).toMatchObject({ title: 'Two repositories' });
+    expect(home).not.toHaveProperty('manifestError');
+    expect(unread).toMatchObject({ id: trpgId, title: 'trpg', config: null, manifestError: { text: '', message: expect.stringMatching(/EISDIR/) } });
+    expect(unread).not.toHaveProperty('unavailable');
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
+  });
+
   it('refuses a save that names no repository or one it cannot reach', async () => {
     await serve();
     expect((await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml: manifest, configRevision: '' }) })).status).toBe(400);

@@ -123,6 +123,16 @@ describe('a local manifest store', () => {
     expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toContain('Fixed');
     fs.rmSync(root, { recursive: true, force: true });
   });
+
+  it('reads a manifest it cannot open as one it cannot read, and refuses to load it', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-local-manifest-'));
+    fs.mkdirSync(path.join(root, '.mygitnotes.yaml'));
+    const store = localManifest(root, vi.fn(async () => undefined));
+    const read = await store.read();
+    expect(read).toMatchObject({ state: 'invalid', text: '', error: expect.stringMatching(/EISDIR/), revision: 'unread:.mygitnotes.yaml' });
+    await expect(store.load()).rejects.toMatchObject({ code: 'EISDIR' });
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe('repositories by path and shared credentials', () => {

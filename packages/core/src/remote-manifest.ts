@@ -15,10 +15,12 @@ interface ManifestRecord {
   /** The repository has no manifest; `config` was derived from its folders and `file` is where a save creates one. */
   derived: boolean;
 }
-/** A manifest file that does not parse: its text, and the error loading it raises. */
+/** A manifest file that does not parse, or cannot be read: its text (empty when unread), and the error loading it raises. */
 interface InvalidManifestRecord {
   file: string;
   invalid: { text: string; error: unknown; };
+  /** Reading the file failed; the next read tries again rather than keeping the failure for this snapshot. */
+  unread?: true;
 }
 
 /** Folders that hold tooling or attachments rather than notes. */
@@ -50,13 +52,22 @@ export class RemoteManifest implements ManifestStore, RepositoryManifestFile {
   private async current() {
     const snapshot = await this.reader.getSnapshot();
     if (this.record?.sha !== snapshot.sha) this.record = { sha: snapshot.sha, value: this.parse(snapshot) };
-    return { sha: snapshot.sha, record: await this.record.value };
+    const kept = this.record;
+    const record = await kept.value;
+    if ('unread' in record && this.record === kept) this.record = undefined;
+    return { sha: snapshot.sha, record };
   }
 
   private async parse({ entries }: RemoteSnapshot): Promise<ManifestRecord | InvalidManifestRecord> {
-    const file = MANIFEST_FILES.find(p => entries.some(e => e.path === p && e.type === 'blob'));
+    // A symbolic link is never read as a file, so it is not taken for the manifest either.
+    const file = MANIFEST_FILES.find(p => entries.some(e => e.path === p && e.type === 'blob' && e.mode !== '120000'));
     if (!file) return { config: deriveWorkspaceConfig(entries, this.reader.repository.split('/').pop() || 'Notes'), file: WORKSPACE_CONFIG_FILENAME, prefixed: new Set(), derived: true };
-    const text = (await this.reader.readFile(file)).toString('utf8');
+    let text: string;
+    try {
+      text = (await this.reader.readFile(file)).toString('utf8');
+    } catch (error) {
+      return { file, invalid: { text: '', error }, unread: true };
+    }
     let config: WorkspaceConfig;
     try {
       config = parseWorkspaceConfig(text);

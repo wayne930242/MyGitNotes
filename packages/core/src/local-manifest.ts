@@ -15,10 +15,18 @@ export const MISSING_MANIFEST_REVISION = 'none';
 /** A local manifest's revision: a hash of the file it was read from and its text, so any edit or move changes it. */
 const contentRevision = (file: string, text: string) => `sha256:${createHash('sha256').update(file).update('\0').update(text).digest('hex')}`;
 
-/** The manifest file of a worktree and its text, or null when it has none. */
-function readFile(root: string): { file: string; text: string; } | null {
+/** The revision of a manifest file that exists but cannot be read, such as a directory or a file without read permission. */
+const unreadRevision = (file: string) => `unread:${file}`;
+
+/** The manifest file of a worktree and its text, or null when it has none; `error` instead of text when the file cannot be read. */
+function readFile(root: string): { file: string; text: string; error?: undefined; } | { file: string; error: Error; } | null {
   const file = loadedWorkspaceConfigFile(root);
-  return file ? { file, text: fs.readFileSync(path.join(root, file), 'utf-8') } : null;
+  if (!file) return null;
+  try {
+    return { file, text: fs.readFileSync(path.join(root, file), 'utf-8') };
+  } catch (error) {
+    return { file, error: error as Error };
+  }
 }
 
 /**
@@ -29,16 +37,18 @@ function readFile(root: string): { file: string; text: string; } | null {
 export function localManifest(root: string, commit: LocalCommit, newFile = path.posix.join('notes', WORKSPACE_CONFIG_FILENAME)): ManifestStore & RepositoryManifestFile {
   const current = () => {
     const found = readFile(root);
-    return { found, revision: found ? contentRevision(found.file, found.text) : MISSING_MANIFEST_REVISION };
+    return { found, revision: !found ? MISSING_MANIFEST_REVISION : found.error ? unreadRevision(found.file) : contentRevision(found.file, found.text) };
   };
   const load = async () => {
     const { found, revision } = current();
     if (!found) throw new SourceError('Workspace manifest missing.', 422);
+    if (found.error) throw found.error;
     return { config: parseWorkspaceConfigAt(root, found.file, found.text), revision };
   };
   const read = async (): Promise<ManifestRead> => {
     const { found, revision } = current();
     if (!found) return { state: 'missing', revision };
+    if (found.error) return { state: 'invalid', text: '', error: found.error.message, revision };
     try {
       return { state: 'file', config: parseWorkspaceConfigAt(root, found.file, found.text), revision };
     } catch (error) {
