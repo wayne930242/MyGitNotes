@@ -10,6 +10,8 @@ MyGitNotes 是以 Git 保存的個人筆記與文件工作區。平台指 GitHub
 
 **筆記本儲存庫**：一個筆記本的內容所在的儲存庫。一個筆記本只屬於一個儲存庫；筆記本儲存庫只放工作區內容，沒有 `core`。避免稱為：外部 repo、子 repo。
 
+**儲存庫 manifest**：每個儲存庫自己的 `.mygitnotes.yaml`，決定這個儲存庫的標題（標頭、筆記本切換器分組、Changes 與 Agents 頁顯示的名稱）、開啟時的預設筆記本，以及它的筆記本使用的偏好設定。沒有 manifest 的儲存庫以儲存庫名稱顯示。筆記本儲存庫提供哪些筆記本，目前仍由主儲存庫 manifest 的 `source` 決定。
+
 ## Core 與工作區分支
 
 同一個儲存庫以兩條分支分開產品與內容。`core` 只放產品原始碼，工作區只從 upstream fast-forward 它；`main` 只放工作區內容，不再合併 `core`。兩者各自 checkout 在自己的 worktree，local server 從 core worktree 執行並編輯 main worktree。
