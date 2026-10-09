@@ -160,17 +160,21 @@ describe('Settings → Repositories in a local deployment', () => {
 
 describe('Settings → Repositories on a hosted community deployment', () => {
   const session = 'c'.repeat(43);
-  it('lists the members read-only and refuses every change on the server', async () => {
+  it('lists the members read-only to a signed-in visitor, counting hidden ones unnamed, and refuses every change on the server', async () => {
     const product = scratch();
     const file = path.join(product, 'mygitnotes.server.yaml');
     fs.writeFileSync(file, 'repositories:\n  - { type: github, repository: owner/trpg, branch: main, hidden: true }\n');
     for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    await createRecordStore(product).set(session, { kind: 'session', token: 'fixture-visitor', userId: 2 });
     const provider = vi.spyOn(globalThis, 'fetch');
     await listen(createApp(product));
-    const list = await call('GET', '/api/workspace/members');
-    expect(list.body).toMatchObject({ changeable: false, revision: null });
+    const list = await call('GET', '/api/workspace/members', undefined, { Cookie: `gh_notes_session=${session}` });
+    expect(list.status).toBe(200);
+    expect(list.body).toMatchObject({ changeable: false, revision: null, hiddenUnnamed: 1 });
     expect(list.body.repositoryChoice).toBeUndefined();
-    expect(list.body.members.map((member: { alias: string; hidden: boolean; editable: string; branch: string; }) => [member.alias, member.hidden, member.editable, member.branch])).toEqual([['kb', false, 'none', 'main'], ['trpg', true, 'none', 'main']]);
+    // The administrator's hidden repository is counted, never named, to someone who cannot change the list.
+    expect(list.body.members.map((member: { alias: string; hidden: boolean; editable: string; branch: string; }) => [member.alias, member.hidden, member.editable, member.branch])).toEqual([['kb', false, 'none', 'main']]);
+    expect(JSON.stringify(list.body)).not.toContain('trpg');
     // The list made no request beyond this test's own.
     expect(provider.mock.calls.filter(([url]) => !String(url).startsWith(base))).toEqual([]);
     const before = fs.readFileSync(file, 'utf8');
@@ -180,12 +184,26 @@ describe('Settings → Repositories on a hosted community deployment', () => {
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
 
+  it('answers 401 without naming any repository to a request that is not signed in', async () => {
+    const product = scratch();
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: secret-owner/hidden-diary, branch: main, hidden: true }\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'secret-owner/private-notes', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    await listen(createApp(product));
+    for (const headers of [{}, { Cookie: `gh_notes_session=${'d'.repeat(43)}` }]) {
+      const response = await fetch(`${base}/api/workspace/members`, { headers });
+      const text = await response.text();
+      expect([response.status, JSON.parse(text).code]).toEqual([401, 'sign-in']);
+      expect(text).not.toMatch(/secret-owner|private-notes|hidden-diary/);
+    }
+  });
+
   it("shows a visitor-choice deployment's one member, the visitor's repository, read-only", async () => {
     const product = scratch();
     for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
     const choices: WorkspaceChoices = { read: async () => ({ repository: 'visitor/notes', branch: 'main' }), write: async () => undefined, clear: async () => undefined, signedOut: async () => undefined };
+    await createRecordStore(product).set(session, { kind: 'session', token: 'fixture-visitor', userId: 2 });
     await listen(createApp(product, { configSource: chosenRepositorySource(product, process.env, choices), workspaceChoices: choices }));
-    const list = (await call('GET', '/api/workspace/members')).body;
+    const list = (await call('GET', '/api/workspace/members', undefined, { Cookie: `gh_notes_session=${session}` })).body;
     expect(list).toMatchObject({ changeable: false, repositoryChoice: true, members: [{ id: 'github:visitor/notes@main', alias: 'notes', default: true, hidden: false, editable: 'none' }] });
     const refused = await call('PATCH', '/api/workspace/members', { repository: 'github:visitor/notes@main', hidden: true, revision: 'none' });
     expect(refused).toMatchObject({ status: 405, body: { code: 'read-only', error: expect.stringContaining('Switch repository') } });
@@ -195,11 +213,8 @@ describe('Settings → Repositories on a hosted community deployment', () => {
 describe('a hidden member of a hosted workspace', () => {
   const session = 'c'.repeat(43);
   const repositories: Record<string, { head: string; files: Record<string, string>; }> = { 'owner/kb': { head: 'a'.repeat(40), files: { '.mygitnotes.yaml': manifest('KB', 'life'), 'notes/life/note.md': '# KB note\n\nshared words\n' } }, 'owner/vault': { head: 'b'.repeat(40), files: { '.mygitnotes.yaml': manifest('Vault', 'life'), 'notes/life/note.md': '# Vault note\n\nshared words\n' } } };
-  it('is never requested from the provider, whatever the page or MCP call', async () => {
-    const product = scratch();
-    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: owner/vault, branch: main, hidden: true }\n');
-    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
-    await createRecordStore(product).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+  /** Answers GitHub API requests from `repositories`, recording each repository asked for; any other is not found. */
+  const fakeProvider = (publicRepositories: string[] = []) => {
     const requested: string[] = [];
     const nativeFetch = globalThis.fetch;
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
@@ -210,12 +225,20 @@ describe('a hidden member of a hosted workspace', () => {
       const repository = repositories[name];
       const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
       if (!repository) return json({ message: 'Not Found' }, 404);
-      if (endpoint === '') return json({ private: true, default_branch: 'main', permissions: { push: true } });
+      if (endpoint === '') return json({ private: !publicRepositories.includes(name), default_branch: 'main', permissions: { push: true } });
       if (endpoint.startsWith('/commits/')) return json({ sha: repository.head, commit: { tree: { sha: `${name}-tree` } } });
       if (endpoint.startsWith('/git/trees/')) return json({ truncated: false, tree: [{ path: 'notes', sha: `${name}:notes`, type: 'tree', mode: '040000' }, { path: 'notes/life', sha: `${name}:notes/life`, type: 'tree', mode: '040000' }, ...Object.entries(repository.files).map(([file, text]) => ({ path: file, sha: `${name}:${file}`, type: 'blob', mode: '100644', size: Buffer.byteLength(text) }))] });
       if (endpoint.startsWith('/git/blobs/')) return json({ encoding: 'base64', content: Buffer.from(repository.files[decodeURIComponent(endpoint.slice('/git/blobs/'.length)).slice(name.length + 1)] ?? '').toString('base64') });
       return json({});
     });
+    return requested;
+  };
+  it('is never requested from the provider, whatever the page or MCP call', async () => {
+    const product = scratch();
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: owner/vault, branch: main, hidden: true }\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    await createRecordStore(product).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+    const requested = fakeProvider();
     await listen(createApp(product));
     const headers = { Cookie: `gh_notes_session=${session}` };
     const get = (url: string) => call('GET', url, undefined, headers);
@@ -237,5 +260,22 @@ describe('a hidden member of a hosted workspace', () => {
     expect(((await callWorkspaceRemoteTool(mcp, 'search_notes', { query: 'shared' }, false)).matches as { notebookId: string; }[]).map(match => match.notebookId)).toEqual(['kb~life']);
     expect(requested.filter(name => name === 'owner/vault')).toEqual([]);
     expect(requested).toContain('owner/kb');
+  });
+
+  it('does not name a visible repository the provider refused to a visitor who is not signed in', async () => {
+    const product = scratch();
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: secret-owner/private-diary, branch: main }\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    await createRecordStore(product).set(session, { kind: 'session', token: 'fixture-owner', userId: 1 });
+    fakeProvider(['owner/kb']);
+    await listen(createApp(product));
+    const anonymous = await fetch(`${base}/api/workspace`);
+    const text = await anonymous.text();
+    expect(anonymous.status).toBe(200);
+    expect(JSON.parse(text).repositories.map((repository: { alias: string; }) => repository.alias)).toEqual(['kb']);
+    expect(text).not.toMatch(/secret-owner|private-diary/);
+    // Someone signed in learns that the repository is listed and that they cannot reach it.
+    const signedIn = (await call('GET', '/api/workspace', undefined, { Cookie: `gh_notes_session=${session}` })).body;
+    expect(signedIn.repositories.map((repository: { alias: string; unavailable?: { reason: string; }; }) => [repository.alias, repository.unavailable?.reason])).toEqual([['kb', undefined], ['private-diary', 'no-access']]);
   });
 });

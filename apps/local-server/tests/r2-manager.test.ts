@@ -410,7 +410,7 @@ describe('R2 management on a hosted workspace', () => {
   const files = new Map<string, Buffer>();
   let revision = 'one', canPush = true;
   const published: RemoteChange[][] = [];
-  async function startRemote(token: string | undefined) {
+  async function startRemote(token: string | undefined, env: Record<string, string> = {}) {
     root = '';
     files.clear();
     published.length = 0;
@@ -428,9 +428,31 @@ describe('R2 management on a hosted workspace', () => {
       return revision += '-next';
     });
     alias = 'notes';
-    await start({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'example/notes', MYGITNOTES_BRANCH: 'main' });
+    await start({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'example/notes', MYGITNOTES_BRANCH: 'main', ...env });
     for (const key of ['ex/old/Core Rules.pdf', 'ex/old/map.webp', 'ex/keep.pdf']) bucket.objects.set(key, Buffer.from(key));
   }
+
+  it("counts the deployment's hidden repositories without naming them, and still asks before a delete", async () => {
+    canPush = true;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-hosted-hidden-'));
+    try {
+      const config = path.join(dir, 'mygitnotes.server.yaml');
+      fs.writeFileSync(config, 'repositories:\n  - { type: github, repository: secret-owner/hidden-diary, branch: main, hidden: true }\n');
+      await startRemote('writer-token', { MYGITNOTES_SERVER_CONFIG: config });
+      const references = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/keep.pdf`).then(r => r.text());
+      expect(references).not.toMatch(/hidden-diary|secret-owner/);
+      expect(JSON.parse(references)).toMatchObject({ hidden: [], hiddenUnnamed: 1 });
+      const refused = await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf' });
+      expect(refused.status).toBe(409);
+      const body = await refused.text();
+      expect(body).not.toMatch(/hidden-diary|secret-owner/);
+      expect(JSON.parse(body)).toMatchObject({ code: 'hidden-unchecked', hidden: [], hiddenUnnamed: 1 });
+      expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
+      expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf', confirmHidden: true })).status).toBe(200);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
 
   it('commits note rewrites for a writer', async () => {
     canPush = true;

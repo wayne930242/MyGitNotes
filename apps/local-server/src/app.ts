@@ -105,7 +105,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   // The member list opens no repository, so it works while every repository is hidden or unreachable.
-  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage));
+  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));
@@ -157,7 +157,9 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         const workspace = workspaceOf(res);
         // `?fresh=1` opened every repository at its current branch head, and each manifest is read from that snapshot.
-        const [keyedConfig, entries] = await Promise.all([workspace.keyedConfig(), workspace.all()]);
+        const [keyedConfig, listed] = await Promise.all([workspace.keyedConfig(), workspace.all()]);
+        // A signed-out visitor is not told the names of repositories the provider refused them, private ones among them.
+        const entries = signedIn(res) ? listed : listed.filter(entry => !('unavailable' in entry && entry.unavailable.reason === 'no-access'));
         const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
           const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
           const manifest = repositoryManifestStatus(await workspace.manifestOf(entry.ref.id));

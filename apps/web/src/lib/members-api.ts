@@ -22,6 +22,8 @@ export interface MembersAnswer {
   environment?: string;
   /** Each visitor opens the one repository they chose, and switches it with Switch repository. */
   repositoryChoice?: true;
+  /** Hidden repositories of a hosted deployment, which its visitors are told the number of but not the names. */
+  hiddenUnnamed?: number;
 }
 
 /** A refused membership change; `code` tells a stale read (`stale`) or a missing folder (`folder-required`) from a refusal. */

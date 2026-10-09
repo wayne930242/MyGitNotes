@@ -1,6 +1,7 @@
 import { type Request, type Response, Router } from 'express';
-import { MembershipError, type MembershipStore, type RepositoryId, SourceError, type WorkspaceConfigSource, type WorkspaceMember, WorkspaceSetupError } from '@mygitnotes/core';
+import { MembershipError, type MembershipStore, type RepositoryId, SourceError, type WorkspaceConfigSource, type WorkspaceMember, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import type { AssetStorage } from './asset-storage.js';
+import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { endEventStreams } from './event-stream.js';
 import { choosesRepository } from './workspace-choice.js';
 
@@ -33,7 +34,16 @@ export interface MembersAnswer {
   environment?: string;
   /** Each visitor chooses the one repository (decision C2), so the list changes through Switch repository, not a file. */
   repositoryChoice?: true;
+  /** Hidden members the requester cannot change, counted but not named (see `namedTo`). */
+  hiddenUnnamed?: number;
 }
+
+/**
+ * Whether a member may be named to someone who cannot change the membership: a visible member, which the workspace
+ * shows anyway, or a hidden one the requester can change (a local deployment's, or a person's own account member).
+ * A hosted deployment's hidden members are the administrator's, so its visitors only learn how many there are.
+ */
+export const namedTo = (member: WorkspaceMember) => !member.hidden || member.editable !== 'none';
 
 const status = (member: WorkspaceMember): MemberStatus => {
   const { source } = member.ref;
@@ -56,8 +66,22 @@ const text = (value: unknown, name: string) => {
  * change them, adding, removing, hiding, showing, reordering and choosing the default. Mounted ahead of the routes that
  * open repositories. A change ends the open event streams, so every page reconnects to the new membership.
  */
-export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage): Router {
+export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage, auth: SessionServices): Router {
   const router = Router();
+  /** Answers 401 (or 503) and returns false when a remote request carries no usable sign-in. */
+  const signedIn = async (req: Request, res: Response, settings: WorkspaceSettings) => {
+    if (settings.site.type === 'local') return true;
+    let token: string | undefined;
+    try {
+      token = await authToken(req, res, auth, settings.site);
+    } catch (error) {
+      // The session store or provider did not answer; the reader's session still stands.
+      if (!(error instanceof CredentialRejected)) throw new SourceError('Session service temporarily unavailable. Retry shortly.', 503);
+    }
+    if (token) return true;
+    res.status(401).json({ error: 'Sign in to see the repositories of this workspace.', code: 'sign-in' });
+    return false;
+  };
   const change = (action: (store: MembershipStore, req: Request) => Promise<{ revision: string; }>) => async (req: Request, res: Response) => {
     try {
       const store = configSource.membership?.(req);
@@ -73,9 +97,14 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
   router.get('/', async (req, res) => {
     try {
       const settings = await configSource.settings(req);
+      // A local deployment answers only this computer; a remote one names its repositories only to someone signed in,
+      // since a private repository's name is not for anonymous visitors.
+      if (!(await signedIn(req, res, settings))) return;
       const store = configSource.membership?.(req);
       const environment = store?.environment?.();
-      const answer: MembersAnswer = { members: settings.members.map(status), changeable: Boolean(store), revision: store ? await store.revision() : null, sharedAssetKeys: Boolean(await assetStorage.sharedKeys?.(req, res)), ...(environment ? { environment } : {}), ...(choosesRepository() ? { repositoryChoice: true as const } : {}) };
+      const named = settings.members.filter(namedTo);
+      const hiddenUnnamed = settings.members.length - named.length;
+      const answer: MembersAnswer = { members: named.map(status), changeable: Boolean(store), revision: store ? await store.revision() : null, sharedAssetKeys: Boolean(await assetStorage.sharedKeys?.(req, res)), ...(environment ? { environment } : {}), ...(choosesRepository() ? { repositoryChoice: true as const } : {}), ...(hiddenUnnamed ? { hiddenUnnamed } : {}) };
       res.json(answer);
     } catch (error) {
       fail(res, error);

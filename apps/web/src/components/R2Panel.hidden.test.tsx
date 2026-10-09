@@ -45,3 +45,16 @@ it('asks nothing while no repository is hidden', async () => {
   fireEvent.click(confirm);
   await waitFor(() => expect(api.deleteR2).toHaveBeenCalledWith('kb~kb', 'docs/guide.pdf', false, false));
 });
+
+it("counts a hosted deployment's hidden repositories it was not told the names of, and still asks first", async () => {
+  api.fetchR2References.mockResolvedValue({ objects: ['docs/guide.pdf'], notes: [], hidden: [], hiddenUnnamed: 2 });
+  render(createElement(I18nProvider, null, createElement(R2Panel, props)));
+  fireEvent.click(screen.getByRole('button', { name: /guide\.pdf/ }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Delete' })[0]);
+  expect(await screen.findByText(/not checked for references to this item: 2 hidden repository\(s\) of this deployment/)).toBeInTheDocument();
+  const confirm = screen.getByRole('button', { name: 'Confirm deletion' });
+  expect(confirm).toBeDisabled();
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Go ahead without checking them' }));
+  fireEvent.click(confirm);
+  await waitFor(() => expect(api.deleteR2).toHaveBeenCalledWith('kb~kb', 'docs/guide.pdf', false, true));
+});

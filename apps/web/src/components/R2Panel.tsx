@@ -124,7 +124,7 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
       setSelected(key);
     });
   const relative = (key: string) => key === root ? 'R2' : `R2/${inRoot(key)}`;
-  const unchecked = references?.hidden ?? [];
+  const unchecked = [...(references?.hidden ?? []).map(repository => `${repository.alias} (${repository.repository ?? repository.path ?? repository.id})`), ...references?.hiddenUnnamed ? [t('files.r2HiddenUnnamed', { count: references.hiddenUnnamed })] : []];
   const destinations = [root, ...folders].filter(folder => !directoryTarget || folder !== target && !folder.startsWith(target + '/'));
   const rawUrl = selectedObject ? r2RawUrl(notebookId, selectedObject.key) : '';
   const presentation = selectedObject ? r2PreviewType(selectedObject.key).kind : 'file';
@@ -344,7 +344,7 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
             : <LoadingStatus>{t('files.loading')}</LoadingStatus>)}
           {operation !== 'mkdir' && unchecked.length > 0 && (
             <div role='alert' className='r2-hidden-unchecked'>
-              <p>{t('files.r2HiddenUnchecked', { repositories: unchecked.map(repository => `${repository.alias} (${repository.repository ?? repository.path ?? repository.id})`).join(', ') })}</p>
+              <p>{t('files.r2HiddenUnchecked', { repositories: unchecked.join(', ') })}</p>
               <label>
                 <input type='checkbox' checked={uncheckedConfirmed} disabled={busy} onChange={event => setUncheckedConfirmed(event.target.checked)} />
                 {t('files.r2HiddenConfirm')}

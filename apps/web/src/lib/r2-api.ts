@@ -16,6 +16,8 @@ export interface R2References {
   notes: NoteRef[];
   /** Hidden repositories sharing the key space, which are never read and so not checked (decision C7). */
   hidden?: { id: string; alias: string; repository?: string; path?: string; }[];
+  /** Hidden repositories of a hosted deployment, unchecked as well, which the requester is not told the names of. */
+  hiddenUnnamed?: number;
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {

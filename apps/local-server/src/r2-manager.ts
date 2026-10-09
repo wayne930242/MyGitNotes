@@ -6,6 +6,7 @@ import { type AssetScope, type AssetStorage, inAssetScope, resolveAssetScope } f
 import { eachRepository, notebookRepository, type RepositoryHandle, requestMembers } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
+import { namedTo } from './workspace-members.js';
 import { writeFileAtomicSync } from './workspace-files.js';
 
 const markdown = (file: string) => /\.(md|markdown)$/i.test(file);
@@ -30,12 +31,20 @@ interface UncheckedRepository {
   repository?: string;
   path?: string;
 }
+/** The hidden repositories a delete or move cannot check: named where the requester may know them, else only counted. */
+interface Unchecked {
+  named: UncheckedRepository[];
+  unnamed: number;
+}
 /** A delete or move asked without confirming that hidden repositories go unchecked. */
 class HiddenUncheckedError extends SourceError {
-  constructor(readonly repositories: UncheckedRepository[]) {
-    super(`Hidden repositories are not checked for references: ${repositories.map(repository => repository.alias).join(', ')}. Confirm to go ahead.`, 409);
+  constructor(readonly unchecked: Unchecked) {
+    const names = unchecked.named.map(repository => repository.alias);
+    super(`Hidden repositories are not checked for references: ${[...names, ...unchecked.unnamed ? [`${unchecked.unnamed} more`] : []].join(', ')}. Confirm to go ahead.`, 409);
   }
 }
+/** How a route answers the hidden repositories it did not check. */
+const uncheckedAnswer = ({ named, unnamed }: Unchecked) => ({ hidden: named, ...(unnamed ? { hiddenUnnamed: unnamed } : {}) });
 /** A note of one repository that references R2 objects. */
 interface ReferencingNote {
   repository: string;
@@ -120,10 +129,12 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     const record = (key: string, deltaBytes: number) => storage.record?.(scope, key, deltaBytes) ?? Promise.resolve();
     const moved = storage.moved && ((from: string, to: string, bytes: number) => storage.moved!(scope, from, to, bytes));
     // Hidden repositories are never read, so where every repository shares the bucket root their references go unchecked (decision C7).
-    const unchecked: UncheckedRepository[] = scope.prefix === '' ? requestMembers(res).filter(member => member.hidden).map(member => ({ id: member.ref.id, alias: member.alias, ...(member.ref.source.type === 'local' ? { path: member.localPath } : { repository: member.ref.source.repository }) })) : [];
+    // A hosted deployment's hidden repositories are the administrator's: they are counted, not named (see `namedTo`).
+    const hidden = scope.prefix === '' ? requestMembers(res).filter(member => member.hidden) : [];
+    const unchecked: Unchecked = { named: hidden.filter(namedTo).map(member => ({ id: member.ref.id, alias: member.alias, ...(member.ref.source.type === 'local' ? { path: member.localPath } : { repository: member.ref.source.repository }) })), unnamed: hidden.filter(member => !namedTo(member)).length };
     /** A delete or move goes ahead with hidden repositories unchecked only once the person confirmed it. */
     const confirmUnchecked = (input: Record<string, unknown>) => {
-      if (unchecked.length && input.confirmHidden !== true) throw new HiddenUncheckedError(unchecked);
+      if (hidden.length && input.confirmHidden !== true) throw new HiddenUncheckedError(unchecked);
     };
     return { repositories: () => Promise.all(entries.map(openEntry)), notebook, scope, settings: scope.settings, record, moved, authorize, unchecked, confirmUnchecked };
   };
@@ -156,7 +167,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     } catch (error) {
       const retryAfter = error instanceof SourceError ? error.retryAfter : undefined;
       if (retryAfter) res.setHeader('Retry-After', String(retryAfter));
-      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}), ...(error instanceof HiddenUncheckedError ? { code: 'hidden-unchecked', hidden: error.repositories } : {}) });
+      res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'R2 operation failed.', ...(retryAfter ? { retryAfter } : {}), ...(error instanceof HiddenUncheckedError ? { code: 'hidden-unchecked', ...uncheckedAnswer(error.unchecked) } : {}) });
     }
   };
 
@@ -220,7 +231,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
       const { repositories, scope, unchecked } = await context(req, res, req.query);
       const objects = (await affected(scope, bucketKey(scope, req.query.key), req.query.directory === '1')).map(object => object.key);
       const notes = (await Promise.all((await repositories()).map(async repository => referencing(repository, await repository.notes(), objects)))).flat().sort(byPath);
-      res.json({ objects, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })), hidden: unchecked });
+      res.json({ objects, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })), ...uncheckedAnswer(unchecked) });
     }),
   );
   router.post(

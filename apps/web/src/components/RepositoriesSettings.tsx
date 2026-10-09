@@ -180,6 +180,7 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
           );
         })}
       </ul>
+      {answer.hiddenUnnamed ? <p className='text-xs text-muted'>{t('repositories.hiddenUnnamed', { count: answer.hiddenUnnamed })}</p> : null}
       {changeable && (
         <form
           className='flex flex-col gap-2 p-3 rounded-xl border border-line bg-surface'

@@ -98,6 +98,12 @@ it('shows the members read-only where the administrator changes them, and the sh
   expect(row('kb').getByText(/share keys with journal \(r2:inbox\/\)/)).toBeInTheDocument();
 });
 
+it("says how many repositories a hosted deployment's administrator hides, without names it was not told", async () => {
+  api.fetchMembers.mockResolvedValue(answer([member('kb', { default: true, editable: 'none' })], { changeable: false, revision: null, hiddenUnnamed: 2 }));
+  show({ repositories: [repository('kb')] });
+  expect(await screen.findByText('The administrator also hides 2 repository(s), which this page does not name.')).toBeInTheDocument();
+});
+
 it("says a visitor-choice deployment's repository changes through Switch repository, not the configuration file", async () => {
   api.fetchMembers.mockResolvedValue(answer([member('notes', { default: true, editable: 'none' })], { changeable: false, revision: null, repositoryChoice: true }));
   show({ repositories: [repository('notes')] });
