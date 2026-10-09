@@ -7,7 +7,7 @@ import { loadedWorkspaceConfigFile } from './config.js';
 import { SourceError } from './github-api.js';
 import { deriveAlias, repositoryName } from './notebook-key.js';
 import { type RepositoryId, repositoryRef } from './repository.js';
-import { normalizeNotebookFolder } from './source-config.js';
+import { normalizeNotebookFolder, serverConfigFile } from './source-config.js';
 import { type DeploymentMembers, environmentSetting, type MembershipStore, type NewMember, readDeploymentMembers, sameMember, type WorkspaceMember } from './workspace-config-source.js';
 
 /** Why a membership change was refused; the browser tells a stale read (`stale`) from a refusal. */
@@ -101,8 +101,12 @@ const readText = (file: string) => {
   }
 };
 
-/** Writes a file through a temporary file in its directory and a rename, so a reader never sees half of it. */
-function writeAtomic(file: string, text: string) {
+/**
+ * Writes a file through a temporary file in its directory and a rename, so a reader never sees half of it. A symbolic
+ * link (a configuration kept with dotfiles, say) stays one: the file it points at is replaced, not the link.
+ */
+function writeAtomic(link: string, text: string) {
+  const file = fs.existsSync(link) ? fs.realpathSync(link) : link;
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
   const mode = fs.existsSync(file) ? fs.statSync(file).mode : 0o644;
   try {
@@ -190,11 +194,12 @@ function worktreePath(value: unknown): string {
  */
 export function serverFileMembership(base: string, env: NodeJS.ProcessEnv = process.env): MembershipStore {
   const change = (revision: string, apply: (members: WorkspaceMember[]) => WorkspaceMember[]) => {
-    const { file } = readDeploymentMembers(base, env);
+    const file = serverConfigFile(base, env);
     return serialized(file, async () => {
       const text = readText(file);
       if (revision !== serverConfigRevision(text)) throw new MembershipError('stale', `${file} changed since the repositories were read. Reload them and try again.`, 409);
-      const current = readDeploymentMembers(base, env);
+      // The members come from the text whose revision was checked, so an edit made since cannot shift an entry's index.
+      const current = readDeploymentMembers(base, env, text);
       const written = serverConfigWithMembers(text, current, apply(current.members));
       writeAtomic(file, written);
       return { revision: serverConfigRevision(written) };

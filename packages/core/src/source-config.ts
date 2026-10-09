@@ -99,11 +99,15 @@ export function normalizeNotebookFolder(value: unknown): string {
   return folder;
 }
 
-/** The parsed server configuration file, or null when there is none. */
-export function readServerConfig(base: string, env: NodeJS.ProcessEnv = process.env): { file: string; raw: Record<string, unknown> | null; } | null {
+/**
+ * The parsed server configuration file, or null when there is none. `text` is the file's text already read (null for no
+ * file), so a caller that checked a revision of that text parses exactly what it checked.
+ */
+export function readServerConfig(base: string, env: NodeJS.ProcessEnv = process.env, text?: string | null): { file: string; raw: Record<string, unknown> | null; } | null {
   const file = serverConfigFile(base, env);
-  if (!fs.existsSync(file)) return null;
-  const raw = YAML.parse(fs.readFileSync(file, 'utf8')) as unknown;
+  if (text === undefined) text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
+  if (text === null) return null;
+  const raw = YAML.parse(text) as unknown;
   if (raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) throw new Error(`${file} must be a mapping.`);
   return { file, raw: raw as Record<string, unknown> | null };
 }
@@ -112,8 +116,8 @@ export function readServerConfig(base: string, env: NodeJS.ProcessEnv = process.
  * The entries under `repositories` in the server configuration, validated for a local or a remote deployment; every
  * error names the file and the entry's index. A relative `path` resolves against the file.
  */
-export function loadServerRepositories(base: string, env: NodeJS.ProcessEnv, mode: 'local' | 'remote'): ServerRepositoryEntry[] {
-  const config = readServerConfig(base, env);
+export function loadServerRepositories(base: string, env: NodeJS.ProcessEnv, mode: 'local' | 'remote', text?: string | null): ServerRepositoryEntry[] {
+  const config = readServerConfig(base, env, text);
   const listed = config?.raw?.repositories;
   if (!config || listed === undefined || listed === null) return [];
   const { file } = config;
@@ -179,14 +183,15 @@ export function loadRepositoryMappings(base: string, env: NodeJS.ProcessEnv = pr
   return loadServerRepositories(base, env, 'local').map(entry => ({ ...entry, source: entry.identity, path: entry.path! }));
 }
 
-export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env): SourceConfig {
+/** The deployment's own source; `text` is the server configuration's text already read, as `readServerConfig` takes it. */
+export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env, text?: string | null): SourceConfig {
   // An empty key, as .env.example ships them, counts as unset.
   const get = (suffix: string) => env[`MYGITNOTES_${suffix}`] || env[`GITHUB_NOTES_${suffix}`] || undefined;
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local' ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) } : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: type === 'github' ? get('GITHUB_URL') : get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
   const file = serverConfigFile(base, env);
   // A file that lists only repositories, as Settings may create one in local mode, leaves the source to the environment.
-  const config = readServerConfig(base, env);
+  const config = readServerConfig(base, env, text);
   if (config && config.raw?.source !== undefined) return parseSourceConfig(config.raw, path.dirname(file));
   if (config && !env.VERCEL && config.raw?.repositories === undefined) return parseSourceConfig(config.raw, path.dirname(file));
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');

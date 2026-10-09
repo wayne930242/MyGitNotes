@@ -171,6 +171,46 @@ describe('a local deployment keeping its membership in the server configuration'
     expect(read(file)).toBe(`repositories:\n  - type: local\n    path: ${env.MYGITNOTES_LOCAL_PATH}\n    alias: kb\n    hidden: true\n  - type: local\n    path: ${notes}\n    alias: notes\n    default: true\n`);
   });
 
+  it('keeps a symbolically linked configuration a link, writing the file it points at', async () => {
+    const { base, env } = setup();
+    const kept = path.join(scratch(), 'dotfiles', 'mygitnotes.server.yaml');
+    fs.mkdirSync(path.dirname(kept), { recursive: true });
+    fs.writeFileSync(kept, '# kept with dotfiles\nproduct_repository: owner/kb\n');
+    const file = path.join(base, 'mygitnotes.server.yaml');
+    fs.symlinkSync(kept, file);
+    const store = deploymentConfigSource(base, env).membership!(request)!;
+    const notes = worktree(base, 'notes', manifest('notes'));
+    await store.add({ localPath: notes }, await store.revision());
+    expect(fs.lstatSync(file).isSymbolicLink()).toBe(true);
+    expect(read(kept)).toBe(`# kept with dotfiles\nproduct_repository: owner/kb\nrepositories:\n  - type: local\n    path: ${notes}\n    alias: notes\n`);
+    expect(fs.readdirSync(path.dirname(kept)).filter(name => name.endsWith('.tmp'))).toEqual([]);
+  });
+
+  it('changes the entry of the text whose revision it checked, even when the file is edited while the change reads it', async () => {
+    const trpg = (base: string) => worktree(base, 'trpg', manifest('trpg')), scrap = (base: string) => worktree(base, 'scratch', manifest('scratch'));
+    const { base, file, source, store } = setup('repositories:\n  - { type: local, path: ./trpg, alias: trpg }\n  - { type: local, path: ./scratch, alias: scratch }\n');
+    trpg(base);
+    scrap(base);
+    const scratchId = (await source.settings(request)).members.find(member => member.alias === 'scratch')!.ref.id;
+    const revision = await store.revision();
+    // Someone reorders the entries by hand just after the change read the file.
+    const nativeRead = fs.readFileSync;
+    let edited = false;
+    vi.spyOn(fs, 'readFileSync').mockImplementation(
+      ((target: fs.PathOrFileDescriptor, options?: unknown) => {
+        const result = nativeRead(target, options as BufferEncoding);
+        if (!edited && target === file) {
+          edited = true;
+          fs.writeFileSync(file, 'repositories:\n  - { type: local, path: ./scratch, alias: scratch }\n  - { type: local, path: ./trpg, alias: trpg }\n');
+        }
+        return result;
+      }) as typeof fs.readFileSync,
+    );
+    await store.setHidden(scratchId, true, revision);
+    vi.restoreAllMocks();
+    expect(read(file)).toBe('repositories:\n  - { type: local, path: ./trpg, alias: trpg }\n  - { type: local, path: ./scratch, alias: scratch, hidden: true }\n');
+  });
+
   it('asks for a folder for a worktree without a manifest, and refuses one that is no worktree root or has a manifest', async () => {
     const { base, source, store } = setup();
     const bare = worktree(base, 'bare');

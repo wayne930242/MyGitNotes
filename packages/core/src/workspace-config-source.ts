@@ -235,13 +235,16 @@ export function deploymentMembers(source: SourceConfig, entries: ServerRepositor
   return resolveDeploymentMembers(source, entries, file).members;
 }
 
-/** The deployment's source with its server configuration's members, each entry's index kept for writing them back. */
-export function readDeploymentMembers(base: string, env: NodeJS.ProcessEnv): DeploymentMembers & { source: SourceConfig; file: string; } {
+/**
+ * The deployment's source with its server configuration's members, each entry's index kept for writing them back.
+ * `text` is the configuration's text already read (null for no file), so the members come from exactly that text.
+ */
+export function readDeploymentMembers(base: string, env: NodeJS.ProcessEnv, text?: string | null): DeploymentMembers & { source: SourceConfig; file: string; } {
   try {
-    const source = loadSourceConfig(base, env);
+    const source = loadSourceConfig(base, env, text);
     if (env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
     const file = serverConfigFile(base, env);
-    return { source, file, ...resolveDeploymentMembers(source, loadServerRepositories(base, env, source.type === 'local' ? 'local' : 'remote'), file) };
+    return { source, file, ...resolveDeploymentMembers(source, loadServerRepositories(base, env, source.type === 'local' ? 'local' : 'remote', text), file) };
   } catch (error) {
     throw new WorkspaceSetupError((error as Error).message);
   }
