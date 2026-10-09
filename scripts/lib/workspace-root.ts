@@ -18,9 +18,10 @@ export function resolveWorkspaceRoot(checkout = process.cwd(), argv = process.ar
 
 /**
  * The worktrees of the workspace's members: `root`, then each worktree `repositories` in this checkout's
- * `mygitnotes.server.yaml` maps, once each (a mapping onto `root` is `root`).
+ * `mygitnotes.server.yaml` maps, once each (a mapping onto `root` is `root`). With `visibleOnly`, worktrees whose
+ * entry says `hidden: true` are left out, since a hidden repository is not read.
  */
-export function memberWorktrees(root: string, checkout = process.cwd()): string[] {
+export function memberWorktrees(root: string, checkout = process.cwd(), { visibleOnly = false } = {}): string[] {
   const real = (worktree: string) => {
     try {
       return fs.realpathSync(worktree);
@@ -28,8 +29,9 @@ export function memberWorktrees(root: string, checkout = process.cwd()): string[
       return path.resolve(worktree);
     }
   };
-  const seen = new Set<string>();
-  return [root, ...loadRepositoryMappings(checkout).map(mapping => mapping.path)].filter(worktree => {
+  const mappings = loadRepositoryMappings(checkout);
+  const seen = new Set(visibleOnly ? mappings.filter(mapping => mapping.hidden).map(mapping => real(mapping.path)) : []);
+  return [root, ...mappings.map(mapping => mapping.path)].filter(worktree => {
     const key = real(worktree);
     if (seen.has(key)) return false;
     seen.add(key);

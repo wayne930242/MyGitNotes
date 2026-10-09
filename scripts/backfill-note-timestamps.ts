@@ -14,8 +14,8 @@ async function backfillNoteTimestamps() {
   let skipped = 0;
   let noHistory = 0;
 
-  // Every member worktree mygitnotes.server.yaml maps is processed with the notebooks of its own manifest.
-  const worktrees = memberWorktrees(repoRoot).flatMap(root => {
+  // Every visible member worktree mygitnotes.server.yaml maps is processed with the notebooks of its own manifest.
+  const worktrees = memberWorktrees(repoRoot, process.cwd(), { visibleOnly: true }).flatMap(root => {
     const config = loadWorkspaceConfig(root);
     if (!config) console.log(`[backfill] Skipped ${root}: it has no workspace manifest.`);
     return config ? [{ root, config }] : [];

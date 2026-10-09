@@ -63,3 +63,5 @@ export * from './remote-cache.js';
 export * from './note-catalog.js';
 export * from './core-status.js';
 export * from './github-core-update.js';
+export * from './workspace-membership.js';
+export * from './folder-manifest.js';

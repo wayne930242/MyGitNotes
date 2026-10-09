@@ -78,6 +78,13 @@ describe('backfill-note-timestamps CLI', () => {
       expect(parseNoteContent(fs.readFileSync(path.join(second, 'notes/personal/campaign.md'), 'utf8')).metadata.created).toBe('2026-09-20T08:00:00.000Z');
       expect(output).toContain(`${second}:notes/personal/campaign.md`);
       expect(output).toContain(`Skipped ${bare}: it has no workspace manifest.`);
+      // A hidden repository is not read.
+      fs.writeFileSync(path.join(second, 'notes/personal/later.md'), '# Later\n');
+      run('add', '.');
+      run('commit', '-m', 'add later');
+      write('mygitnotes.server.yaml', `source:\n  type: local\n  path: .\nrepositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n    hidden: true\n`);
+      expect(backfill()).not.toContain(second);
+      expect(fs.readFileSync(path.join(second, 'notes/personal/later.md'), 'utf8')).toBe('# Later\n');
     } finally {
       fs.rmSync(second, { recursive: true, force: true });
       fs.rmSync(bare, { recursive: true, force: true });

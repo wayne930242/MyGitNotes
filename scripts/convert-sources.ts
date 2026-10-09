@@ -27,7 +27,7 @@ function describe(plan: SourceConversionPlan, order: AliasOrder | null) {
   else log(`  ${plan.converting.root}: ${moved.length ? `removes notebook(s) ${moved.join(', ')}, ` : ''}drops source and sets schema_version 4 in ${plan.converting.file}.`);
   if (plan.defaultNotebook) log(`  ${plan.converting.file}: default_notebook changes from ${plan.defaultNotebook.from}, which moves to another repository, to ${plan.defaultNotebook.to}.`);
   for (const entry of plan.legacyEntries) log(`  ${entry.file} in ${plan.converting.root} names notebook ${entry.notebookId} ${entry.count} time(s); those entries were written before each notebook kept its documents in its own repository and stay where they are.`);
-  if (order?.changed) log(`  ${order.serverFile}: lists repositories as ${order.mappings.map(mapping => mapping.source.repository).join(', ')}, the repositories notebooks move to first in the order ${plan.converting.file} names them, so each keeps the alias it had.`);
+  if (order?.changed) log(`  ${order.serverFile}: lists repositories as ${order.mappings.map(mapping => mapping.source.type === 'local' ? mapping.path : mapping.source.repository).join(', ')}, the repositories notebooks move to first in the order ${plan.converting.file} names them, so each keeps the alias it had.`);
   if (order) log(`  Aliases after the conversion: ${order.aliases.join(', ')}.`);
 }
 

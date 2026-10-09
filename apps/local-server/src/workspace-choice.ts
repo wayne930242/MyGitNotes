@@ -20,7 +20,7 @@ export function chosenRepositorySource(base: string, env: NodeJS.ProcessEnv = pr
     async settings(request) {
       const choice = await choices.read(request);
       const ref = choice && repositoryRef({ type: 'github', ...(url ? { url } : {}), ...choice });
-      const members = ref ? [{ ref, alias: deriveAlias(repositoryName(ref.source), new Set()), default: true, hidden: false }] : [];
+      const members = ref ? [{ ref, alias: deriveAlias(repositoryName(ref.source), new Set()), default: true, hidden: false, editable: 'none' as const }] : [];
       return { site, members, manifest: (_member, inRepository) => inRepository() };
     },
   };

@@ -24,7 +24,7 @@ describe('the deployment configuration source', () => {
     expect(source.mode).toBe('remote');
     const settings = await source.settings(request);
     expect(settings.site).toEqual({ type: 'github' });
-    expect(settings.members).toEqual([{ ref: repositoryRef({ type: 'github', repository: 'owner/repo', branch: 'main' }), alias: 'repo', default: true, hidden: false }]);
+    expect(settings.members).toEqual([{ ref: repositoryRef({ type: 'github', repository: 'owner/repo', branch: 'main' }), alias: 'repo', default: true, hidden: false, editable: 'none' }]);
     expect(defaultMember(settings)?.ref.id).toBe('github:owner/repo@main');
     env.MYGITNOTES_REPOSITORY = 'owner/other';
     expect(defaultMember(await source.settings(request))?.ref.id).toBe('github:owner/other@main');
@@ -310,8 +310,8 @@ describe('local repository mappings', () => {
     expect(mapsRepository(mapping, { type: 'github', repository: 'owner/other', branch: 'main' })).toBe(false);
     const settings = await deploymentConfigSource(base, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: path.join(base, 'home') }).settings(request);
     expect(settings.site).toEqual({ type: 'local' });
-    // A mapping onto the default worktree is that repository by another name.
-    expect(settings.members.map(entry => [entry.ref.id, entry.alias, entry.default, entry.localPath])).toEqual([[`local:${path.join(base, 'home')}`, 'home', true, path.join(base, 'home')], ['github:owner/trpg@main', 'trpg', false, path.resolve(base, '../trpg')]]);
+    // A mapping onto the default worktree is that repository by another name, placed where its entry is.
+    expect(settings.members.map(entry => [entry.ref.id, entry.alias, entry.default, entry.localPath, entry.editable])).toEqual([['github:owner/trpg@main', 'trpg', false, path.resolve(base, '../trpg'), 'server-file'], [`local:${path.join(base, 'home')}`, 'home', true, path.join(base, 'home'), 'environment']]);
     fs.rmSync(base, { recursive: true, force: true });
   });
   it("names a mapped repository by the branch its worktree has checked out, a linked worktree's included", async () => {

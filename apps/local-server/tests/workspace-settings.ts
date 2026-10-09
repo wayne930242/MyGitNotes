@@ -17,7 +17,7 @@ export function workspaceSettings(sources: (SourceConfig | [SourceConfig, Member
     const alias = deriveAlias(repositoryName(source), taken);
     taken.add(alias);
     const localPath = source.type === 'local' ? source.path : options.worktree;
-    return { ref: repositoryRef(source), alias, default: index === 0, hidden: options.hidden ?? false, ...(localPath ? { localPath } : {}) };
+    return { ref: repositoryRef(source), alias, default: index === 0, hidden: options.hidden ?? false, ...(localPath ? { localPath } : {}), editable: 'none' };
   });
   const [first] = sources;
   return { site: first ? siteOf(Array.isArray(first) ? first[0] : first) : { type: 'github' }, members, manifest: (_member, inRepository) => inRepository() };

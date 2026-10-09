@@ -52,40 +52,131 @@ function defaultLocalPath(base: string): string {
 /** The deployment's server configuration file, whether or not it exists. */
 export function serverConfigFile(base: string, env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.MYGITNOTES_SERVER_CONFIG || env.GITHUB_NOTES_SERVER_CONFIG || undefined;
-  return path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
+  // The compatible name is used only where it exists and the standard one does not; a new file takes the standard name.
+  return path.resolve(base, configured || (!fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) && fs.existsSync(path.join(base, SERVER_CONFIG_FILENAME)) ? SERVER_CONFIG_FILENAME : 'mygitnotes.server.yaml'));
 }
 
-/** A local deployment's worktree for one platform repository, from `repositories` in the server configuration. */
-export interface RepositoryMapping {
-  source: RemoteSourceConfig extends infer T ? T extends RemoteSourceConfig ? Omit<T, 'branch'> : never : never;
-  path: string;
+/** A platform repository without its branch, as a worktree mapping names it; a worktree that names none is `local`. */
+export type RepositoryIdentity = (RemoteSourceConfig extends infer T ? T extends RemoteSourceConfig ? Omit<T, 'branch'> : never : never) | { type: 'local'; path: string; };
+
+/**
+ * One entry under `repositories` in the server configuration: a member of the deployment's workspace. In local mode
+ * it maps a worktree (`path`) and names the platform repository it checks out, or `type: local` for none; in remote
+ * mode it names a platform repository and its branch. `alias`, `default`, `hidden` and `folder` are the member's own.
+ */
+export interface ServerRepositoryEntry {
+  /** Position under `repositories`, which errors name. */
+  index: number;
+  /** Local mode: the platform repository the worktree checks out (the worktree's branch is its own), or `local`. */
+  identity: RepositoryIdentity;
+  /** Remote mode: the branch; required unless the entry names the deployment's own repository. */
+  branch?: string;
+  /** Local mode: the worktree, resolved against the server configuration file. */
+  path?: string;
+  alias?: string;
+  default?: boolean;
+  hidden?: boolean;
+  /** For a repository without a manifest: the repository-relative folder of its one notebook. */
+  folder?: string;
 }
+
+/** A local deployment's worktree for one repository, from `repositories` in the server configuration. */
+export type RepositoryMapping = ServerRepositoryEntry & { source: RepositoryIdentity; path: string; };
 
 /** Whether a mapping names the platform repository `source` serves; the worktree's checked-out branch is its own. */
 export function mapsRepository(mapping: RepositoryMapping, source: RemoteSourceConfig): boolean {
-  if (mapping.source.type !== source.type || mapping.source.repository !== source.repository) return false;
+  if (mapping.source.type === 'local' || mapping.source.type !== source.type || mapping.source.repository !== source.repository) return false;
   return mapping.source.url === source.url;
 }
 
-/** Worktree paths for notebook repositories; a relative `path` resolves against the server configuration file. */
-export function loadRepositoryMappings(base: string, env: NodeJS.ProcessEnv = process.env): RepositoryMapping[] {
+const ENTRY_KEYS = new Set(['type', 'repository', 'branch', 'url', 'path', 'alias', 'default', 'hidden', 'folder']);
+
+/** A folder a notebook may root at: relative, inside the repository and not the repository itself. */
+export function normalizeNotebookFolder(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) throw new Error('folder must name a folder inside the repository.');
+  const folder = path.posix.normalize(value.trim().replace(/\\/g, '/')).replace(/\/+$/, '');
+  if (path.posix.isAbsolute(folder) || /^[A-Za-z]:/.test(folder) || folder === '.' || folder === '..' || folder.startsWith('../') || folder.split('/').some(part => part.startsWith('.'))) throw new Error(`folder must be a folder inside the repository, not its root, a dot folder or outside it: '${value}'.`);
+  return folder;
+}
+
+/** The parsed server configuration file, or null when there is none. */
+export function readServerConfig(base: string, env: NodeJS.ProcessEnv = process.env): { file: string; raw: Record<string, unknown> | null; } | null {
   const file = serverConfigFile(base, env);
-  if (!fs.existsSync(file)) return [];
-  const listed = (YAML.parse(fs.readFileSync(file, 'utf8')) as { repositories?: unknown; } | null)?.repositories;
-  if (listed === undefined) return [];
+  if (!fs.existsSync(file)) return null;
+  const raw = YAML.parse(fs.readFileSync(file, 'utf8')) as unknown;
+  if (raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) throw new Error(`${file} must be a mapping.`);
+  return { file, raw: raw as Record<string, unknown> | null };
+}
+
+/**
+ * The entries under `repositories` in the server configuration, validated for a local or a remote deployment; every
+ * error names the file and the entry's index. A relative `path` resolves against the file.
+ */
+export function loadServerRepositories(base: string, env: NodeJS.ProcessEnv, mode: 'local' | 'remote'): ServerRepositoryEntry[] {
+  const config = readServerConfig(base, env);
+  const listed = config?.raw?.repositories;
+  if (!config || listed === undefined || listed === null) return [];
+  const { file } = config;
   if (!Array.isArray(listed)) throw new Error(`${file}: repositories must be a list.`);
-  return listed.map((entry: Record<string, unknown>, index) => {
-    if (!entry || typeof entry.path !== 'string' || !entry.path.trim()) throw new Error(`${file}: repositories[${index}] needs a path.`);
+  const aliases = new Set<string>();
+  return listed.map((value: unknown, index): ServerRepositoryEntry => {
+    const where = `${file}: repositories[${index}]`;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(`${where} must be a mapping.`);
+    const entry = value as Record<string, unknown>;
+    const unknown = Object.keys(entry).filter(key => !ENTRY_KEYS.has(key));
+    if (unknown.length) throw new Error(`${where} has unknown keys: ${unknown.join(', ')}.`);
+    const flags: Pick<ServerRepositoryEntry, 'alias' | 'default' | 'hidden' | 'folder'> = {};
+    if (entry.alias !== undefined) {
+      if (typeof entry.alias !== 'string' || !/^[a-z0-9][a-z0-9-]*$/.test(entry.alias) || entry.alias.length > 40) throw new Error(`${where}: alias must be a lowercase slug ([a-z0-9][a-z0-9-]*) of at most 40 characters.`);
+      if (aliases.has(entry.alias)) throw new Error(`${where}: alias ${entry.alias} is already another repository's.`);
+      aliases.add(entry.alias);
+      flags.alias = entry.alias;
+    }
+    for (const key of ['default', 'hidden'] as const) {
+      if (entry[key] === undefined) continue;
+      if (typeof entry[key] !== 'boolean') throw new Error(`${where}: ${key} must be true or false.`);
+      flags[key] = entry[key] as boolean;
+    }
+    if (entry.folder !== undefined) {
+      try {
+        flags.folder = normalizeNotebookFolder(entry.folder);
+      } catch (error) {
+        throw new Error(`${where}: ${(error as Error).message}`);
+      }
+    }
+    if (mode === 'local') {
+      if (typeof entry.path !== 'string' || !entry.path.trim()) throw new Error(`${where} needs a path.`);
+      if (entry.branch !== undefined) throw new Error(`${where}: a worktree serves the branch it has checked out; remove branch.`);
+      const worktree = path.resolve(path.dirname(file), entry.path);
+      if (entry.type === 'local') {
+        if (entry.repository !== undefined || entry.url !== undefined) throw new Error(`${where}: a local entry names only its path.`);
+        return { index, identity: { type: 'local', path: worktree }, path: worktree, ...flags };
+      }
+      let source: SourceConfig;
+      try {
+        source = parseSourceConfig({ source: { type: entry.type, repository: entry.repository, url: entry.url, branch: 'main' } }, path.dirname(file));
+      } catch (error) {
+        throw new Error(`${where}: ${(error as Error).message}`);
+      }
+      if (source.type === 'local') throw new Error(`${where} must be local, github or gitlab.`);
+      const { branch: _branch, ...identity } = source;
+      return { index, identity: identity as RepositoryIdentity, path: worktree, ...flags };
+    }
+    if (entry.path !== undefined || entry.type === 'local') throw new Error(`${where}: a remote deployment reaches repositories through their platform; remove path and name a github or gitlab repository.`);
     let source: SourceConfig;
     try {
-      source = parseSourceConfig({ source: { ...entry, branch: 'main' } }, path.dirname(file));
+      source = parseSourceConfig({ source: { type: entry.type, repository: entry.repository, url: entry.url, branch: entry.branch ?? 'main' } }, path.dirname(file));
     } catch (error) {
-      throw new Error(`${file}: repositories[${index}]: ${(error as Error).message}`);
+      throw new Error(`${where}: ${(error as Error).message}`);
     }
-    if (source.type === 'local') throw new Error(`${file}: repositories[${index}] must name a github or gitlab repository.`);
-    const { branch: _branch, ...identity } = source;
-    return { source: identity as RepositoryMapping['source'], path: path.resolve(path.dirname(file), entry.path) };
+    const { branch, ...identity } = source as RemoteSourceConfig;
+    return { index, identity: identity as RepositoryIdentity, ...(entry.branch !== undefined ? { branch } : {}), ...flags };
   });
+}
+
+/** The worktrees `repositories` maps in a local deployment's server configuration, with each entry's own settings. */
+export function loadRepositoryMappings(base: string, env: NodeJS.ProcessEnv = process.env): RepositoryMapping[] {
+  return loadServerRepositories(base, env, 'local').map(entry => ({ ...entry, source: entry.identity, path: entry.path! }));
 }
 
 export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.env): SourceConfig {
@@ -94,7 +185,10 @@ export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.
   const type = get('SOURCE');
   if (type) return parseSourceConfig({ source: type === 'local' ? { type, path: get('LOCAL_PATH') || env.REPO_ROOT || defaultLocalPath(base) } : { type, repository: get('REPOSITORY'), branch: get('BRANCH'), url: type === 'github' ? get('GITHUB_URL') : get('GITLAB_URL') || env.GITLAB_URL || undefined } }, base);
   const file = serverConfigFile(base, env);
-  if (fs.existsSync(file)) return parseSourceConfig(YAML.parse(fs.readFileSync(file, 'utf8')), path.dirname(file));
+  // A file that lists only repositories, as Settings may create one in local mode, leaves the source to the environment.
+  const config = readServerConfig(base, env);
+  if (config && config.raw?.source !== undefined) return parseSourceConfig(config.raw, path.dirname(file));
+  if (config && !env.VERCEL && config.raw?.repositories === undefined) return parseSourceConfig(config.raw, path.dirname(file));
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');
   return { type: 'local', path: env.REPO_ROOT ? path.resolve(env.REPO_ROOT) : defaultLocalPath(base) };
 }
