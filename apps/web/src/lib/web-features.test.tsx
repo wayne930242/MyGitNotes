@@ -35,6 +35,47 @@ it("appends an edition's settings sections and leaves the page unchanged without
   expect(extended.replace(/<div id="settings-plan".*?Pro plan<\/p><\/div>/, '')).toBe(plain);
 });
 
+async function settingsPage(features: WebFeature[]) {
+  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean; }).IS_REACT_ACT_ENVIRONMENT = true;
+  vi.spyOn(globalThis, 'fetch').mockReturnValue(new Promise(() => {}));
+  window.matchMedia = ((query: string) => ({ matches: false, media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
+  const slot = document.createElement('div');
+  slot.id = 'workspace-sidebar-slot';
+  const container = document.createElement('div');
+  document.body.append(slot, container);
+  root = createRoot(container);
+  const repositories = { repositories: [], onMembershipChanged: async () => {}, onOpenChanges: () => {} };
+  await act(async () => root!.render(createElement(WebFeaturesProvider, { features }, createElement(SettingsModal, { manifest: { repositories: [], defaultRepository: '', initialRepository: '', onManifestRevision: () => {} }, repositories, onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} }))));
+  const page = { links: [...slot.querySelectorAll('a.sidebar-link')].map(link => link.getAttribute('href')), sections: [...container.querySelectorAll('[id^="settings-"]')].map(section => section.id), text: container.textContent };
+  slot.remove();
+  container.remove();
+  vi.restoreAllMocks();
+  return page;
+}
+
+it("puts an edition's section in place of the community section with the same id", async () => {
+  const members: WebFeature = { id: 'members', settingsSections: [{ id: 'repositories', title: 'Members', icon: CreditCard, element: createElement('p', null, 'Edition members') }] };
+  const community = await settingsPage([]);
+  act(() => root?.unmount());
+  root = undefined;
+  const replaced = await settingsPage([members]);
+  expect(replaced.links).toEqual(community.links);
+  expect(replaced.links.filter(link => link === '#settings-repositories')).toHaveLength(1);
+  expect(replaced.sections).toEqual(community.sections);
+  expect(replaced.text).toContain('Edition members');
+});
+
+it('keeps the community repositories section when an edition replaces only another section', async () => {
+  const theme: WebFeature = { id: 'theme', settingsSections: [{ id: 'theme', title: 'Brand theme', icon: CreditCard, element: createElement('p', null, 'Edition theme') }] };
+  const page = await settingsPage([theme, billing]);
+  expect(page.links.filter(link => link === '#settings-theme')).toHaveLength(1);
+  expect(page.text).toContain('Edition theme');
+  expect(page.links.filter(link => link === '#settings-repositories')).toHaveLength(1);
+  expect(page.sections.filter(section => section === 'settings-repositories')).toHaveLength(1);
+  expect(page.links.at(-1)).toBe('#settings-plan');
+  expect(page.sections.at(-1)).toBe('settings-plan');
+});
+
 it('lets the last feature that sets them replace the account controls', () => {
   function Probe() {
     const render = useAccountControls();

@@ -83,6 +83,7 @@ export interface FeatureGate {
 export interface WebFeature {
   id: string;
   routes?: FeatureRoute[];
+  /** Appended after the community sections; one whose id matches a shown community section (such as `repositories`) replaces it in place. */
   settingsSections?: FeatureSettingsSection[];
   /** Replaces the header's sign-in and account controls; the last feature that sets it wins. */
   accountControls?: RenderAccountControls;
