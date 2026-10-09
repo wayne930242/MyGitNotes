@@ -9,7 +9,7 @@ import { workspaceSettings } from './workspace-settings.js';
 
 const manifest = (title: string, id: string) => `schema_version: 4\nworkspace:\n  title: ${title}\n  default_notebook: ${id}\nnotebooks:\n  - id: ${id}\n    title: ${title}\n    root: notes/life\n`;
 /** Files and head commit of each repository the fake GitHub serves. */
-const repositories: Record<string, { head: string; files: Record<string, string>; }> = { 'owner/home': { head: 'a'.repeat(40), files: { '.mygitnotes.yaml': manifest('Hosted', 'life'), 'notes/life/note.md': '# Home note\n' } }, 'owner/trpg': { head: 'b'.repeat(40), files: { '.mygitnotes.yaml': manifest('TRPG', 'trpg'), 'notes/life/note.md': '# TRPG note\n' } }, 'owner/nobranch': { head: '', files: {} } };
+const repositories: Record<string, { head: string; files: Record<string, string>; }> = { 'owner/home': { head: 'a'.repeat(40), files: { '.mygitnotes.yaml': manifest('Hosted', 'life'), 'notes/life/note.md': '# Home note\n' } }, 'owner/trpg': { head: 'b'.repeat(40), files: { '.mygitnotes.yaml': manifest('TRPG', 'trpg'), 'notes/life/note.md': '# TRPG note\n' } }, 'owner/nobranch': { head: '', files: {} }, 'owner/legacy': { head: 'f'.repeat(40), files: { '.mygitnotes.yaml': 'schema_version: 3\nworkspace:\n  title: Legacy\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\nfiles:\n  hide_dotfiles: true\n', 'notes/life/note.md': '# Legacy note\n' } } };
 let root: string, server: Server, base: string;
 let writes: { repository: string; endpoint: string; }[];
 const session = 'c'.repeat(43);
@@ -90,4 +90,22 @@ it("reports each repository's own manifest and commits a manifest to the reposit
   expect(saved.status).toBe(200);
   expect(writes.length).toBeGreaterThan(0);
   expect(new Set(writes.map(write => write.repository))).toEqual(new Set(['owner/trpg']));
+});
+
+it('keeps serving a deployment whose repository still has a schema 3 manifest without source, so code can deploy before its migrate commit', async () => {
+  vi.stubEnv('MYGITNOTES_REPOSITORY', 'owner/legacy');
+  const deployment = createServer(createApp(root));
+  await new Promise<void>(resolve => deployment.listen(0, '127.0.0.1', resolve));
+  const at = `http://127.0.0.1:${(deployment.address() as { port: number; }).port}`;
+  try {
+    const workspace = await (await fetch(`${at}/api/workspace`, { headers })).json();
+    expect(workspace.repositories).toEqual([expect.objectContaining({ id: 'github:owner/legacy@main', title: 'Legacy', defaultNotebook: 'legacy~life', notebooks: ['legacy~life'], write: true })]);
+    expect(workspace.repositories[0].unavailable).toBeUndefined();
+    expect((await (await fetch(`${at}/api/notes/read?path=notes/life/note.md&notebookId=legacy~life`, { headers })).json()).note.content).toContain('Legacy note');
+    const committed = await fetch(`${at}/api/notes/commit`, { method: 'POST', headers, body: JSON.stringify({ repository: 'github:owner/legacy@main', revision: 'f'.repeat(40), message: 'docs: update', notes: [{ path: 'notes/life/note.md', notebookId: 'legacy~life', content: '# Legacy changed\n', metadata: {} }] }) });
+    expect(committed.status).toBe(200);
+    expect(new Set(writes.map(write => write.repository))).toEqual(new Set(['owner/legacy']));
+  } finally {
+    await new Promise<void>(resolve => deployment.close(() => resolve()));
+  }
 });
