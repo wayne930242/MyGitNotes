@@ -124,4 +124,7 @@ it('refuses a grant made for another site', async () => {
   const response = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list' }) });
   expect(response.status).toBe(401);
   expect(warn).toHaveBeenCalledWith('[mcp] unauthorized: grant-site');
+  // The owner reads the reason on the grant list.
+  const listed = await store.listGrants((await store.get(token)).ownerId);
+  expect(listed).toEqual([expect.objectContaining({ site: 'github:https://ghe.example.test', lastRejection: expect.objectContaining({ reason: 'grant-site' }) })]);
 });
