@@ -37,6 +37,9 @@ export function assertWorkspaceCompatible(root: string): void {
   if (typeof version === 'number' && version > SUPPORTED_SCHEMA_VERSION) {
     throw new WorkspaceCompatibilityError(`${file} uses schema_version ${version}; it requires a newer Core than this one (${SUPPORTED_SCHEMA_VERSION}). Update Core with \`pnpm update-core\`.`);
   }
+  // A manifest still using `source` is converted before it can migrate.
+  const sourced = sourceNotebooks(fs.readFileSync(file, 'utf8'));
+  if (sourced.length) throw new WorkspaceCompatibilityError(`${file} uses schema_version ${String(version)}, and notebook(s) ${sourced.join(', ')} use source, which schema 4 removed. Run \`pnpm convert-sources\`, which moves it to schema 4.`);
   throw new WorkspaceCompatibilityError(`${file} uses schema_version ${String(version)}; this Core supports ${SUPPORTED_SCHEMA_VERSION}. Run \`pnpm migrate-workspace\`.`);
 }
 

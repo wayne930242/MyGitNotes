@@ -74,9 +74,11 @@ it('binds the next free port when the desired one is occupied and records it for
   }
 }, 15000);
 
-it.each([['a newer schema_version', 5, /requires a newer Core/], ['a schema_version 3 workspace', 3, /pnpm migrate-workspace/], ['a schema_version 2 workspace with Screen lanes', 2, /pnpm migrate-workspace/], ['no workspace', 0, /pnpm bootstrap-workspace/]])('fails fast at startup on %s', async (_label, version, message) => {
+it.each([['a newer schema_version', 5, /requires a newer Core/], ['a schema_version 3 workspace', 3, /pnpm migrate-workspace/], ['a schema_version 3 workspace with a source notebook', -3, /notebook\(s\) b use source.*Run `pnpm convert-sources`/], ['a schema_version 2 workspace with Screen lanes', 2, /pnpm migrate-workspace/], ['no workspace', 0, /pnpm bootstrap-workspace/]])('fails fast at startup on %s', async (_label, version, message) => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-startup-'));
-  if (version) writeWorkspace(root, version);
+  if (version > 0) writeWorkspace(root, version);
+  // A negative version writes that schema with a notebook of another repository named by `source`.
+  if (version < 0) fs.writeFileSync(path.join(root, '.mygitnotes.yaml'), `schema_version: ${-version}\nworkspace:\n  title: Startup\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/b }\n`);
   const env: NodeJS.ProcessEnv = { ...process.env, PORT: '0', HOST: '127.0.0.1', APP_URL: '', VERCEL: '', MYGITNOTES_DEV_PORTS_FILE: path.join(root, '.mygitnotes-dev-ports.json') };
   for (const key of ['REPO_ROOT', 'MYGITNOTES_LOCAL_PATH', 'GITHUB_NOTES_LOCAL_PATH', 'MYGITNOTES_SOURCE', 'GITHUB_NOTES_SOURCE']) delete env[key];
   // An explicit path keeps a local .env from filling in a real workspace; the empty directory holds none.
