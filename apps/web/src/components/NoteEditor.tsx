@@ -72,7 +72,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   }, [frame, setHasOpenNote]);
 
   const [editorMode, setEditorMode] = useState<MarkdownEditorMode>('live');
-  const [showLineNumbers, setShowLineNumbers] = useState(() => readShowLineNumbers());
+  const [showLineNumbers, setShowLineNumbers] = useState(() => readShowLineNumbers(note.notebookId));
   const toggleLineNumbers = () =>
     setShowLineNumbers(value => {
       const next = !value;

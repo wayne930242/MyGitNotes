@@ -5,12 +5,31 @@ import { type ComponentPropsWithoutRef, type ReactNode, useEffect, useRef, useSt
 type Props = Omit<ComponentPropsWithoutRef<typeof RadixSelect.Trigger>, 'value' | 'onChange' | 'children'> & {
   value: string;
   onValueChange: (value: string) => void;
-  options: { value: string; label: string; disabled?: boolean; }[];
+  options: SelectOption[];
+  /** Lists the options under headings, each group naming its options' values in order; an option in no group is not listed. */
+  groups?: { label: string; values: string[]; }[];
   /** Shown in the trigger in place of the selected label. */
   icon?: ReactNode;
 };
 
-export function Select({ value, onValueChange, options, icon, disabled, className = '', onFocus, ...props }: Props) {
+interface SelectOption {
+  value: string;
+  label: string;
+  disabled?: boolean;
+}
+
+function SelectItem({ option }: { option: SelectOption; }) {
+  return (
+    <RadixSelect.Item className='select-option' value={`option:${option.value}`} data-option-value={option.value} disabled={option.disabled}>
+      <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
+      <RadixSelect.ItemIndicator className='select-check'>
+        <Check className='w-4 h-4' />
+      </RadixSelect.ItemIndicator>
+    </RadixSelect.Item>
+  );
+}
+
+export function Select({ value, onValueChange, options, groups, icon, disabled, className = '', onFocus, ...props }: Props) {
   const trigger = useRef<HTMLButtonElement>(null);
   const [portal, setPortal] = useState<HTMLElement>();
   const [contentReady, setContentReady] = useState(false);
@@ -54,14 +73,14 @@ export function Select({ value, onValueChange, options, icon, disabled, classNam
               <ChevronUp className='w-4 h-4' />
             </RadixSelect.ScrollUpButton>
             <RadixSelect.Viewport className='select-viewport'>
-              {options.map(option => (
-                <RadixSelect.Item className='select-option' key={option.value} value={`option:${option.value}`} data-option-value={option.value} disabled={option.disabled}>
-                  <RadixSelect.ItemText>{option.label}</RadixSelect.ItemText>
-                  <RadixSelect.ItemIndicator className='select-check'>
-                    <Check className='w-4 h-4' />
-                  </RadixSelect.ItemIndicator>
-                </RadixSelect.Item>
-              ))}
+              {groups
+                ? groups.map(group => (
+                  <RadixSelect.Group key={group.label} className='select-group'>
+                    <RadixSelect.Label className='select-group-label'>{group.label}</RadixSelect.Label>
+                    {group.values.flatMap(value => options.filter(option => option.value === value)).map(option => <SelectItem key={option.value} option={option} />)}
+                  </RadixSelect.Group>
+                ))
+                : options.map(option => <SelectItem key={option.value} option={option} />)}
             </RadixSelect.Viewport>
             <RadixSelect.ScrollDownButton className='select-scroll'>
               <ChevronDown className='w-4 h-4' />

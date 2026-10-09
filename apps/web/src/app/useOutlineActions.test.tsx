@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useOutlineActions } from './useOutlineActions.js';
 import type { NoteItem } from '../lib/types.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
 const read = vi.hoisted(() => vi.fn());
 vi.mock('../lib/api.js', () => ({ readNote: read }));
 vi.mock('../lib/i18n/index.js', () => {
@@ -11,7 +12,7 @@ vi.mock('../lib/i18n/index.js', () => {
 });
 const source: NoteItem = { notebookId: 'a', path: 'notes/shared/source.md', title: 'Source', id: 's', content: 'dirty source', tags: [], metadata: {} };
 const destination = { ...source, path: 'notes/shared/plan.outline.md', title: 'Plan', content: '- Saved' };
-const repository = { id: 'github:a/repo@main', alias: 'repo', type: 'github' as const, branch: 'main', revision: 'head', write: true, notebooks: ['a'] };
+const repository = { id: 'github:a/repo@main', alias: 'repo', type: 'github' as const, branch: 'main', revision: 'head', write: true, notebooks: ['a'], title: 'repo', defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: '' };
 type Params = Parameters<typeof useOutlineActions>[0];
 function params(overrides: Partial<Params> = {}): Params {
   return { config: { schema_version: 3, workspace: { title: 'QA', default_notebook: 'a' }, notebooks: [{ id: 'a', root: 'notes/shared', title: 'A' }, { id: 'b', root: 'notes/shared', title: 'B' }] }, repositoryFor: id => id === 'a' ? repository : { ...repository, id: 'github:b/repo@main', notebooks: ['b'] }, readDraft: () => undefined, remote: false, sourceId: repository.id, selectedNotebookId: 'a', locationKey: 'source', routedRef: source, prepareLeave: vi.fn(async () => true), openNote: vi.fn(async () => {}), openNewNote: vi.fn(), onError: vi.fn(), ...overrides };

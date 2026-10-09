@@ -10,6 +10,8 @@ interface HeaderProps {
   /** Notebooks whose repository cannot serve them; the switcher marks them. */
   unavailableNotebooks?: string[];
   workspaceTitle: string;
+  /** With several repositories, the switcher lists notebooks under each repository's title. */
+  notebookGroups?: { label: string; notebooks: string[]; }[];
   accountControls?: React.ReactNode;
   activeTab: WorkspaceTab;
   setActiveTab: (tab: WorkspaceTab) => void;
@@ -23,7 +25,7 @@ interface HeaderProps {
   navigationDisabled?: boolean;
 }
 
-export function Header({ workspaceTitle, unavailableNotebooks = [], accountControls, activeTab, setActiveTab, notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
+export function Header({ workspaceTitle, notebookGroups, unavailableNotebooks = [], accountControls, activeTab, setActiveTab, notebooks, selectedNotebookId, onSelectNotebook, notebookDisabled, onCreateNote, createNoteDisabled, onOpenCommands, navigationDisabled = false }: HeaderProps) {
   const { t } = useTranslation();
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · MyGitNotes`;
@@ -69,7 +71,7 @@ export function Header({ workspaceTitle, unavailableNotebooks = [], accountContr
             {notebooks.length > 0 && (
               <>
                 <BookOpen aria-hidden='true' />
-                <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId} title={notebooks.find(nb => nb.id === selectedNotebookId)?.title} disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook} options={notebooks.map(nb => ({ value: nb.id, label: unavailableNotebooks.includes(nb.id) ? `${nb.title} · ${t('notebook.unavailable')}` : nb.title }))} />
+                <Select aria-label={t('sidebar.notebooks')} value={selectedNotebookId} title={notebooks.find(nb => nb.id === selectedNotebookId)?.title} disabled={notebookDisabled || navigationDisabled} onValueChange={onSelectNotebook} groups={notebookGroups?.map(group => ({ label: group.label, values: group.notebooks }))} options={notebooks.map(nb => ({ value: nb.id, label: unavailableNotebooks.includes(nb.id) ? `${nb.title} · ${t('notebook.unavailable')}` : nb.title }))} />
               </>
             )}
           </div>

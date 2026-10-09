@@ -7,9 +7,10 @@ import { draftStore, repositoryOf, type WorkspaceRepository } from '../lib/works
 import type { FileChange, NoteItem } from '../lib/types.js';
 import { documentDraftKey } from '../lib/use-workspace-document.js';
 import { focusDocumentClient } from '../lib/use-focus-page.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
 
-const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', repository: 'me/notes', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'] };
-const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', repository: 'me/campaign', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'] };
+const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', repository: 'me/notes', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'], title: 'notes', defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: '' };
+const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', repository: 'me/campaign', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'], title: 'campaign', defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: '' };
 const repositories = [home, other];
 const note = (path: string, notebookId: string, content: string, revision: string): NoteItem => ({ id: path, path, notebookId, title: path, content, metadata: {}, tags: [], revision });
 const base = note('notes/life/a.md', 'notes~life', '# A', home.revision);

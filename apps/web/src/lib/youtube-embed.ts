@@ -1,11 +1,11 @@
 import type { YouTubeDisplayMode } from '@mygitnotes/core';
+import { notebookPreferences } from './notebook-preferences.js';
 
 export const YOUTUBE_MODE_STORAGE_KEY = 'github-notes:youtube-display-mode';
 export const YOUTUBE_MODE_EVENT = 'github-notes:youtube-display-mode-change';
 let youtubeSessionSequence = 0;
+/** This device's choice for the session, kept in memory too in case storage is unavailable. */
 let rememberedYouTubeMode: YouTubeDisplayMode | null = null;
-/** Workspace-configured default, applied when this device has not made its own choice yet. */
-let configuredDefaultMode: YouTubeDisplayMode = 'thumbnail';
 let activePlayer: { key: string; host: HTMLDivElement; route: string; frame: number; target: HTMLElement; surface: HTMLElement; } | null = null;
 
 export function stopYouTubePlayback() {
@@ -13,16 +13,6 @@ export function stopYouTubePlayback() {
   cancelAnimationFrame(activePlayer.frame);
   activePlayer.host.remove();
   activePlayer = null;
-}
-
-export function setDefaultYouTubeDisplayMode(mode: YouTubeDisplayMode) {
-  configuredDefaultMode = mode;
-  // A mode remembered before this arrived was derived from the previous default, and the session
-  // cache would otherwise keep serving it. A stored per-device choice still wins, so drop the
-  // cache only when this device has none.
-  try {
-    if (globalThis.localStorage.getItem(YOUTUBE_MODE_STORAGE_KEY) === null) rememberedYouTubeMode = null;
-  } catch { /* Storage unreachable: leave the cache alone rather than discard a session choice. */ }
 }
 
 export type { YouTubeDisplayMode };
@@ -38,15 +28,20 @@ export function isYouTubeDisplayMode(value: unknown): value is YouTubeDisplayMod
   return value === 'thumbnail' || value === 'medium' || value === 'theater';
 }
 
-export function readYouTubeDisplayMode(storage?: Pick<Storage, 'getItem'>): YouTubeDisplayMode {
+/**
+ * This device's chosen mode once it has chosen one; until then the preference of the repository serving `notebookId`.
+ * Only a choice is remembered, so each note keeps taking its own repository's default until the device picks a mode.
+ */
+export function readYouTubeDisplayMode(notebookId?: string, storage?: Pick<Storage, 'getItem'>): YouTubeDisplayMode {
   if (!storage && rememberedYouTubeMode) return rememberedYouTubeMode;
+  const fallback = notebookPreferences(notebookId).defaultYoutubeDisplayMode;
   try {
     const value = (storage ?? globalThis.localStorage).getItem(YOUTUBE_MODE_STORAGE_KEY);
-    const mode = value === 'music' ? 'thumbnail' : isYouTubeDisplayMode(value) ? value : configuredDefaultMode;
-    if (!storage) rememberedYouTubeMode = mode;
-    return mode;
+    const chosen = value === 'music' ? 'thumbnail' : isYouTubeDisplayMode(value) ? value : null;
+    if (chosen && !storage) rememberedYouTubeMode = chosen;
+    return chosen ?? fallback;
   } catch {
-    return rememberedYouTubeMode ?? configuredDefaultMode;
+    return rememberedYouTubeMode ?? fallback;
   }
 }
 
@@ -134,7 +129,8 @@ function bindYouTubeToolbar(toolbar: HTMLElement) {
   });
 }
 
-export function populateYouTubeEmbed(embed: HTMLElement, labels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS) {
+/** `notebookId` names the notebook of the note showing the embed, whose repository's preference applies until this device chooses. */
+export function populateYouTubeEmbed(embed: HTMLElement, labels: YouTubeLabels = DEFAULT_YOUTUBE_LABELS, notebookId?: string) {
   embed.dataset.youtubeSession ||= `youtube-${++youtubeSessionSequence}`;
   const videoId = embed.dataset.videoId || '';
   embed.innerHTML = youtubeEmbedMarkup(videoId, labels);
@@ -143,7 +139,7 @@ export function populateYouTubeEmbed(embed: HTMLElement, labels: YouTubeLabels =
 
   const poster = embed.querySelector<HTMLButtonElement>('.note-youtube-poster')!;
   const image = poster.querySelector<HTMLImageElement>('img')!;
-  applyYouTubeDisplayMode(embed, readYouTubeDisplayMode());
+  applyYouTubeDisplayMode(embed, readYouTubeDisplayMode(notebookId));
   return { poster, image };
 }
 

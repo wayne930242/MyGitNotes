@@ -59,10 +59,6 @@ export const WorkspaceManifestEditor: React.FC<WorkspaceManifestEditorProps> = (
               <span className='font-semibold text-fg'>{t('settings.manifestDefaultNotebook')}</span>
               <select disabled={readOnly} value={parsed.workspace.default_notebook} onChange={e => updateConfig(config => ({ ...config, workspace: { ...config.workspace, default_notebook: e.target.value } }))} className='w-full p-2 text-xs bg-surface border border-line rounded-lg focus:outline-none focus:ring-2 focus:ring-primary'>{parsed.notebooks.map(nb => <option key={nb.id} value={nb.id}>{nb.title}</option>)}</select>
             </label>
-            <label className='flex items-center gap-2 text-xs'>
-              <input type='checkbox' disabled={readOnly} checked={parsed.files?.hide_dotfiles ?? true} onChange={e => updateConfig(config => ({ ...config, files: { ...config.files, hide_dotfiles: e.target.checked } }))} />
-              <span className='font-semibold text-fg'>{t('settings.manifestHideDotfiles')}</span>
-            </label>
           </div>
           <div className='flex flex-col gap-2'>
             <h4 className='text-xs font-semibold text-fg uppercase tracking-wider'>{t('settings.manifestPreferences')}</h4>

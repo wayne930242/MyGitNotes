@@ -1,6 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getNoteViewPreferences, LINE_NUMBERS_STORAGE_KEY, NOTE_VIEW_STORAGE_KEY, noteViewStyle, readNoteViewPreferences, readShowLineNumbers, setDefaultShowLineNumbers, subscribeNoteViewPreferences, writeNoteViewPreferences, writeShowLineNumbers } from './editor-preferences.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
+import { getNoteViewPreferences, LINE_NUMBERS_STORAGE_KEY, NOTE_VIEW_STORAGE_KEY, noteViewStyle, readNoteViewPreferences, readShowLineNumbers, subscribeNoteViewPreferences, writeNoteViewPreferences, writeShowLineNumbers } from './editor-preferences.js';
+import { setNotebookPreferences } from './notebook-preferences.js';
+
+/** Every notebook's repository sets `defaultShowLineNumbers` to `value`. */
+const setDefaultShowLineNumbers = (value: boolean) => setNotebookPreferences(() => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultShowLineNumbers: value }));
 
 beforeEach(() => localStorage.clear());
 afterEach(() => {
@@ -37,7 +42,15 @@ describe('Show-line-numbers preference', () => {
       },
     };
     setDefaultShowLineNumbers(true);
-    expect(readShowLineNumbers(storage)).toBe(true);
+    expect(readShowLineNumbers(undefined, storage)).toBe(true);
+  });
+
+  it("takes each note's own repository default until this device chooses", () => {
+    setNotebookPreferences(notebookId => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultShowLineNumbers: notebookId === 'code~src' }));
+    expect(readShowLineNumbers('notes~life')).toBe(false);
+    expect(readShowLineNumbers('code~src')).toBe(true);
+    writeShowLineNumbers(false);
+    expect(readShowLineNumbers('code~src')).toBe(false);
   });
 });
 

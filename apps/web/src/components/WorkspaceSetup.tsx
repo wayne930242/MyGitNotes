@@ -297,7 +297,7 @@ export function WorkspaceGate({ children }: { children: ReactNode; }) {
 }
 
 /** Offers to commit the manifest derived for a repository that has none, so its layout is kept and editable in Settings; `config` names notebooks by local id, as the file keeps them. */
-export function DerivedManifestNotice({ config, configRevision, canWrite, onCreated }: { config: WorkspaceConfig; configRevision: string; canWrite: boolean; onCreated: () => Promise<void>; }) {
+export function DerivedManifestNotice({ repository, config, configRevision, canWrite, onCreated }: { repository: string; config: WorkspaceConfig; configRevision: string; canWrite: boolean; onCreated: () => Promise<void>; }) {
   const { t } = useTranslation();
   const [dismissed, setDismissed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -307,7 +307,7 @@ export function DerivedManifestNotice({ config, configRevision, canWrite, onCrea
     setBusy(true);
     setError('');
     try {
-      await updateWorkspaceConfig(YAML.stringify(config), configRevision);
+      await updateWorkspaceConfig(repository, YAML.stringify(config), configRevision);
       await onCreated();
     } catch (reason) {
       setError((reason as Error).message);

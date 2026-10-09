@@ -25,11 +25,11 @@ beforeEach(() => {
 
 const notebooks: NotebookConfig[] = [{ id: 'nb', title: 'Notes', root: 'notes' }, { id: 'blog', title: 'Blog', root: 'blog/posts' }];
 const home = 'local:home';
-const repositories = [{ id: home, notebooks: ['nb', 'blog'] }];
+const repositories = [{ id: home, notebooks: ['nb', 'blog'], title: 'Knowledge Base' }];
 const workspaces = [{ repository: home, folder: '', hasInstructions: true, parents: [] }, { repository: home, folder: 'blog', hasInstructions: true, parents: [''] }];
 
 function agent(overrides: Partial<PiAgentValue> = {}): PiAgentValue {
-  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaceTitle: 'Knowledge Base', workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', starting: false, start: vi.fn(async () => {}), wake: vi.fn(), send: vi.fn(() => true), held: null, commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
+  return { available: true, session: { id: 's1', cwd: '/home/me/workspace', location: { repository: home, folder: '' }, trusted: true, status: 'ready', startedAt: '' }, target: null, notebooks, repositories, homeRepository: home, workspaces, loadWorkspaces: vi.fn(async () => {}), connected: true, transcript: emptyTranscript, modelState: { models: [], levels: [] }, checkModels: vi.fn(), setModel: vi.fn(), setThinking: vi.fn(), error: '', starting: false, start: vi.fn(async () => {}), wake: vi.fn(), send: vi.fn(() => true), held: null, commands: [], loadCommands: vi.fn(), editorText: null, takeEditorText: vi.fn(), abort: vi.fn(async () => ''), answer: vi.fn(), newConversation: vi.fn(), end: vi.fn(async () => {}), switchWorkspace: vi.fn(async () => {}), locate: vi.fn(async (path: string) => `/home/me/workspace/${path}`), ...overrides };
 }
 
 function noteTarget(caret = createCaretStore()): AgentTarget {

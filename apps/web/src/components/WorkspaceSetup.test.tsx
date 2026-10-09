@@ -96,10 +96,10 @@ it('commits the derived manifest and reloads the workspace', async () => {
   const { updateWorkspaceConfig } = await import('../lib/api.js');
   const onCreated = vi.fn(async () => {});
   const config: WorkspaceConfig = { schema_version: 3, workspace: { title: 'notes', default_notebook: 'journal' }, notebooks: [{ id: 'journal', title: 'journal', root: 'journal' }] };
-  await render(createElement(DerivedManifestNotice, { config, configRevision: 'abc', canWrite: true, onCreated }));
+  await render(createElement(DerivedManifestNotice, { repository: 'github:visitor/notes@main', config, configRevision: 'abc', canWrite: true, onCreated }));
   await act(async () => button('Create manifest').click());
   await settle();
-  expect(updateWorkspaceConfig).toHaveBeenCalledWith(expect.stringContaining('default_notebook: journal'), 'abc');
+  expect(updateWorkspaceConfig).toHaveBeenCalledWith('github:visitor/notes@main', expect.stringContaining('default_notebook: journal'), 'abc');
   expect(onCreated).toHaveBeenCalled();
 });
 

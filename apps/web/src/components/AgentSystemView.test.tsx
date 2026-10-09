@@ -18,7 +18,7 @@ vi.mock('./WorkspaceChrome.js', () => ({ useWorkspaceSidebarDrawer: () => ({ ope
 vi.mock('./EditorFooter.js', () => ({ EditorFooter: ({ content }: { content: string; }) => <div data-testid='footer-content-length'>{content.length}</div> }));
 
 const home = 'local:home';
-const repositories = [{ id: home, branch: 'main', write: true, notebooks: ['blog'] }];
+const repositories = [{ id: home, branch: 'main', write: true, notebooks: ['blog'], title: 'Knowledge Base' }];
 const notebooks = [{ id: 'blog', title: 'Blog', root: 'blog/posts' }] as never[];
 const status = (untracked: string[] = []) => ({ branch: 'main', isClean: untracked.length === 0, modified: [], staged: [], untracked, ahead: 0, behind: 0 });
 const file = (path: string, folder: string, kind: AgentFile['kind'], skill?: string): AgentFile => ({ path, folder, kind, ...(skill ? { skill } : {}), editable: true });
@@ -38,7 +38,7 @@ function view({ sections = [], writable = true }: { sections?: RenderAgentWorksp
   return render(
     <WebFeaturesProvider features={[{ id: 'edition', agentWorkspaceSections: sections }]}>
       <I18nProvider>
-        <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories.map(repository => ({ ...repository, write: writable }))} homeRepository={home} workspaceTitle='Knowledge Base' onBusyChange={() => {}} />
+        <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories.map(repository => ({ ...repository, write: writable }))} homeRepository={home} onBusyChange={() => {}} />
       </I18nProvider>
     </WebFeaturesProvider>,
   );

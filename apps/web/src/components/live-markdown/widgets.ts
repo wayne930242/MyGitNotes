@@ -307,11 +307,11 @@ export class BulletMarker extends WidgetType {
   }
 }
 export class YouTubeWidget extends WidgetType {
-  constructor(readonly owner: string, readonly videoId: string, readonly start: number, readonly sourceUrl: string, readonly from: number, readonly labels: YouTubeLabels) {
+  constructor(readonly owner: string, readonly videoId: string, readonly start: number, readonly sourceUrl: string, readonly from: number, readonly labels: YouTubeLabels, readonly notebookId?: string) {
     super();
   }
   eq(other: YouTubeWidget) {
-    return this.owner === other.owner && this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels;
+    return this.owner === other.owner && this.videoId === other.videoId && this.start === other.start && this.sourceUrl === other.sourceUrl && this.from === other.from && this.labels === other.labels && this.notebookId === other.notebookId;
   }
   toDOM(view: EditorView) {
     // CodeMirror measures a block widget's own box, which excludes its margins, so the spacing
@@ -326,7 +326,7 @@ export class YouTubeWidget extends WidgetType {
     container.dataset.youtubeSourceUrl = this.sourceUrl;
     container.dataset.youtubeSession = `${this.owner}:${this.videoId}:${this.start}:${this.from}`;
 
-    const { poster: button, image: img } = populateYouTubeEmbed(container, this.labels);
+    const { poster: button, image: img } = populateYouTubeEmbed(container, this.labels, this.notebookId);
     img.addEventListener('load', () => view.requestMeasure());
 
     button.addEventListener('mousedown', event => {

@@ -1,20 +1,16 @@
 import { type CSSProperties, useSyncExternalStore } from 'react';
+import { notebookPreferences } from './notebook-preferences.js';
 
 export const LINE_NUMBERS_STORAGE_KEY = 'github-notes:show-line-numbers';
 
-/** Workspace-configured default, applied when this device has not made its own choice yet. */
-let configuredDefaultShowLineNumbers = false;
-
-export function setDefaultShowLineNumbers(value: boolean) {
-  configuredDefaultShowLineNumbers = value;
-}
-
-export function readShowLineNumbers(storage?: Pick<Storage, 'getItem'>): boolean {
+/** This device's choice once it has made one; until then the preference of the repository serving `notebookId`. */
+export function readShowLineNumbers(notebookId?: string, storage?: Pick<Storage, 'getItem'>): boolean {
+  const fallback = notebookPreferences(notebookId).defaultShowLineNumbers;
   try {
     const value = (storage ?? globalThis.localStorage).getItem(LINE_NUMBERS_STORAGE_KEY);
-    return value === null ? configuredDefaultShowLineNumbers : value === 'true';
+    return value === null ? fallback : value === 'true';
   } catch {
-    return configuredDefaultShowLineNumbers;
+    return fallback;
   }
 }
 

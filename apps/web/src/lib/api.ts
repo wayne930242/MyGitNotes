@@ -1,6 +1,6 @@
 import type { NewVersionRequest } from './history-api.js';
 import type { AgentFile, AgentWorkspace } from './agent-workspaces.js';
-import { AssetItem, FolderItem, GitCommit, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
+import { AssetItem, FolderItem, GitCommit, GitStatus, NoteItem } from './types.js';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { WorkspaceAnswer } from './workspace-repositories.js';
 
@@ -62,8 +62,9 @@ export async function fetchWorkspace(fresh = false): Promise<WorkspaceAnswer> {
 /** A local workspace's stream of `change` events, sent when files change in any of its worktrees. */
 export const openWorkspaceEvents = () => new EventSource(`${API_BASE}/workspace/events`);
 
-export async function updateWorkspaceConfig(configYaml: string, configRevision: string): Promise<{ success: boolean; config: WorkspaceConfig; configRevision: string; }> {
-  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ configYaml, configRevision }) });
+/** Commits one repository's manifest, refused with 409 when `configRevision` is no longer that manifest's revision. */
+export async function updateWorkspaceConfig(repository: string, configYaml: string, configRevision: string): Promise<{ success: boolean; configRevision: string; }> {
+  const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, configYaml, configRevision }) });
   if (!res.ok) {
     const err = await res.json();
     throw new Error(err.error || 'Failed to update workspace configuration');

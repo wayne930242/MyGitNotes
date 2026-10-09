@@ -93,7 +93,7 @@ function SwitchWorkspace({ onDone }: { onDone: () => void; }) {
 /** How a workspace reads in the panel: the workspace title for the home root, the repository for another root, else the folder's name. */
 function useWorkspaceName() {
   const agent = usePiAgent();
-  return (workspace: PiLocation) => workspaceName(workspace, { home: agent.homeRepository, title: agent.workspaceTitle, repositories: agent.repositories });
+  return (workspace: PiLocation) => workspaceName(workspace, agent.repositories);
 }
 
 /**

@@ -14,8 +14,8 @@ import { isNotebookKey, resolveBareId } from './notebook-keys.js';
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
-import { setDefaultShowLineNumbers } from './editor-preferences.js';
-import { setDefaultYouTubeDisplayMode } from './youtube-embed.js';
+import { setNotebookPreferences } from './notebook-preferences.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
 import { listLocalDrafts } from './storage.js';
 import { draftScope, draftStore, notebookRepositories, repositoryOf, type WorkspaceRepository } from './workspace-repositories.js';
 import { noteRefKey } from '@mygitnotes/core/note-query';
@@ -39,24 +39,15 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const loadedWorkspace = useRef('');
   const refreshRequest = useRef(0);
   const [repositories, setRepositories] = useState<WorkspaceRepository[]>([]);
-  const [configRevision, setConfigRevision] = useState('');
   const [loadError, setLoadError] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionError, setActionError] = useState('');
 
   const [repoRoot, setRepoRoot] = useState<string>('');
-  /** The home repository keeps no manifest yet; its configuration was derived from its folders. */
-  const [manifestDerived, setManifestDerived] = useState(false);
   /** The deployment lets each visitor choose their repository. */
   const [repositoryChoice, setRepositoryChoice] = useState(false);
   /** The workspace configuration as routes and the app name it: every notebook by its key. */
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
-  /** The manifest as the repository keeps it, every notebook by its local id: what Settings edits and "create manifest" commits. */
-  const [manifestConfig, setManifestConfig] = useState<WorkspaceConfig | null>(null);
-  // Children read these defaults while they render — a `useState` initializer runs before any
-  // effect — so applying them in an effect would hand the first mount the previous default.
-  setDefaultYouTubeDisplayMode(config?.preferences?.defaultYoutubeDisplayMode ?? 'thumbnail');
-  setDefaultShowLineNumbers(config?.preferences?.defaultShowLineNumbers ?? false);
   useEffect(() => {
     setWorkspaceNotebooks(config?.notebooks || []);
   }, [config]);
@@ -74,9 +65,15 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const homeRepository = repositories.find(repository => repository.id === sourceId);
   const homeBranch = homeRepository?.branch ?? '';
   const repositoryFor = (notebookId: string) => repositoryOf(repositories, notebookId);
+  // Each note takes the preferences of its own repository; without a notebook, the default repository's, and with
+  // none, the built-in ones. Children read them while they render — a `useState` initializer runs before any
+  // effect — so setting them in an effect would hand the first mount the previous preferences.
+  setNotebookPreferences(notebookId => (notebookId ? repositoryFor(notebookId)?.preferences : undefined) ?? homeRepository?.preferences ?? DEFAULT_WORKSPACE_PREFERENCES);
   const canWriteNotebook = (notebookId: string) => Boolean(repositoryFor(notebookId)?.write);
   const revisionFor = (notebookId: string) => repositoryFor(notebookId)?.revision ?? '';
   const setRepositoryRevision = (id: RepositoryId, revision: string) => setRepositories(previous => previous.map(repository => repository.id === id ? { ...repository, revision } : repository));
+  /** Keeps the revision a manifest save answered, since a refetch may still answer from the snapshot before it. */
+  const setManifestRevision = (id: RepositoryId, configRevision: string) => setRepositories(previous => previous.map(repository => repository.id === id ? { ...repository, configRevision } : repository));
   const setNotebookRevision = (notebookId: string, revision: string) => {
     const repository = repositoryFor(notebookId);
     if (repository) setRepositoryRevision(repository.id, revision);
@@ -172,13 +169,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setSourceId(ws.home);
       setRemote(!ws.local);
       setRepositories((previous) => (sameValue(previous, ws.repositories) ? previous : ws.repositories));
-      setConfigRevision(ws.configRevision);
       setLoadError('');
       setRepoRoot(ws.repoRoot ?? '');
-      setManifestDerived(ws.manifest === 'derived');
       setRepositoryChoice(ws.repositoryChoice === true);
       setConfig((previous) => (sameValue(previous, ws.keyedConfig) ? previous : ws.keyedConfig));
-      setManifestConfig((previous) => (sameValue(previous, ws.config) ? previous : ws.config));
       setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftStore(repository))])));
       setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
       setLoading(false);
@@ -194,7 +188,6 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setFoldersLoading(false);
       setAssets([]);
       setConfig(null);
-      setManifestConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
     } finally {
       if (request === refreshRequest.current) setLoading(false);
@@ -243,5 +236,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, manifestConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

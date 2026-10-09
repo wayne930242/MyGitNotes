@@ -121,7 +121,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
         const video = parseYouTubeUrl(url);
         if (video) {
           if (!editing) {
-            marks.push(Decoration.replace({ widget: new YouTubeWidget(youtubeOwner, video.videoId, video.start, url, from, { play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'), thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'), copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed') }), block: true }).range(from, to));
+            marks.push(Decoration.replace({ widget: new YouTubeWidget(youtubeOwner, video.videoId, video.start, url, from, { play: t('youtube.play'), player: t('youtube.player'), modes: t('youtube.modes'), thumbnail: t('youtube.thumbnail'), medium: t('youtube.medium'), theater: t('youtube.theater'), copy: t('youtube.copy'), copied: t('youtube.copied'), copyFailed: t('youtube.copyFailed') }, notebookId), block: true }).range(from, to));
             return false;
           }
         }

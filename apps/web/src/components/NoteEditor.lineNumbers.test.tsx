@@ -6,7 +6,12 @@ import '@testing-library/jest-dom/vitest';
 import { PanelProvider } from '../lib/panel-context.js';
 import { NoteEditor, type NoteEditorProps } from './NoteEditor.js';
 import type { MarkdownEditorHandle, MarkdownEditorMode } from './MarkdownEditor.js';
-import { LINE_NUMBERS_STORAGE_KEY, setDefaultShowLineNumbers } from '../lib/editor-preferences.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
+import { LINE_NUMBERS_STORAGE_KEY } from '../lib/editor-preferences.js';
+import { setNotebookPreferences } from '../lib/notebook-preferences.js';
+
+/** Every notebook's repository sets `defaultShowLineNumbers` to `value`. */
+const setDefaultShowLineNumbers = (value: boolean) => setNotebookPreferences(() => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultShowLineNumbers: value }));
 
 vi.mock('./MarkdownEditor.js', () => ({
   MarkdownEditorModeSwitch: ({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void; }) => createElement('button', { type: 'button', onClick: () => onChange(mode === 'live' ? 'raw' : 'live') }, `Switch to ${mode === 'live' ? 'Source' : 'Live'}`),
@@ -70,4 +75,14 @@ it('persists a toggle across a remount', () => {
   render(editor({ frame: 'compact' }));
   expect(screen.getByLabelText('Note content')).toHaveAttribute('data-line-numbers', 'true');
   expect(localStorage.getItem(LINE_NUMBERS_STORAGE_KEY)).toBe('true');
+});
+
+it("opens each of two editors with its own note's repository default", () => {
+  // Two repositories whose manifests disagree on `defaultShowLineNumbers`, each with a note open at once.
+  setNotebookPreferences(notebookId => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultShowLineNumbers: notebookId === 'code~src' }));
+  const code = { ...note, id: 'b', path: 'src/b.md', notebookId: 'code~src' };
+  render(createElement('div', null, editor({ frame: 'pane' }), editor({ frame: 'pane', note: code })));
+  const [notes, source] = screen.getAllByLabelText('Note content');
+  expect(notes).toHaveAttribute('data-line-numbers', 'false');
+  expect(source).toHaveAttribute('data-line-numbers', 'true');
 });

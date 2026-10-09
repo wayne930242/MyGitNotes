@@ -14,6 +14,16 @@ export const draftStore = (repository: Pick<RepositoryStatus, 'id' | 'branch' | 
 
 export const repositoryOf = <R extends Pick<RepositoryStatus, 'notebooks'>>(repositories: R[], notebookId: string): R | undefined => repositories.find(repository => repository.notebooks.includes(notebookId));
 
+/**
+ * The repository a page belongs to, whose title the header shows and whose preferences apply without a note: the
+ * repository of the notebook it shows (decision C6), or the default repository on pages that show no single notebook,
+ * Settings, Agents and all-notebooks (decision C10). Undefined only when the workspace has no default repository.
+ */
+export function pageRepository<R extends Pick<RepositoryStatus, 'id' | 'notebooks'>>(repositories: R[], defaultRepository: string, page: { tab: string; allNotebooks: boolean; notebookId: string; }): R | undefined {
+  const shown = page.tab === 'settings' || page.tab === 'agent' || page.allNotebooks ? undefined : repositoryOf(repositories, page.notebookId);
+  return shown ?? repositories.find(repository => repository.id === defaultRepository);
+}
+
 /** The revisions the workspace's repositories hold; a worktree has none. */
 export const revisionSet = (repositories: Pick<RepositoryStatus, 'id' | 'revision'>[]): RevisionSet => Object.fromEntries(repositories.filter(repository => repository.revision).map(repository => [repository.id, repository.revision]));
 

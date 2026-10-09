@@ -1,9 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { applyTagEntries, PartialTagChangeError } from './tag-changes.js';
 import type { WorkspaceRepository } from './workspace-repositories.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
 
-const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'] };
-const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'] };
+const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'], title: 'notes', defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: '' };
+const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'], title: 'campaign', defaultNotebook: null, preferences: DEFAULT_WORKSPACE_PREFERENCES, config: null, configRevision: '' };
 const entries = [{ path: 'notes/life/a.md', notebookId: 'notes~life', tags: ['x'] }, { path: 'trpg/b.md', notebookId: 'campaign~trpg', tags: ['x'] }];
 
 afterEach(() => vi.unstubAllGlobals());

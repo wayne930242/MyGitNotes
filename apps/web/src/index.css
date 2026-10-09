@@ -172,6 +172,8 @@ input, textarea, [contenteditable='true'] { caret-color: var(--color-text); }
 .select-option { position: relative; display: flex; align-items: center; min-height: 32px; padding: 6px 32px 6px 10px; font-size: 12px; line-height: 18px; white-space: normal; overflow-wrap: anywhere; outline: none; cursor: pointer; border-radius: var(--radius-sm); }
 .select-option[data-highlighted] { background: var(--color-primary-light); }
 .select-option[data-disabled] { opacity: 0.45; cursor: default; }
+.select-group + .select-group { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--color-border); }
+.select-group-label { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; line-height: 16px; color: var(--color-muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .select-check { position: absolute; right: 8px; }
 .select-scroll { display: flex; align-items: center; justify-content: center; height: 28px; }
 .editor-notices { flex: 0 1 auto; min-height: 0; max-height: 35%; overflow-y: auto; }

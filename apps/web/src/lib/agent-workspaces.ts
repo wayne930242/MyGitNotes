@@ -43,13 +43,13 @@ export function repositoryName(repository: Pick<RepositoryStatus, 'id' | 'reposi
 }
 
 /**
- * How a workspace reads in a list: the workspace title for the home repository's root, the repository's name for
- * another root, and the folder's own name otherwise.
+ * How a workspace reads in a list: a repository's root by that repository's title (its manifest's `workspace.title`,
+ * or its name without a manifest), and a folder by its own name.
  */
-export function workspaceName(workspace: Pick<AgentWorkspace, 'repository' | 'folder'>, context: { home: string; title: string; repositories: Pick<RepositoryStatus, 'id' | 'repository'>[]; }): string {
+export function workspaceName(workspace: Pick<AgentWorkspace, 'repository' | 'folder'>, repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'title'>[]): string {
   if (workspace.folder) return workspace.folder.split('/').pop()!;
-  if (workspace.repository === context.home) return context.title;
-  return repositoryName(context.repositories.find(repository => repository.id === workspace.repository), workspace.repository);
+  const repository = repositories.find(candidate => candidate.id === workspace.repository);
+  return repository?.title || repositoryName(repository, workspace.repository);
 }
 
 /** The skills of one workspace, by name, each with its files in path order. */

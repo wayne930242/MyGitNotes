@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { applyYouTubeDisplayMode, copyYouTubeUrl, readYouTubeDisplayMode, setDefaultYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
+import { setNotebookPreferences } from './notebook-preferences.js';
+import { applyYouTubeDisplayMode, copyYouTubeUrl, readYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY, type YouTubeDisplayMode } from './youtube-embed.js';
+
+/** Every notebook's repository sets `defaultYoutubeDisplayMode` to `mode`. */
+const setDefaultYouTubeDisplayMode = (mode: YouTubeDisplayMode) => setNotebookPreferences(() => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultYoutubeDisplayMode: mode }));
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -15,6 +20,15 @@ describe('YouTube display mode preference', () => {
     expect(readYouTubeDisplayMode()).toBe('theater');
   });
 
+  it("gives each note its own repository's default until this device chooses a mode", () => {
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => {} });
+    setNotebookPreferences(notebookId => ({ ...DEFAULT_WORKSPACE_PREFERENCES, defaultYoutubeDisplayMode: notebookId === 'films~watch' ? 'theater' : 'thumbnail' }));
+    // Reading one note's mode must not fix it for a note of another repository. This runs before any test chooses a mode.
+    expect(readYouTubeDisplayMode('films~watch')).toBe('theater');
+    expect(readYouTubeDisplayMode('notes~life')).toBe('thumbnail');
+    expect(readYouTubeDisplayMode('films~watch')).toBe('theater');
+  });
+
   it('defaults invalid storage to thumbnail and persists a selected mode', () => {
     const storage = { getItem: vi.fn(() => 'invalid'), setItem: vi.fn() };
     const embed = { dataset: {}, querySelectorAll: () => [] };
@@ -28,7 +42,7 @@ describe('YouTube display mode preference', () => {
       },
     );
 
-    expect(readYouTubeDisplayMode(storage)).toBe('thumbnail');
+    expect(readYouTubeDisplayMode(undefined, storage)).toBe('thumbnail');
     setYouTubeDisplayMode('theater', storage);
 
     expect(storage.setItem).toHaveBeenCalledWith(YOUTUBE_MODE_STORAGE_KEY, 'theater');
@@ -38,10 +52,10 @@ describe('YouTube display mode preference', () => {
 
   it('falls back to the workspace-configured default, not a hardcoded one, when nothing is stored', () => {
     const storage = { getItem: vi.fn(() => null) };
-    expect(readYouTubeDisplayMode(storage)).toBe('thumbnail');
+    expect(readYouTubeDisplayMode(undefined, storage)).toBe('thumbnail');
 
     setDefaultYouTubeDisplayMode('theater');
-    expect(readYouTubeDisplayMode(storage)).toBe('theater');
+    expect(readYouTubeDisplayMode(undefined, storage)).toBe('theater');
   });
 
   it('keeps the selected mode in memory when storage is unavailable', () => {

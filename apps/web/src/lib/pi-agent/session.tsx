@@ -138,10 +138,9 @@ export interface PiAgentValue {
   /** What the panel can name to Pi right now; null on the notebook list or an empty pane. */
   target: AgentTarget | null;
   notebooks: NotebookConfig[];
-  repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[];
-  /** The home repository, whose root workspace Pi starts in by default and which the workspace title names. */
+  repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks' | 'title'>[];
+  /** The home repository, whose root workspace Pi starts in by default. */
   homeRepository: string;
-  workspaceTitle: string;
   /** The agent workspaces Pi may run in, once `loadWorkspaces` has listed them. */
   workspaces: AgentWorkspace[];
   loadWorkspaces: () => Promise<void>;
@@ -258,7 +257,7 @@ export function usePiAgentAvailable(): boolean {
  * in the agent workspace the user last switched to, else at the root of the home repository, and resumes the
  * conversation it last had while that is still valid there.
  */
-export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, notebooks, repositories, webTools, children }: { enabled: boolean; homeRepository: string; workspaceTitle: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks'>[]; /** Answers the agent's note tools, for a remote workspace whose notes this page holds as working changes. */ webTools?: WebToolHandler; children: ReactNode; }) {
+export function PiAgentProvider({ enabled, homeRepository, notebooks, repositories, webTools, children }: { enabled: boolean; homeRepository: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks' | 'title'>[]; /** Answers the agent's note tools, for a remote workspace whose notes this page holds as working changes. */ webTools?: WebToolHandler; children: ReactNode; }) {
   const webToolsRef = useRef(webTools);
   useEffect(() => {
     webToolsRef.current = webTools;
@@ -511,7 +510,6 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
     notebooks,
     repositories,
     homeRepository,
-    workspaceTitle,
     workspaces,
     loadWorkspaces,
     connected,
@@ -629,7 +627,7 @@ export function PiAgentProvider({ enabled, homeRepository, workspaceTitle, noteb
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaceTitle, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, wake, held, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, wake, held, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

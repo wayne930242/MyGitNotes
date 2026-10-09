@@ -58,15 +58,14 @@ interface AgentSystemViewProps {
   notebooks: NotebookConfig[];
   /** The selected notebook's folders, for picking the folder of a new workspace. */
   folders: FolderItem[];
-  repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'branch' | 'write' | 'notebooks'>[];
-  /** The home repository, whose root workspace is named by the workspace title and whose Git status the app shows. */
+  repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'branch' | 'write' | 'notebooks' | 'title'>[];
+  /** The home repository, whose Git status the app shows. */
   homeRepository: string;
-  workspaceTitle: string;
   onBusyChange: (busy: boolean) => void;
 }
 
 /** The Agents page: pick an agent workspace, then edit its core instructions and its skills with their reference files and scripts. */
-export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemViewProps>(({ remote = false, notebooks, folders, repositories, homeRepository, workspaceTitle, onBusyChange, onGitStatus }, ref) => {
+export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemViewProps>(({ remote = false, notebooks, folders, repositories, homeRepository, onBusyChange, onGitStatus }, ref) => {
   const { t, language } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const sections = useAgentWorkspaceSections();
@@ -129,7 +128,7 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
   const showRestore = !remote && !renameRestoreLimited;
   const skills = workspaceSkills(files, selected.folder);
   const instructions = files.find(file => file.folder === selected.folder && file.kind === 'instructions');
-  const label = (candidate: WorkspaceRef) => workspaceName(candidate, { home: homeRepository, title: workspaceTitle, repositories });
+  const label = (candidate: WorkspaceRef) => workspaceName(candidate, repositories);
   const refreshGitStatus = async () => {
     if (remote) return;
     const { status } = await fetchGitStatus(repository);

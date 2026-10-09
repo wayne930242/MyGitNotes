@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { activateYouTubeEmbed, applyYouTubeDisplayMode, copyYouTubeUrl, isYouTubeDisplayMode, readYouTubeDisplayMode, rememberYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY } from './youtube-embed.js';
+import { elementNotebook } from './notebook-preferences.js';
+import { activateYouTubeEmbed, applyYouTubeDisplayMode, copyYouTubeUrl, isYouTubeDisplayMode, readYouTubeDisplayMode, rememberYouTubeDisplayMode, setYouTubeDisplayMode, YOUTUBE_MODE_EVENT, YOUTUBE_MODE_STORAGE_KEY, type YouTubeDisplayMode } from './youtube-embed.js';
 
 type ElementRef = { readonly current: HTMLElement | null; };
 
@@ -9,7 +10,8 @@ export function useNoteYouTubeEmbed(surfaceRef: ElementRef) {
     if (!surface) return;
     surface.dataset.noteYoutubeSurface = 'true';
 
-    const apply = (mode = readYouTubeDisplayMode()) => surface.querySelectorAll<HTMLElement>('.note-youtube-embed').forEach(embed => applyYouTubeDisplayMode(embed, mode));
+    // Without a chosen mode, each embed takes the preference of its own note's repository.
+    const apply = (mode?: YouTubeDisplayMode) => surface.querySelectorAll<HTMLElement>('.note-youtube-embed').forEach(embed => applyYouTubeDisplayMode(embed, mode ?? readYouTubeDisplayMode(elementNotebook(embed))));
     apply();
     const action = (target: EventTarget | null) => target instanceof Element ? target.closest<HTMLElement>('[data-youtube-mode-option], [data-youtube-copy], .note-youtube-poster') : null;
     const run = (target: HTMLElement) => {

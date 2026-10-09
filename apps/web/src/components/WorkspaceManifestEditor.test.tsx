@@ -43,6 +43,18 @@ describe('WorkspaceManifestEditor', () => {
     expect(YAML.parse(latest).workspace.title).toBe('Renamed Workspace');
   });
 
+  it('no longer offers the obsolete hide_dotfiles, and keeps a manifest that sets it unchanged there', () => {
+    let latest = '';
+    render(editor({
+      onChange: yaml => {
+        latest = yaml;
+      },
+    }));
+    expect(screen.queryByText(/dotfiles/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByDisplayValue('My Workspace'), { target: { value: 'Renamed Workspace' } });
+    expect(YAML.parse(latest).files).toEqual({ hide_dotfiles: true });
+  });
+
   it('edits a notebook root through the Form', () => {
     let latest = '';
     render(editor({

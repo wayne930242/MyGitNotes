@@ -1,3 +1,4 @@
+import { notebookPreferences } from '../lib/notebook-preferences.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
 import { useState } from 'react';
@@ -28,18 +29,17 @@ interface Params {
   location: ReturnType<typeof useLocation>;
   navigate: ReturnType<typeof useNavigate>;
   editorRoute: ReturnType<typeof parseWorkspaceRoute>;
-  config: WorkspaceState['config'];
   resolveBareNotebook: WorkspaceState['resolveBareNotebook'];
 }
 
-export function useFocusPanes({ selectedNotebookId, notebookRepository, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, editorRoute, config, resolveBareNotebook }: Params) {
+export function useFocusPanes({ selectedNotebookId, notebookRepository, focusPage, remote, sourceId, repoRoot, activeTab, route, canWrite, editorRegistry, location, navigate, editorRoute, resolveBareNotebook }: Params) {
   // Focus: the URL names the displayed one; named Focus sync through their workspace document.
   const focusCapacity = usePaneCapacity();
   // A view kept before notebook keys belongs to the notebook its local id stands for, as an old URL's does.
   const localId = parseNotebookKey(selectedNotebookId)?.localId;
   const focusScope = localId && resolveBareNotebook(localId) === selectedNotebookId ? remote ? sourceId : `local:${repoRoot}` : null;
   // A Notes page whose URL names no Focus shows the one it displayed last, decided while rendering so the list never paints first.
-  const defaultFocus = config?.preferences?.defaultFocusMode && !hasStoredFocusView(notebookRepository, focusScope, selectedNotebookId) ? CURRENT_FOCUS : null;
+  const defaultFocus = notebookPreferences(selectedNotebookId).defaultFocusMode && !hasStoredFocusView(notebookRepository, focusScope, selectedNotebookId) ? CURRENT_FOCUS : null;
   const noteFocus = useNoteFocus({ page: focusPage, notebookId: selectedNotebookId, repository: notebookRepository, scope: focusScope, focusKey: activeTab === 'notes' ? route.focus : null, restoreLast: activeTab === 'notes' && !editorRoute.note, defaultFocus, writable: canWrite, flushEditors: editorRegistry.flushEditors });
   const focusDisplay = noteFocus.layout && noteFocus.entry ? displayedPanes(noteFocus.entry, noteFocus.layout, focusCapacity) : undefined;
   /** On phones the browse region and the Focus take turns filling the screen. */
