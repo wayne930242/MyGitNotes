@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
+import { Router } from 'express';
 import { deploymentConfigSource } from '@mygitnotes/core';
 import { callWorkspaceRemoteTool } from '@mygitnotes/mcp-server';
 import { createApp } from '../src/app.js';
@@ -120,6 +121,20 @@ describe('Settings → Repositories in a local deployment', () => {
     const workspace = (await call('GET', '/api/workspace')).body;
     expect(workspace.repositories.find((repository: { alias: string; }) => repository.alias === 'scraps')).toMatchObject({ notebooks: ['scraps~scraps'], manifest: 'derived' });
     expect(await noteTitles()).toContain('scraps note');
+  });
+
+  it("ends the agent's session when its repository is hidden, telling it which repositories stay", async () => {
+    const product = scratch();
+    const kb = worktree(product, 'kb');
+    worktree(product, 'trpg');
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - type: local\n    path: ./trpg\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: kb, VERCEL: '', APP_URL: '' })) vi.stubEnv(key, value);
+    const membershipChanged = vi.fn(async (_visible: string[]) => {});
+    await listen(createApp(product, { piAgent: { router: Router(), membershipChanged } }));
+    const { revision } = await members();
+    const [kbId, trpgId] = [await idOf('kb'), await idOf('trpg')];
+    expect((await call('PATCH', '/api/workspace/members', { repository: trpgId, hidden: true, revision })).status).toBe(200);
+    await vi.waitFor(() => expect(membershipChanged).toHaveBeenCalledWith([kbId]));
   });
 
   it('stops watching a worktree once it is hidden, ending every open stream so pages reconnect', async () => {

@@ -278,8 +278,13 @@ function AgentConversation() {
       {starting && <LoadingStatus className='pi-agent-idle'>{t('piAgent.startingSession')}</LoadingStatus>}
       {!live && !starting && !resting && (
         <div className='pi-agent-idle'>
-          <p>{t('piAgent.exited')}</p>
-          {session?.exit?.stderr && <pre className='pi-agent-pre'>{session.exit.stderr}</pre>}
+          {/* Hiding a repository ends its session on purpose: a notice of what happened, not a failure to show output for. */}
+          {session?.endedBecause === 'repository-hidden' ? <p>{t('piAgent.endedHidden')}</p> : (
+            <>
+              <p>{t('piAgent.exited')}</p>
+              {session?.exit?.stderr && <pre className='pi-agent-pre'>{session.exit.stderr}</pre>}
+            </>
+          )}
           <Button variant='primary' onClick={() => void agent.start()}>{t('piAgent.start')}</Button>
         </div>
       )}

@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, productRepository, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, productRepository, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, visibleMembers, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -105,7 +105,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   // The member list opens no repository, so it works while every repository is hidden or unreachable.
-  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }));
+  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }, async settings => piAgent?.membershipChanged?.(visibleMembers(settings).map(member => member.ref.id))));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));

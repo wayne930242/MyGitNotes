@@ -311,6 +311,24 @@ describe('pi agent bridge', () => {
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');
   });
 
+  it('ends a session whose repository was hidden, saying so, and keeps one whose repository stays', async () => {
+    const { base, port } = await start();
+    const created = await (await post(base, 'POST')).json() as { session: { id: string; }; };
+    const client = connect(port, base);
+    await client.opened;
+    await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'ready');
+    await agent!.membershipChanged(['home', 'other']);
+    expect(agent!.manager.session?.alive).toBe(true);
+    await agent!.membershipChanged(['other']);
+    const ended = await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'exited');
+    expect(ended.session).toMatchObject({ id: created.session.id, endedBecause: 'repository-hidden' });
+    // A page that asks later learns the same, and starting again makes a new session.
+    expect((await (await fetch(`${base}/api/pi/session`)).json() as { session: unknown; }).session).toMatchObject({ id: created.session.id, status: 'exited', endedBecause: 'repository-hidden' });
+    const restarted = await (await post(base, 'POST')).json() as { session: { id: string; endedBecause?: string; }; };
+    expect(restarted.session.id).not.toBe(created.session.id);
+    expect(restarted.session.endedBecause).toBeUndefined();
+  });
+
   it('records the session file Pi reports, and the one a new conversation moves to', async () => {
     const { base, port, workspace } = await start();
     await post(base, 'POST');

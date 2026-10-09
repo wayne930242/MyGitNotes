@@ -137,6 +137,15 @@ export class PiSessionManager {
     this.current = undefined;
     await session?.end();
   }
+
+  /**
+   * Ends the live session when its repository is no longer a visible member of the workspace, since Pi's own tools
+   * would keep reading that worktree. The ended session stays current, so the panel can say why it ended.
+   */
+  async leaveHidden(visible: readonly string[]): Promise<void> {
+    const session = this.current;
+    if (session?.alive && !visible.includes(session.info.location.repository)) await session.end('repository-hidden');
+  }
 }
 
 export interface PiAgent {
@@ -151,6 +160,11 @@ export interface PiAgent {
    * An agent that runs no socket of its own (one reached through `PiSessionInfo.socket`) leaves it out.
    */
   upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean;
+  /**
+   * Hears that the workspace's members changed, with the repositories still visible; a session working in a repository
+   * that was hidden or removed ends, so it stops reading it. An agent that runs nothing locally may leave it out.
+   */
+  membershipChanged?: (visible: string[]) => Promise<void>;
 }
 
 export interface PiAgentOptions {
@@ -174,7 +188,7 @@ function fail(res: express.Response, error: unknown) {
 }
 
 /** The local agent bridges its own socket and keeps its session in a local process, so unlike any `PiAgent`, it always has `upgrade` and a `manager`. */
-export function createPiAgent({ command, resolveFolder = workspaceFolder, webTools = false }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; } {
+export function createPiAgent({ command, resolveFolder = workspaceFolder, webTools = false }: PiAgentOptions = {}): PiAgent & { upgrade: NonNullable<PiAgent['upgrade']>; manager: PiSessionManager; membershipChanged: NonNullable<PiAgent['membershipChanged']>; } {
   const manager = new PiSessionManager(command);
   const router = express.Router();
   // Pi's note tools call in from the Pi process with the session's token rather than from a page or a signed-in person.
@@ -256,5 +270,5 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder, webToo
     }
     return true;
   };
-  return { router, tools, upgrade, manager };
+  return { router, tools, upgrade, manager, membershipChanged: visible => manager.leaveHidden(visible) };
 }

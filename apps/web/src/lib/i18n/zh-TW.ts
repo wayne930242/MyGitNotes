@@ -1572,6 +1572,7 @@ export const zhTW: Record<TranslationKey, string> = {
   'piAgent.newConversation': '新對話',
   'piAgent.end': '結束 session',
   'piAgent.exited': 'Pi session 已結束。',
+  'piAgent.endedHidden': '這個 session 所在的儲存庫已不在此工作區顯示，所以已關閉。開始新的 session 即可繼續。',
   'piAgent.start': '啟動 session',
   'piAgent.startingSession': '正在啟動 Pi…',
   'piAgent.noModel': 'Pi 目前沒有可用的模型。',

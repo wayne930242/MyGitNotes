@@ -27,6 +27,8 @@ export interface PiSessionInfo {
   pid?: number;
   startedAt: string;
   exit?: { code: number | null; signal: string | null; stderr: string; };
+  /** Why this server ended the session, when it did so on its own: its repository was hidden or removed from the workspace. */
+  endedBecause?: 'repository-hidden';
 }
 
 /** An agent workspace: a folder of one repository of the workspace, empty for the repository root. */
@@ -301,9 +303,10 @@ export class PiSession {
     return undefined;
   }
 
-  /** Closes stdin for Pi's orderly shutdown, then escalates to signals if it lingers. */
-  async end(): Promise<void> {
+  /** Closes stdin for Pi's orderly shutdown, then escalates to signals if it lingers; `reason` tells clients why. */
+  async end(reason?: PiSessionInfo['endedBecause']): Promise<void> {
     if (this.alive) {
+      if (reason) this.info.endedBecause = reason;
       this.child.stdin.end();
       const term = setTimeout(() => this.child.kill('SIGTERM'), SHUTDOWN_GRACE_MS);
       const kill = setTimeout(() => this.child.kill('SIGKILL'), SHUTDOWN_GRACE_MS + KILL_GRACE_MS);

@@ -75,7 +75,7 @@ const text = (value: unknown, name: string) => {
  * change them, adding, removing, hiding, showing, reordering and choosing the default. Mounted ahead of the routes that
  * open repositories. A change ends the open event streams, so every page reconnects to the new membership.
  */
-export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage, auth: SessionServices): Router {
+export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage, auth: SessionServices, onChange?: (settings: WorkspaceSettings) => Promise<void>): Router {
   const router = Router();
   /** Answers 401 (or 503) and returns false when a remote request carries no usable sign-in. */
   const signedIn = async (req: Request, res: Response, settings: WorkspaceSettings) => {
@@ -97,6 +97,8 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
       if (!store) return res.status(405).json({ error: choosesRepository() ? 'Each visitor of this deployment opens the one repository they chose; use Switch repository to open another.' : 'This deployment lists its repositories in mygitnotes.server.yaml or its environment; the administrator changes them there and redeploys.', code: 'read-only' });
       const { revision } = await action(store, req);
       endEventStreams();
+      // What else follows the members (the agent's session) hears of the change without holding up the answer.
+      if (onChange) void configSource.settings(req).then(onChange).catch((error: Error) => console.warn(`[members] after a membership change: ${error.message}`));
       res.json({ revision });
     } catch (error) {
       fail(res, error);

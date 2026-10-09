@@ -39,6 +39,8 @@ export interface PiSessionInfo {
   pid?: number;
   startedAt: string;
   exit?: { code: number | null; signal: string | null; stderr: string; };
+  /** Why the server ended the session on its own: its repository was hidden or removed from the workspace. */
+  endedBecause?: 'repository-hidden';
 }
 
 /** The WebSocket the panel opens for a session: the agent's own socket when it names one, else the page's host. */

@@ -196,6 +196,17 @@ it('offers a manual start when no session runs, showing why the last one ended',
   expect(value.start).toHaveBeenCalled();
 });
 
+it('says calmly that a session ended because its repository was hidden, offering a new start', () => {
+  const value = agent({ session: { id: 's1', cwd: '/w', location: { repository: home, folder: '' }, status: 'exited', startedAt: '', exit: { code: 0, signal: null, stderr: 'stopping' }, endedBecause: 'repository-hidden' }, connected: false });
+  panel(value);
+  expect(screen.getByText(/no longer shown in this workspace, so it was closed/)).toBeTruthy();
+  expect(screen.queryByText('The Pi session has ended.')).toBeNull();
+  expect(screen.queryByText('stopping')).toBeNull();
+  expect(screen.queryByRole('alert')).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Start session' }));
+  expect(value.start).toHaveBeenCalled();
+});
+
 it('shows a start under way as loading, not as a button, until the session answers', () => {
   panel(agent({ session: null, connected: false, starting: true }));
   expect(screen.getByRole('status').textContent).toBe('Starting Pi…');
