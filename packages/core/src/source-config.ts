@@ -50,7 +50,7 @@ function defaultLocalPath(base: string): string {
   throw new Error(`No MyGitNotes workspace at ${base}. Run \`pnpm link-workspace <path>\` to use an existing workspace, or \`pnpm bootstrap-workspace\` to create one.`);
 }
 /** The deployment's server configuration file, whether or not it exists. */
-function serverConfigFile(base: string, env: NodeJS.ProcessEnv): string {
+export function serverConfigFile(base: string, env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.MYGITNOTES_SERVER_CONFIG || env.GITHUB_NOTES_SERVER_CONFIG || undefined;
   return path.resolve(base, configured || (fs.existsSync(path.join(base, 'mygitnotes.server.yaml')) ? 'mygitnotes.server.yaml' : SERVER_CONFIG_FILENAME));
 }

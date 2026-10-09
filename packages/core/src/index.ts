@@ -14,6 +14,7 @@ export * from './note-status.js';
 export * from './config.js';
 export * from './workspace-preferences.js';
 export * from './workspace-migration.js';
+export * from './source-conversion.js';
 export * from './frontmatter.js';
 export * from './note-timestamps.js';
 export * from './classifier.js';

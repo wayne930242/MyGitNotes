@@ -9,6 +9,7 @@
     "bootstrap-workspace": "tsx scripts/bootstrap-workspace.ts",
     "update-core": "tsx scripts/update-core.ts",
     "migrate-workspace": "tsx scripts/migrate-workspace.ts",
+    "convert-sources": "tsx scripts/convert-sources.ts",
     "convert-workspace": "node scripts/convert-workspace.mjs",
     "backfill-note-timestamps": "tsx scripts/backfill-note-timestamps.ts",
     "build": "node apps/check-version.mjs && pnpm --filter \"@mygitnotes/*\" run build",
