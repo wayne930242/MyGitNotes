@@ -11,7 +11,8 @@ export interface RepositoryDraft {
   path: string;
 }
 
-type DraftRepository = Pick<RepositoryStatus, 'id' | 'branch' | 'alias'>;
+/** A repository as its drafts are keyed: by id and branch, its notebooks named by its alias. */
+export type DraftRepository = Pick<RepositoryStatus, 'id' | 'branch' | 'alias'>;
 
 /**
  * The drafts this browser holds for a repository: working notes and remote deletions waiting in Changes, workspace

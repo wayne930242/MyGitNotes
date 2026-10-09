@@ -6,6 +6,7 @@ export interface WorkspaceMemberStatus {
   alias: string;
   type: 'github' | 'gitlab' | 'local';
   repository?: string;
+  /** The branch that keys this member's drafts, as the workspace reports it; a hidden member's drafts are found by it. */
   branch?: string;
   path?: string;
   default: boolean;

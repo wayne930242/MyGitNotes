@@ -68,6 +68,19 @@ it('refuses to hide a repository this browser holds drafts for, names them, and 
   expect(onOpenChanges).not.toHaveBeenCalled();
 });
 
+it('refuses to remove a hidden repository this browser holds drafts for, found by the branch the list names', async () => {
+  const hidden = member('archive', { hidden: true, branch: 'notes' });
+  api.fetchMembers.mockResolvedValue(answer([kb, journal, hidden]));
+  localStorage.setItem(workingNotesKey(`${hidden.id}:notes`), JSON.stringify({ 'notes/archive/old.md': { note: { path: 'notes/archive/old.md', notebookId: 'archive' }, base: null } }));
+  show();
+  await screen.findByText('JOURNAL');
+  // The workspace did not load the hidden repository, so only the list says where its drafts are.
+  fireEvent.click(row('archive').getByRole('button', { name: 'Remove' }));
+  const dialog = within(await screen.findByRole('dialog'));
+  expect(dialog.getByText('Note · notes/archive/old.md')).toBeInTheDocument();
+  expect(api.removeMember).not.toHaveBeenCalled();
+});
+
 it('reloads the list and says so when it changed since it was read', async () => {
   api.setDefaultMember.mockRejectedValueOnce(new MembershipApiError('changed', 409, 'stale'));
   show();

@@ -1,4 +1,5 @@
 import { type Request, type Response, Router } from 'express';
+import { getCurrentBranch } from '@mygitnotes/git';
 import { MembershipError, type MembershipStore, type RepositoryId, SourceError, type WorkspaceConfigSource, type WorkspaceMember, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import type { AssetStorage } from './asset-storage.js';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
@@ -12,7 +13,11 @@ export interface MemberStatus {
   type: 'github' | 'gitlab' | 'local';
   /** The platform repository; absent for a worktree that names none. */
   repository?: string;
-  /** The branch of a platform repository; a worktree serves the branch it has checked out. */
+  /**
+   * The branch this member serves, which keys the drafts a browser holds for it: a hosted repository's configured
+   * branch, or the branch a worktree has checked out (empty when detached), as `GET /api/workspace` reports it. A
+   * hidden member is not loaded, so this is how Settings finds its drafts before removing it.
+   */
   branch?: string;
   /** Local mode: the worktree. */
   path?: string;
@@ -45,9 +50,13 @@ export interface MembersAnswer {
  */
 export const namedTo = (member: WorkspaceMember) => !member.hidden || member.editable !== 'none';
 
-const status = (member: WorkspaceMember): MemberStatus => {
+/** The branch a worktree has checked out, read from its `HEAD` without loading any note; undefined where it is gone. */
+const worktreeBranch = (worktree: string) => getCurrentBranch(worktree).catch(() => undefined);
+
+const status = async (member: WorkspaceMember): Promise<MemberStatus> => {
   const { source } = member.ref;
-  return { id: member.ref.id, alias: member.alias, type: source.type, ...(source.type === 'local' ? {} : { repository: source.repository, branch: source.branch }), ...(member.localPath ? { path: member.localPath } : {}), default: member.default, hidden: member.hidden, ...(member.folder ? { folder: member.folder } : {}), editable: member.editable };
+  const branch = member.localPath ? await worktreeBranch(member.localPath) : source.type === 'local' ? undefined : source.branch;
+  return { id: member.ref.id, alias: member.alias, type: source.type, ...(source.type === 'local' ? {} : { repository: source.repository }), ...(branch === undefined ? {} : { branch }), ...(member.localPath ? { path: member.localPath } : {}), default: member.default, hidden: member.hidden, ...(member.folder ? { folder: member.folder } : {}), editable: member.editable };
 };
 
 function fail(res: Response, error: unknown) {
@@ -104,7 +113,7 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
       const environment = store?.environment?.();
       const named = settings.members.filter(namedTo);
       const hiddenUnnamed = settings.members.length - named.length;
-      const answer: MembersAnswer = { members: named.map(status), changeable: Boolean(store), revision: store ? await store.revision() : null, sharedAssetKeys: Boolean(await assetStorage.sharedKeys?.(req, res)), ...(environment ? { environment } : {}), ...(choosesRepository() ? { repositoryChoice: true as const } : {}), ...(hiddenUnnamed ? { hiddenUnnamed } : {}) };
+      const answer: MembersAnswer = { members: await Promise.all(named.map(status)), changeable: Boolean(store), revision: store ? await store.revision() : null, sharedAssetKeys: Boolean(await assetStorage.sharedKeys?.(req, res)), ...(environment ? { environment } : {}), ...(choosesRepository() ? { repositoryChoice: true as const } : {}), ...(hiddenUnnamed ? { hiddenUnnamed } : {}) };
       res.json(answer);
     } catch (error) {
       fail(res, error);

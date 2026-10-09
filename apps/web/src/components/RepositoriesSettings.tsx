@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertCircle, ArrowDown, ArrowUp, Eye, EyeOff, FolderGit2, Star, Trash2 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n/index.js';
 import { addMember, fetchMembers, type MembersAnswer, MembershipApiError, removeMember, reorderMembers, setDefaultMember, setMemberHidden, type WorkspaceMemberStatus } from '../lib/members-api.js';
-import { discardRepositoryDrafts, type RepositoryDraft, repositoryDrafts } from '../lib/repository-drafts.js';
+import { discardRepositoryDrafts, type DraftRepository, type RepositoryDraft, repositoryDrafts } from '../lib/repository-drafts.js';
 import type { WorkspaceRepository } from '../lib/workspace-repositories.js';
 import { Button } from './Button.js';
 import { WorkspaceDialog } from './WorkspaceDialog.js';
@@ -33,7 +33,7 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
   const [busy, setBusy] = useState(false);
   const [path, setPath] = useState('');
   const [folder, setFolder] = useState<string>();
-  const [drafts, setDrafts] = useState<{ repository: WorkspaceRepository; action: 'hide' | 'remove'; drafts: RepositoryDraft[]; }>();
+  const [drafts, setDrafts] = useState<{ repository: DraftRepository; action: 'hide' | 'remove'; drafts: RepositoryDraft[]; }>();
 
   const load = useCallback(async () => {
     try {
@@ -51,6 +51,8 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
   }, []);
 
   const statusOf = (member: WorkspaceMemberStatus) => repositories.find(repository => repository.id === member.id);
+  /** Where a member's drafts are kept: as the workspace loaded it, or, for a hidden member it did not load, as the list names it. */
+  const draftsOf = (member: WorkspaceMemberStatus): DraftRepository => statusOf(member) ?? { id: member.id, alias: member.alias, branch: member.branch ?? '' };
   /** Runs one change against the revision this page read; a stale read reloads the list and says so. */
   const run = async (change: (revision: string) => Promise<unknown>) => {
     if (!answer?.revision) return;
@@ -73,9 +75,9 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
   };
   /** Hiding or removing a repository this browser holds drafts for waits until they are committed or discarded. */
   const guarded = (member: WorkspaceMemberStatus, action: 'hide' | 'remove', change: (revision: string) => Promise<unknown>) => {
-    const repository = statusOf(member);
-    const held = repository ? repositoryDrafts(repository) : [];
-    if (repository && held.length) return setDrafts({ repository, action, drafts: held });
+    const repository = draftsOf(member);
+    const held = repositoryDrafts(repository);
+    if (held.length) return setDrafts({ repository, action, drafts: held });
     void run(change);
   };
   const add = async () => {

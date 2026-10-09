@@ -70,7 +70,7 @@ describe('Settings → Repositories in a local deployment', () => {
     fs.renameSync(trpg, `${trpg}-moved`);
     let list = await members();
     expect(list).toMatchObject({ changeable: true, sharedAssetKeys: false, revision: expect.stringMatching(/^sha256:/), environment: 'MYGITNOTES_LOCAL_PATH' });
-    expect(list.members.map((member: { alias: string; default: boolean; hidden: boolean; editable: string; }) => [member.alias, member.default, member.hidden, member.editable])).toEqual([['kb', true, false, 'environment'], ['trpg', false, false, 'server-file']]);
+    expect(list.members.map((member: { alias: string; default: boolean; hidden: boolean; editable: string; branch?: string; }) => [member.alias, member.default, member.hidden, member.editable, member.branch])).toEqual([['kb', true, false, 'environment', 'main'], ['trpg', false, false, 'server-file', undefined]]);
     fs.renameSync(`${trpg}-moved`, trpg);
 
     let { body } = await call('POST', '/api/workspace/members', { path: journal, revision: list.revision });
@@ -82,7 +82,8 @@ describe('Settings → Repositories in a local deployment', () => {
     expect((await call('GET', '/api/workspace')).body.repositories.map((repository: { alias: string; }) => repository.alias)).toEqual(['kb', 'trpg']);
     expect((await call('GET', '/api/notes/read?path=notes/journal/note.md&notebookId=journal~journal')).status).toBe(404);
     list = await members();
-    expect(list.members.find((member: { alias: string; }) => member.alias === 'journal')).toMatchObject({ hidden: true, path: journal });
+    // A hidden worktree is not loaded, yet the branch that keys its drafts is listed, so Settings can find them.
+    expect(list.members.find((member: { alias: string; }) => member.alias === 'journal')).toMatchObject({ hidden: true, path: journal, branch: 'main' });
     ({ body } = await call('PATCH', '/api/workspace/members', { repository: await idOf('journal'), hidden: false, revision: list.revision }));
     expect(await noteTitles()).toEqual(['journal note', 'kb note', 'trpg note']);
     ({ body } = await call('PATCH', '/api/workspace/members', { repository: await idOf('trpg'), default: true, revision: body.revision }));
