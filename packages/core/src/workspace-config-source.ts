@@ -4,7 +4,7 @@ import { SourceError } from './github-api.js';
 import { deriveAlias, repositoryName } from './notebook-key.js';
 import { type RepositoryRef, repositoryRef } from './repository.js';
 import type { ManifestRead } from './repository-manifest.js';
-import { loadRepositoryMappings, loadSourceConfig, type SourceConfig } from './source-config.js';
+import { loadRepositoryMappings, loadSourceConfig, type RepositoryMapping, type SourceConfig } from './source-config.js';
 
 /** What an adapter may inspect to decide which workspace a request belongs to. */
 export interface WorkspaceRequest {
@@ -117,22 +117,12 @@ function worktreeBranch(worktree: string): string | undefined {
 }
 
 /**
- * The deployment's members: the repository the environment or the file's top-level `source` names, which is the
- * default, then in local mode each worktree `repositories` maps, in the file's order. A mapping onto the default
- * worktree is that repository by another name, and a mapped repository is on the branch its worktree has checked out
- * (`main` when that cannot be read; the repository is then unavailable or detached). Aliases derive from repository
- * names in that order.
+ * The members of a deployment whose source is `source`, which is the default, then in local mode each worktree
+ * `mappings` maps, in their order. A mapping onto the default worktree is that repository by another name, and a mapped
+ * repository is on the branch its worktree has checked out (`main` when that cannot be read; the repository is then
+ * unavailable or detached). Aliases derive from repository names in that order.
  */
-function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): WorkspaceSettings {
-  let source;
-  let mappings;
-  try {
-    source = loadSourceConfig(base, env);
-    if (env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
-    mappings = source.type === 'local' ? loadRepositoryMappings(base, env) : [];
-  } catch (error) {
-    throw new WorkspaceSetupError((error as Error).message);
-  }
+export function deploymentMembers(source: SourceConfig, mappings: RepositoryMapping[]): WorkspaceMember[] {
   const taken = new Set<string>();
   const member = (ref: RepositoryRef, isDefault: boolean, localPath?: string): WorkspaceMember => {
     const alias = deriveAlias(repositoryName(ref.source), taken);
@@ -145,7 +135,21 @@ function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): Workspace
     if (defaultPath && sameDirectory(mapping.path, defaultPath)) continue;
     members.push(member(repositoryRef({ ...mapping.source, branch: worktreeBranch(mapping.path) ?? 'main' } as SourceConfig), false, mapping.path));
   }
-  return { site: siteOf(source), members, manifest: (_member, inRepository) => inRepository() };
+  return members;
+}
+
+/** The deployment's members from the environment or the file's top-level `source`, and in local mode its `repositories`. */
+function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): WorkspaceSettings {
+  let source;
+  let mappings;
+  try {
+    source = loadSourceConfig(base, env);
+    if (env.VERCEL && source.type === 'local') throw new Error('Vercel requires a GitHub or GitLab source. Configure MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH.');
+    mappings = source.type === 'local' ? loadRepositoryMappings(base, env) : [];
+  } catch (error) {
+    throw new WorkspaceSetupError((error as Error).message);
+  }
+  return { site: siteOf(source), members: deploymentMembers(source, mappings), manifest: (_member, inRepository) => inRepository() };
 }
 
 /** Configuration from the environment and `mygitnotes.server.yaml`, each repository keeping its own manifest. Settings are read on every call; the mode is fixed when the deployment starts. */

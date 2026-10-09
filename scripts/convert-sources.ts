@@ -1,17 +1,21 @@
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import readline from 'node:readline/promises';
-import { applyConvertedRepository, type ConvertedRepository, loadRepositoryMappings, mappedRepositoryEntry, planSourceConversion, serverConfigFile, type SourceConversionPlan } from '../packages/core/src/index.js';
+import { applyConvertedRepository, commitCommand, type ConvertedRepository, deploymentMembers, loadEnvDefaults, loadRepositoryMappings, loadSourceConfig, mappedRepositoryEntry, planSourceConversion, repositoriesInAliasOrder, serverConfigFile, type SourceConversionPlan, targetCommitMessage } from '../packages/core/src/index.js';
 import { resolveWorkspaceRoot } from './lib/workspace-root.js';
 
 const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 const log = (line: string) => console.log(`[convert-sources] ${line}`);
 const flag = (name: string) => process.argv.includes(name);
 
 /** The files of `files` with uncommitted changes, untracked ones included. */
 const dirtyFiles = (root: string, files: string[]) => git(root, ['status', '--porcelain', '-z', '--', ...files]).split('\0').filter(Boolean).map(entry => entry.slice(3));
 
-function describe(plan: SourceConversionPlan) {
+/** How `repositories:` is reordered so each repository keeps its alias, and the aliases the deployment then derives. */
+type AliasOrder = ReturnType<typeof repositoriesInAliasOrder> & { serverFile: string; aliases: string[]; };
+
+function describe(plan: SourceConversionPlan, order: AliasOrder | null) {
   log(`Plan for ${plan.converting.root} (${plan.converting.file}):`);
   for (const target of plan.targets) {
     const what = [target.added.length ? `adds notebook(s) ${target.added.join(', ')}` : '', target.present.length ? `already has ${target.present.join(', ')} from an earlier run` : ''].filter(Boolean).join('; ');
@@ -23,6 +27,8 @@ function describe(plan: SourceConversionPlan) {
   else log(`  ${plan.converting.root}: ${moved.length ? `removes notebook(s) ${moved.join(', ')}, ` : ''}drops source and sets schema_version 4 in ${plan.converting.file}.`);
   if (plan.defaultNotebook) log(`  ${plan.converting.file}: default_notebook changes from ${plan.defaultNotebook.from}, which moves to another repository, to ${plan.defaultNotebook.to}.`);
   for (const entry of plan.legacyEntries) log(`  ${entry.file} in ${plan.converting.root} names notebook ${entry.notebookId} ${entry.count} time(s); those entries were written before each notebook kept its documents in its own repository and stay where they are.`);
+  if (order?.changed) log(`  ${order.serverFile}: lists repositories as ${order.mappings.map(mapping => mapping.source.repository).join(', ')}, the repositories notebooks move to first in the order ${plan.converting.file} names them, so each keeps the alias it had.`);
+  if (order) log(`  Aliases after the conversion: ${order.aliases.join(', ')}.`);
 }
 
 /** Asks before writing; without a terminal the plan is only shown unless `--yes` confirms it. */
@@ -55,7 +61,7 @@ function apply(repository: ConvertedRepository, message: string): boolean {
     return true;
   } catch (error) {
     const reason = String((error as { stderr?: unknown; }).stderr || (error as Error).message).trim().split('\n')[0];
-    console.error(`[convert-sources] ${repository.root}: ${repository.file} was written but not committed (${reason}). Commit it yourself, then run pnpm convert-sources again to finish:\n  git -C ${quote(repository.root)} add --all -- ${quote(repository.file)} && git -C ${quote(repository.root)} commit -m ${quote(message)} --only -- ${quote(repository.file)}`);
+    console.error(`[convert-sources] ${repository.root}: ${repository.file} was written but not committed (${reason}). Commit it yourself, then run pnpm convert-sources again to finish:\n  ${commitCommand(repository.root, repository.file, message)}`);
     return false;
   }
 }
@@ -64,20 +70,31 @@ try {
   const root = resolveWorkspaceRoot();
   const checkout = process.cwd();
   const removeEmptied = flag('--remove-emptied');
-  const plan = planSourceConversion(root, { mappings: loadRepositoryMappings(checkout), removeEmptied, dirtyFiles });
+  const mappings = loadRepositoryMappings(checkout);
+  const plan = planSourceConversion(root, { mappings, removeEmptied, dirtyFiles });
   if (!plan) {
     log(`${root} has no notebook with source; nothing to convert.`);
     process.exit(0);
   }
   const serverFile = serverConfigFile(checkout);
   const entry = plan.emptied ? mappedRepositoryEntry(serverFile, root) : null;
-  describe(plan);
+  // Aliases came from the order the deployment's own source named repositories with source; only its conversion keeps that order.
+  loadEnvDefaults(path.join(checkout, '.env'));
+  const source = loadSourceConfig(checkout);
+  const ownSource = source.type === 'local' && fs.existsSync(source.path) && fs.realpathSync(source.path) === fs.realpathSync(root);
+  const reordered = ownSource ? repositoriesInAliasOrder(serverFile, mappings, plan.targets) : null;
+  const order = reordered && { ...reordered, serverFile, aliases: deploymentMembers(source, reordered.mappings).map(member => `${member.alias} (${member.ref.id})`) };
+  describe(plan, order);
   if (!await confirmed()) process.exit(0);
+  // Written first, so a run that stops part way has the order already; a second run finds no source to convert.
+  if (order?.changed) {
+    order.write();
+    log(`Reordered repositories in ${serverFile}.`);
+  }
   // Each notebook reaches its own repository's manifest before it leaves the converting one, so a run that stops
   // part way is run again: notebooks already present, identically, are skipped.
   for (const target of plan.targets.filter(candidate => candidate.action === 'write')) {
-    const moved = target.added.length ? target.added.join(', ') : 'its notebooks';
-    if (!apply(target, `chore(workspace): take notebook(s) ${moved} into this repository's manifest`)) process.exit(1);
+    if (!apply(target, targetCommitMessage(target.added))) process.exit(1);
   }
   if (!apply(plan.converting, plan.converting.action === 'delete' ? 'chore(workspace): remove the manifest whose notebooks moved to their own repositories' : 'chore(workspace): move notebooks with source to their own repositories')) process.exit(1);
   if (entry) {

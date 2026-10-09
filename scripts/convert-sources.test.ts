@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { deploymentConfigSource } from '../packages/core/src/index.js';
 
 const product = process.cwd();
 /** Core's YAML parser; the product root does not depend on it directly. */
@@ -45,6 +46,9 @@ const read = (root: string, file: string) => fs.readFileSync(path.join(root, fil
 
 const focus = 'version: 1\nfocuses:\n  - id: campaign\n    notebookId: trpg\n    name: Campaign\n    division: single\n    panes:\n      - tabs: []\n';
 const study = 'version: 1\nnotes: []\n';
+/** The Focus and Study files the trpg repository already has of its own. */
+const trpgFocus = 'version: 1\nfocuses:\n  - id: table\n    notebookId: trpg\n    name: Table\n    division: single\n    panes:\n      - tabs: []\n';
+const trpgStudy = 'version: 1\nnotes:\n  - path: notes/life/b.md\n';
 const homeManifest = `schema_version: 3
 # The owner's notebooks.
 workspace:
@@ -71,7 +75,7 @@ const loreManifest = 'schema_version: 3\nworkspace:\n  title: Lore library\n  de
 /** The owner's workspace: a home repository with two notebooks in other repositories, one with a manifest of its own. */
 function fixture() {
   const home = worktree({ '.mygitnotes.yaml': homeManifest, 'notes/life/a.md': '# A\n', '.github-notes-focus.yaml': focus, '.github-notes-study.yaml': study });
-  const trpg = worktree({ 'notes/life/b.md': '# B\n' });
+  const trpg = worktree({ 'notes/life/b.md': '# B\n', '.github-notes-focus.yaml': trpgFocus, '.github-notes-study.yaml': trpgStudy });
   const lore = worktree({ '.mygitnotes.yaml': loreManifest, 'notes/lore/c.md': '# C\n' });
   return { home, trpg, lore, core: checkout(home, { 'owner/trpg': trpg, 'owner/lore': lore }) };
 }
@@ -103,8 +107,11 @@ it('moves each notebook with source into its own repository, one commit per repo
     expect(commits(root)).toHaveLength(2);
     expect(git(root, ['status', '--porcelain'])).toBe('');
   }
+  // Focus and Study files stay as they were in both repositories.
   expect(read(home, '.github-notes-focus.yaml')).toBe(focus);
   expect(read(home, '.github-notes-study.yaml')).toBe(study);
+  expect(read(trpg, '.github-notes-focus.yaml')).toBe(trpgFocus);
+  expect(read(trpg, '.github-notes-study.yaml')).toBe(trpgStudy);
   expect(run(core, ['--yes']).stdout).toContain('has no notebook with source; nothing to convert');
 }, 60000);
 
@@ -207,4 +214,43 @@ it('finishes on a second run after a commit fails part way, skipping notebooks a
   expect(finished.stdout).toContain('already has trpg from an earlier run');
   for (const root of [home, trpg, lore]) expect(commits(root)).toHaveLength(2);
   expect(YAML.parse(read(home, '.mygitnotes.yaml')).notebooks.map((notebook: { id: string; }) => notebook.id)).toEqual(['life']);
+}, 60000);
+
+it('refuses a second run while a manifest an earlier run wrote is still uncommitted, and names the command that commits it', async () => {
+  const { home, lore, core } = fixture();
+  const hook = path.join(lore, '.git/hooks/pre-commit');
+  fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+  expect(run(core, ['--yes']).status).toBe(1);
+  fs.rmSync(hook);
+  const refused = run(core, ['--yes']);
+  expect(refused.status).toBe(1);
+  expect(refused.stderr).toContain(`${lore} has uncommitted changes in .mygitnotes.yaml, which an earlier pnpm convert-sources wrote with notebook(s) lore. Commit it`);
+  // The converting repository is not committed while a target still lacks its commit.
+  expect(read(home, '.mygitnotes.yaml')).toBe(homeManifest);
+  expect(commits(home)).toEqual(['fixture']);
+  const command = refused.stderr.split('\n').find(line => line.trim().startsWith('git -C'))!;
+  execFileSync('/bin/sh', ['-c', command], { stdio: 'pipe' });
+  expect(commits(lore)[0]).toBe("chore(workspace): take notebook(s) lore into this repository's manifest");
+  const finished = run(core, ['--yes']);
+  expect(finished.status).toBe(0);
+  expect(commits(home)).toHaveLength(2);
+}, 60000);
+
+it('orders repositories so each keeps the alias it had from the order the home manifest named them', async () => {
+  const home = worktree({ '.mygitnotes.yaml': homeManifest.replace('repository: owner/trpg', 'repository: alpha/notes').replace('repository: owner/lore', 'repository: beta/notes'), 'notes/life/a.md': '# A\n' });
+  const alpha = worktree({ 'notes/life/b.md': '# B\n' });
+  const beta = worktree({ 'notes/lore/c.md': '# C\n' });
+  const gamma = worktree({ '.mygitnotes.yaml': loreManifest.replace('schema_version: 3', 'schema_version: 4') });
+  // Listed in another order than the manifest names them, with a repository no notebook names in between.
+  const core = checkout(home, { 'beta/notes': beta, 'gamma/notes': gamma, 'alpha/notes': alpha });
+  const shown = run(core);
+  expect(shown.stdout).toContain('lists repositories as alpha/notes, beta/notes, gamma/notes');
+  expect(shown.stdout).toMatch(/Aliases after the conversion: [^,]+, notes \(github:alpha\/notes@main\), notes-2 \(github:beta\/notes@main\), notes-3 \(github:gamma\/notes@main\)\./);
+  expect(read(core, 'mygitnotes.server.yaml')).toMatch(/beta\/notes[\s\S]*gamma\/notes[\s\S]*alpha\/notes/);
+  const converted = run(core, ['--yes']);
+  expect(converted.status).toBe(0);
+  const server = read(core, 'mygitnotes.server.yaml');
+  expect(server).toContain('# Notebook repositories checked out beside the workspace.');
+  const settings = await deploymentConfigSource(core, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: home }).settings({ headers: {} });
+  expect(settings.members.slice(1).map(member => [member.alias, member.ref.id])).toEqual([['notes', 'github:alpha/notes@main'], ['notes-2', 'github:beta/notes@main'], ['notes-3', 'github:gamma/notes@main']]);
 }, 60000);

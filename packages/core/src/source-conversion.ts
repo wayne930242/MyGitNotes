@@ -229,11 +229,52 @@ export function planSourceConversion(root: string, options: SourceConversionOpti
   }
 
   const converting: ConvertedRepository = { root, label: root, file: relative, action: emptied ? 'delete' : 'write', text: convertingText, created: false, added: [], present: [] };
-  for (const repository of [...planned, converting].filter(candidate => candidate.action !== 'none')) {
+  for (const repository of [...planned, converting]) {
     const dirty = options.dirtyFiles?.(repository.root, [repository.file]) ?? [];
-    if (dirty.length) throw new SourceConversionError(`${repository.root} has uncommitted changes in ${dirty.join(', ')}. Commit or discard them, then run pnpm convert-sources again.`);
+    if (!dirty.length) continue;
+    // A manifest an earlier run wrote but could not commit holds every notebook already: it only needs that commit.
+    if (repository.action === 'none') throw new SourceConversionError(`${repository.root} has uncommitted changes in ${dirty.join(', ')}, which an earlier pnpm convert-sources wrote with notebook(s) ${repository.present.join(', ')}. Commit it, then run pnpm convert-sources again:\n  ${commitCommand(repository.root, repository.file, targetCommitMessage(repository.present))}`);
+    throw new SourceConversionError(`${repository.root} has uncommitted changes in ${dirty.join(', ')}. Commit or discard them, then run pnpm convert-sources again.`);
   }
   return { converting, targets: planned, ...(defaultNotebook ? { defaultNotebook } : {}), emptied, legacyEntries };
+}
+
+const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+/** The shell command that commits `file`, and only it, in the worktree `root`. */
+export function commitCommand(root: string, file: string, message: string): string {
+  return `git -C ${quote(root)} add --all -- ${quote(file)} && git -C ${quote(root)} commit -m ${quote(message)} --only -- ${quote(file)}`;
+}
+/** The commit message of a repository that takes `notebooks` into its manifest. */
+export function targetCommitMessage(notebooks: string[]): string {
+  return `chore(workspace): take notebook(s) ${notebooks.length ? notebooks.join(', ') : 'its notebooks'} into this repository's manifest`;
+}
+
+/**
+ * Before schema 4 each repository's alias derived from its name in the order the home manifest's notebooks named it
+ * with `source`; now it derives in the order of `repositories:` in the server configuration. Orders those entries so
+ * the repositories the conversion of the deployment's own source moves notebooks to come first, in the order its
+ * manifest names them, and the others keep theirs after: every repository keeps the alias it had, so the notebook keys
+ * in URLs and Focus layouts keep naming it. `mappings` are the entries of `file` as `loadRepositoryMappings` read them.
+ */
+export function repositoriesInAliasOrder(file: string, mappings: RepositoryMapping[], targets: ConvertedRepository[]): { mappings: RepositoryMapping[]; changed: boolean; write(): void; } {
+  const rank = (mapping: RepositoryMapping) => {
+    const index = targets.findIndex(target => sameDirectory(target.root, mapping.path));
+    return index < 0 ? targets.length : index;
+  };
+  const order = mappings.map((_mapping, index) => index).sort((a, b) => rank(mappings[a]) - rank(mappings[b]) || a - b);
+  const changed = order.some((index, position) => index !== position);
+  return {
+    mappings: order.map(index => mappings[index]),
+    changed,
+    write() {
+      if (!changed) return;
+      const document = YAML.parseDocument(fs.readFileSync(file, 'utf8'));
+      const listed = document.get('repositories');
+      if (!YAML.isSeq(listed) || listed.items.length !== mappings.length) throw new SourceConversionError(`${file} changed while pnpm convert-sources ran. Run it again.`);
+      listed.items = order.map(index => listed.items[index]);
+      fs.writeFileSync(file, document.toString());
+    },
+  };
 }
 
 /** Writes one repository's part of a planned conversion. */
