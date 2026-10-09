@@ -54,6 +54,19 @@ it('persists a study events and memory state and rejects stale writes', async ()
   expect(diff.status).toBe(200);
   expect((await diff.json()).diff).toContain(`+++ ${STUDY_FILE}`);
 });
+it('passes a stored notebook id that is no local id through both ways, and refuses a bare id or another repository\'s key', async () => {
+  const odd = { ...storedStudy, notes: storedStudy.notes.map(item => ({ ...item, notebookId: 'my.notes' })) };
+  await writeFile(path.join(root, STUDY_FILE), stringify(odd));
+  const read = await fetch(url);
+  expect(read.status).toBe(200);
+  const answer = await read.json();
+  expect(answer.study.notes[0].notebookId).toBe('my.notes');
+  expect((await put({ ...answer.study, notes: [{ ...answer.study.notes[0], notebookId: 'a' }] }, answer.revision)).status).toBe(400);
+  expect((await put({ ...answer.study, notes: [{ ...answer.study.notes[0], notebookId: 'other~a' }] }, answer.revision)).status).toBe(400);
+  const saved = await put({ ...answer.study, notes: [{ ...answer.study.notes[0], title: 'Kept' }] }, answer.revision);
+  expect(saved.status).toBe(200);
+  expect(parse(await readFile(path.join(root, STUDY_FILE), 'utf8')).notes[0]).toMatchObject({ notebookId: 'my.notes', title: 'Kept' });
+});
 it('protects Core, rejects symlink targets and reports invalid YAML without replacing it', async () => {
   execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: root });
   expect((await put(study)).status).toBe(403);

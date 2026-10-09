@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -197,9 +197,13 @@ export function localNotebookId(alias: string, notebookId: string): string {
   return local;
 }
 
-/** A workspace document as a request names it (notebook keys) turned into what the repository stores (local ids), or back. */
-export const storedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => localNotebookId(alias, id));
-export const keyedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => notebookKey(alias, id));
+/**
+ * A workspace document as a request names it (notebook keys) turned into what the repository stores (local ids), or back.
+ * A stored value that is no valid local id (hand-edited or old data) names no notebook a key could stand for: it passes
+ * both ways unchanged, so the document still loads and saves. A bare local id or another repository's key is refused.
+ */
+export const storedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => isBareNotebookId(id) || id.includes(KEY_SEPARATOR) ? localNotebookId(alias, id) : id);
+export const keyedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => isBareNotebookId(id) ? notebookKey(alias, id) : id);
 
 /** A workspace document draft a commit request carries. */
 export interface DocumentDraft {

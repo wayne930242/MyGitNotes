@@ -86,6 +86,13 @@ it.each(['source', 'config', 'destination', 'permission'])('rejects stale %s wit
   expect(fs.readFileSync(path.join(roots[0], BOOKMARKS_FILE))).toEqual(before);
   expect(fs.existsSync(path.join(roots[0], request().path))).toBe(change === 'destination');
 });
+it('serves a legacy page whose stored notebook id is no local id, naming that collection as stored', async () => {
+  write(roots[0], BOOKMARKS_FILE, raw('my.notes'));
+  const response = await fetch(`${base}/api/outline-import/source?repository=${encodeURIComponent(repository)}`);
+  expect(response.status).toBe(200);
+  expect((await response.json()).page.notebooks.map((collection: { notebookId: string; }) => collection.notebookId)).toEqual(['my.notes', nb('unknown')]);
+});
+
 it('allows read-only preview and refuses unsupported-only selections without creating an outline', async () => {
   execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: roots[0] });
   expect((await preview()).writable).toBe(false);
