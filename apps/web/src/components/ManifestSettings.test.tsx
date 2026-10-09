@@ -44,6 +44,16 @@ it("opens on the current notebook's repository and saves its manifest there, wit
   await waitFor(() => expect(onManifestRevision).toHaveBeenCalledWith(campaign.id, 'next'));
 });
 
+it('keeps the outcome of a save shown when the saved manifest comes back with its new revision', async () => {
+  const view = settings({ initialRepository: campaign.id });
+  fireEvent.click(screen.getByTitle('Save & Commit'));
+  await screen.findByText('Workspace configuration saved and committed.');
+  const saved = { ...campaign, title: 'Campaign renamed', config: config('Campaign renamed', 'campaign'), configRevision: 'next' };
+  view.rerender(createElement(ManifestSettings, { repositories: [home, saved], homeRepository: home.id, initialRepository: campaign.id, onManifestRevision: () => {}, onRefreshWorkspace: async () => {} }));
+  expect(screen.getByText('Workspace configuration saved and committed.')).toBeInTheDocument();
+  expect(screen.getByRole('textbox', { name: 'Workspace Title' })).toHaveValue('Campaign renamed');
+});
+
 it('switches the editor to the repository chosen in the selector', async () => {
   settings();
   showYaml();

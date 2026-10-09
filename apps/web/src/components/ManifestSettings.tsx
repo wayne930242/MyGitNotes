@@ -32,13 +32,14 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
   const [isSaving, setIsSaving] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ type: 'success' | 'error'; text: string; } | null>(null);
 
-  // The editor restarts from the repository's manifest whenever another repository is chosen or its manifest changes.
+  // The editor restarts from the repository's manifest whenever another repository is chosen or its manifest changes,
+  // such as after its own save; the outcome of a save stays shown until another repository is chosen.
   const source = repository ? [repository.id, repository.configRevision, manifestText(repository)].join('\n') : '';
-  const [loadedSource, setLoadedSource] = useState(source);
-  if (loadedSource !== source) {
-    setLoadedSource(source);
+  const [loaded, setLoaded] = useState({ source, repository: repository?.id });
+  if (loaded.source !== source) {
+    setLoaded({ source, repository: repository?.id });
     setYamlContent(manifestText(repository));
-    setStatusMessage(null);
+    if (loaded.repository !== repository?.id) setStatusMessage(null);
   }
 
   const onCore = repository?.branch === 'core';
