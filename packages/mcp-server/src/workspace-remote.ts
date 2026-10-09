@@ -1,4 +1,5 @@
 import { type RemoteSource, type RevisionSet, StaleRevisionError, type WorkspaceRepositories } from '@mygitnotes/core';
+import { keyedResult, listedNotebooks, notebookArgument } from './notebook-keys.js';
 import { callRemoteTool, isMutationTool } from './remote-tools.js';
 import type { ToolAssets } from './tools/assets.js';
 
@@ -41,28 +42,35 @@ const pathTools = new Set(['read', 'read_note', 'write', 'append', 'edit', 'save
 const optionalWrites = new Set(['delete_note', 'delete_asset', 'update_note_metadata', 'add_asset', 'replace_notes']);
 const mutation = (name: string) => isMutationTool(name) || optionalWrites.has(name);
 
-/** Route a hosted tool by notebook identity; only workspace-wide reads fan out. `assetsFor` names the bucket each repository's asset tools use (the environment's by default). */
-export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args, write: boolean, appUrl?: string, assetsFor?: (handle: RemoteHandle) => ToolAssets): Promise<Record<string, unknown>> {
+/**
+ * Route a hosted tool by notebook identity; only workspace-wide reads fan out. Tools name notebooks by key (a bare
+ * local id resolves as an old URL does), each repository's tools see its local ids, and results name notebooks by key.
+ * `assetsFor` names the bucket each repository's asset tools use (the environment's by default).
+ */
+export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<RemoteHandle>, name: string, input: Args, write: boolean, appUrl?: string, assetsFor?: (handle: RemoteHandle) => ToolAssets): Promise<Record<string, unknown>> {
   const repositories = await workspace.all();
   const available = repositories.filter((entry): entry is typeof entry & { handle: RemoteHandle; } => 'handle' in entry);
   const unavailable = repositories.filter(entry => 'unavailable' in entry).map(entry => ({ repository: entry.ref.id, message: entry.unavailable.message }));
-  if (name === 'get_workspace_config') return { config: (await workspace.manifest()).config, revision: await revisions([available[0]]) };
-  if (name === 'list_notebooks') return { notebooks: (await workspace.manifest()).config.notebooks, revision: await revisions([available[0]]) };
+  if (name === 'get_workspace_config') return { config: await workspace.keyedConfig(), notebooks: await listedNotebooks(workspace), revision: await revisions([available[0]]) };
+  if (name === 'list_notebooks') return { notebooks: await listedNotebooks(workspace), revision: await revisions([available[0]]) };
+  const notebookKey = await notebookArgument(workspace, input.notebookId);
+  const args: Args = notebookKey ? { ...input, notebookId: notebookKey } : input;
+  const web = (entry: (typeof available)[number]) => appUrl ? { appUrl, alias: entry.alias } : undefined;
   if (name === 'get_statuses' && !args.notebookId && repositories.length > 1) {
-    const results = await Promise.all(available.map(entry => callRemoteTool(entry.handle.reader, name, args, write, appUrl)));
+    const results = await Promise.all(available.map(entry => callRemoteTool(entry.handle.reader, name, args, write)));
     const union = (field: string) => [...new Set(results.flatMap(result => result[field] as string[]))];
     return { notebookId: 'all', defaultStatuses: union('defaultStatuses'), configuredStatuses: union('configuredStatuses'), observedStatuses: union('observedStatuses'), allStatuses: union('allStatuses'), revision: await revisions(available), unavailable };
   }
   const broad = (name === 'ls' && (!args.path || args.path === '.')) || (workspaceReads.has(name) && !args.notebookId && !args.path && repositories.length > 1);
   if (broad && name !== 'get_statuses') {
     if (name === 'list_skills' || name === 'list_assets' || name === 'list_folders') {
-      const results = await Promise.all(available.map(entry => callRemoteTool(entry.handle.reader, name, args, write, appUrl, assetsFor?.(entry.handle))));
+      const results = await Promise.all(available.map(async entry => keyedResult(await callRemoteTool(entry.handle.reader, name, args, write, web(entry), assetsFor?.(entry.handle)), entry)));
       const field = name === 'list_skills' ? 'skills' : name === 'list_assets' ? 'assets' : 'folders';
       return { [field]: results.flatMap(result => result[field] as unknown[]), ...(name === 'list_skills' ? { target: null } : {}), revision: await revisions(available), unavailable };
     }
     if (name === 'find') {
       // fileOffset counts glob-matching files across repositories in manifest order.
-      const counts = await Promise.all(available.map(async entry => Number((await callRemoteTool(entry.handle.reader, 'glob', { ...(args.pattern ? { pattern: args.pattern } : {}), limit: 1 }, write, appUrl)).total)));
+      const counts = await Promise.all(available.map(async entry => Number((await callRemoteTool(entry.handle.reader, 'glob', { ...(args.pattern ? { pattern: args.pattern } : {}), limit: 1 }, write)).total)));
       const totalFiles = counts.reduce((sum, count) => sum + count, 0);
       const fileOffset = Number(args.fileOffset || 0);
       let skip = fileOffset;
@@ -77,7 +85,7 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
         const maxFiles = Number(args.maxFiles || 25) - scannedFiles;
         const maxResults = Number(args.maxResults || 100) - matches.length;
         if (maxFiles <= 0 || maxResults <= 0) break;
-        const result = await callRemoteTool(available[i].handle.reader, name, { ...args, fileOffset: skip, maxFiles, maxResults }, write, appUrl);
+        const result = await callRemoteTool(available[i].handle.reader, name, { ...args, fileOffset: skip, maxFiles, maxResults }, write);
         matches.push(...result.matches as unknown[]);
         scannedFiles += Number(result.scannedFiles);
         if (result.truncated && result.nextFileOffset === null) {
@@ -92,11 +100,11 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
     const paged = name === 'ls' || name === 'glob' || name === 'list_notes';
     const field = name === 'ls' ? 'entries' : name === 'glob' ? 'paths' : name === 'list_notes' ? 'notes' : 'matches';
     const results = await Promise.all(available.map(async entry => {
-      if (!paged) return [await callRemoteTool(entry.handle.reader, name, args, write, appUrl)];
+      if (!paged) return [keyedResult(await callRemoteTool(entry.handle.reader, name, args, write, web(entry)), entry)];
       const pages: Record<string, unknown>[] = [];
       let nextOffset: number | null = 0;
       while (nextOffset !== null) {
-        const page = await callRemoteTool(entry.handle.reader, name, { ...args, offset: nextOffset, limit: 500 }, write, appUrl);
+        const page = keyedResult(await callRemoteTool(entry.handle.reader, name, { ...args, offset: nextOffset, limit: 500 }, write, web(entry)), entry);
         pages.push(page);
         nextOffset = page.nextOffset as number | null;
       }
@@ -110,16 +118,18 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
     const entries = paged ? merged.slice(offset, offset + limit) : name === 'search_notes' ? merged.sort((a, b) => Number((b as { score: number; }).score) - Number((a as { score: number; }).score)).slice(0, Number(args.limit || 20)) : merged;
     return { ...(name === 'ls' ? { path: '.' } : {}), ...(name === 'search_notes' ? { query: args.query || '', isRegex: Boolean(args.isRegex), totalMatches: pages.reduce((n, r) => n + Number(r.totalMatches), 0), truncated: pages.some(r => r.truncated) || merged.length > entries.length } : {}), [field]: entries, total, ...(paged ? { nextOffset: offset + limit < total ? offset + limit : null } : {}), ...(name === 'list_notes' ? { count: entries.length } : {}), revision: await revisions(available), unavailable };
   }
-  const entry = ['cp', 'mv', 'rm'].includes(name) ? await resolvePath(workspace, name, args, assetsFor) : typeof args.notebookId === 'string' ? await workspace.forNotebook(args.notebookId) : await resolvePath(workspace, name, args, assetsFor);
+  const entry = ['cp', 'mv', 'rm'].includes(name) ? await resolvePath(workspace, name, args, assetsFor) : notebookKey ? await workspace.forNotebook(notebookKey) : await resolvePath(workspace, name, args, assetsFor);
   const selectedPath = args.path;
-  if (typeof args.notebookId === 'string' && typeof selectedPath === 'string' && !selectedPath.startsWith('r2:') && !entry.notebooks.some(nb => nb.id === args.notebookId && (selectedPath === nb.root || selectedPath.startsWith(`${nb.root}/`) || selectedPath.startsWith('.agents/skills/') || selectedPath.startsWith(`${nb.root.replace(/\/[^/]+$/, '')}/.agents/skills/`)))) throw new Error('Path does not belong to the selected notebook.');
-  const scoped = { ...args };
+  const selected = notebookKey ? entry.notebooks.find(nb => nb.key === notebookKey) : undefined;
+  if (notebookKey && typeof selectedPath === 'string' && !selectedPath.startsWith('r2:') && !(selected && (selectedPath === selected.root || selectedPath.startsWith(`${selected.root}/`) || selectedPath.startsWith('.agents/skills/') || selectedPath.startsWith(`${selected.root.replace(/\/[^/]+$/, '')}/.agents/skills/`)))) throw new Error('Path does not belong to the selected notebook.');
+  // The repository's tools name the notebook by its local id.
+  const scoped: Args = { ...args, ...(selected ? { notebookId: selected.id } : {}) };
   if (typeof scoped.revision === 'string' && scoped.revision.length > 8192) throw new Error('Workspace revision token is too long.');
   const received = typeof scoped.revision === 'string' ? parseWorkspaceRevision(scoped.revision, entry.ref.id, repositories.length) : {};
   if (typeof scoped.revision === 'string') scoped.revision = received[entry.ref.id];
   let result: Record<string, unknown>;
   try {
-    result = await callRemoteTool(entry.handle.reader, name, scoped, write, appUrl, assetsFor?.(entry.handle));
+    result = keyedResult(await callRemoteTool(entry.handle.reader, name, scoped, write, web(entry), assetsFor?.(entry.handle)), entry);
   } catch (error) {
     if (error instanceof StaleRevisionError) throw new StaleRevisionError([entry.ref.id], `Stale revision for repository ${entry.ref.id}. Reload before writing.`);
     throw error;
@@ -141,26 +151,32 @@ async function revisions(entries: { ref: { id: string; }; handle: RemoteHandle; 
 }
 
 async function notebookPath(workspace: WorkspaceRepositories<RemoteHandle>, file: string) {
-  const roots = (await workspace.manifest()).config.notebooks.filter(nb => nb.root === file);
+  const roots = (await workspace.all()).flatMap(entry => entry.notebooks.filter(nb => nb.root === file));
   if (roots.length > 1) throw new Error('The path lies in notebooks of more than one repository. Name its notebook.');
-  return roots.length ? workspace.forNotebook(roots[0].id) : workspace.forPath(file);
+  return roots.length ? workspace.forNotebook(roots[0].key) : workspace.forPath(file);
 }
 
-/** The repository whose notebook an `r2:` key belongs to: the key's first folder after the storage's key prefix names the notebook. */
+/**
+ * The repository whose notebook an `r2:` key belongs to: the key's first folder after the storage's key prefix is a
+ * notebook's local id, so a key no prefix places resolves that id as a bare notebook id.
+ */
 async function r2Repository(workspace: WorkspaceRepositories<RemoteHandle>, key: string, assetsFor?: (handle: RemoteHandle) => ToolAssets) {
   for (const entry of await workspace.all()) {
     if (!('handle' in entry)) continue;
     const prefix = (await assetsFor?.(entry.handle).scope())?.prefix ?? '';
-    const notebook = key.startsWith(prefix) ? key.slice(prefix.length).split('/')[0] : undefined;
-    if (notebook && entry.notebooks.some(nb => nb.id === notebook)) return workspace.forNotebook(notebook);
+    const localId = key.startsWith(prefix) ? key.slice(prefix.length).split('/')[0] : undefined;
+    const notebook = entry.notebooks.find(nb => nb.id === localId);
+    if (notebook) return workspace.forNotebook(notebook.key);
   }
-  return workspace.forNotebook(key.split('/')[0]);
+  const resolved = await workspace.resolveBareId(key.split('/')[0]);
+  if (!resolved) throw new Error(`Notebook is not configured for r2:${key}.`);
+  return workspace.forNotebook(resolved);
 }
 
 async function resolvePath(workspace: WorkspaceRepositories<RemoteHandle>, name: string, args: Args, assetsFor?: (handle: RemoteHandle) => ToolAssets) {
   const selected = typeof args.notebookId === 'string' ? await workspace.forNotebook(args.notebookId) : undefined;
   const pathEntry = (file: string) => {
-    if (selected?.notebooks.some(nb => nb.id === args.notebookId && (file === nb.root || file.startsWith(`${nb.root}/`)))) return Promise.resolve(selected);
+    if (selected && (file === selected.notebook.root || file.startsWith(`${selected.notebook.root}/`))) return Promise.resolve(selected);
     return notebookPath(workspace, file);
   };
   if (name === 'cp' || name === 'mv') {

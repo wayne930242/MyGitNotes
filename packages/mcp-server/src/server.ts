@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRemoteSource, createWorkspaceRepositories, deploymentConfigSource, localManifest, RemoteManifest, type RemoteSource, RepositoryUnavailableError, sharesCredential, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
+import { keyedResult, listedNotebooks, notebookArgument } from './notebook-keys.js';
 import { isMutationTool, remoteTools } from './remote-tools.js';
 import { callWorkspaceRemoteTool } from './workspace-remote.js';
 import { localTools } from './local-tools.js';
@@ -85,11 +86,18 @@ type ToolHandler = (ctx: ToolContext, args: Record<string, unknown>) => Promise<
 
 const localToolHandlers: Record<string, ToolHandler> = { list_folders: (ctx, args) => handleListFolders(ctx, args as { path?: string; notebookId?: string; }), get_workspace_config: (ctx) => handleGetWorkspaceConfig(ctx), list_notebooks: (ctx) => handleListNotebooks(ctx), list_notes: (ctx, args) => handleListNotes(ctx, args), read_note: (ctx, args) => handleReadNote(ctx, args as { path: string; notebookId?: string; metadataOnly?: boolean; }), save_note: (ctx, args) => handleSaveNote(ctx, args as any), delete_note: (ctx, args) => handleDeleteNote(ctx, args as { path: string; commitMessage?: string; }), list_agent_resources: (ctx) => handleListAgentResources(ctx), read_agent_resource: (ctx, args) => handleReadAgentResource(ctx, args as { path?: string; }), list_assets: (ctx, args) => handleListAssets(ctx, args as { notebookId: string; }), add_asset: (ctx, args) => handleAddAsset(ctx, args as any), delete_asset: (ctx, args) => handleDeleteAsset(ctx, args as { path: string; commitMessage?: string; force?: boolean; }), get_git_status: (ctx) => handleGetGitStatus(ctx), git_commit: (ctx, args) => handleGitCommit(ctx, args as { files: string[]; message: string; notebookId?: string; }), check_core_update: (ctx) => handleCheckCoreUpdate(ctx), update_core: (ctx, args) => handleUpdateCore(ctx, args as { autoPush?: boolean; checkOnly?: boolean; }), search_notes: (ctx, args) => handleSearchNotes(ctx, args as any), replace_notes: (ctx, args) => handleReplaceNotes(ctx, args as any), get_statuses: (ctx, args) => handleGetStatuses(ctx, args), get_note_metadata: (ctx, args) => handleGetNoteMetadata(ctx, args as { path: string; }), update_note_metadata: (ctx, args) => handleUpdateNoteMetadata(ctx, args as any), mkdir: (ctx, args) => handleMkdir(ctx, args as any), get_folder_metadata: (ctx, args) => handleGetFolderMetadata(ctx, args as { path: string; }), update_folder_metadata: (ctx, args) => handleUpdateFolderMetadata(ctx, args as any) };
 
-async function dispatchLocalTool(ctx: ToolContext, name: string, args: Record<string, unknown>): Promise<unknown> {
+/**
+ * Tools name notebooks by key (a bare local id resolves as an old URL does); each worktree's handlers see its local ids,
+ * and results name notebooks by key.
+ */
+async function dispatchLocalTool(ctx: ToolContext, name: string, input: Record<string, unknown>): Promise<unknown> {
   const workspace = ctx.workspace;
+  let args = input;
   if (workspace) {
-    if (name === 'get_workspace_config') return { config: (await workspace.manifest()).config };
-    if (name === 'list_notebooks') return { notebooks: (await workspace.manifest()).config.notebooks };
+    if (name === 'get_workspace_config') return { config: await workspace.keyedConfig(), notebooks: await listedNotebooks(workspace) };
+    if (name === 'list_notebooks') return { notebooks: await listedNotebooks(workspace) };
+    const notebookKey = await notebookArgument(workspace, input.notebookId);
+    if (notebookKey) args = { ...input, notebookId: notebookKey };
     const all = await workspace.all();
     const available = all.filter(entry => 'handle' in entry);
     const unavailable = all.filter(entry => 'unavailable' in entry).map(entry => ({ repository: entry.ref.id, message: entry.unavailable.message }));
@@ -97,9 +105,9 @@ async function dispatchLocalTool(ctx: ToolContext, name: string, args: Record<st
     if (['list_notes', 'search_notes', 'get_statuses', 'list_folders', 'list_assets'].includes(name) && !args.notebookId && !args.path) {
       const results = await Promise.all(available.map(async entry => {
         const scoped = { ...ctx, workspace: undefined, repoRoot: entry.handle.root, config: await workspace.scope(entry.ref.id) };
-        if (name === 'list_assets') return Promise.all(scoped.config.notebooks.map(nb => handleListAssets(scoped, { notebookId: nb.id })));
-        if (name === 'list_notes') return handleListNotes(scoped, { ...args, offset: 0, limit: 100000 });
-        return localToolHandlers[name](scoped, args);
+        if (name === 'list_assets') return Promise.all(scoped.config.notebooks.map(async nb => keyedResult(await handleListAssets(scoped, { notebookId: nb.id }), entry)));
+        if (name === 'list_notes') return keyedResult(await handleListNotes(scoped, { ...args, offset: 0, limit: 100000 }), entry);
+        return keyedResult(await localToolHandlers[name](scoped, args) as Record<string, unknown>, entry);
       }));
       const field = name === 'list_notes' ? 'notes' : name === 'search_notes' ? 'matches' : name === 'get_statuses' ? 'notebooks' : name === 'list_assets' ? 'assets' : 'folders';
       const items = results.flatMap(result => name === 'list_assets' ? (result as { assets: unknown[]; }[]).flatMap(item => item.assets) : ((result as Record<string, unknown>)[field] as unknown[] || []));
@@ -123,14 +131,20 @@ async function dispatchLocalTool(ctx: ToolContext, name: string, args: Record<st
     const rootAgentResource = name === 'read_agent_resource' && selectedPath && (!selectedPath.startsWith('notes/') || selectedPath === 'notes/AGENTS.md');
     const file = rootAgentResource ? undefined : selectedPath || (name === 'git_commit' ? undefined : Array.isArray(args.files) ? args.files[0] : undefined);
     const entry = notebookId ? await workspace.forNotebook(notebookId) : file ? await workspace.forPath(String(file)) : await workspace.byId(workspace.home.ref.id);
-    if (notebookId && selectedPath && !selectedPath.startsWith('r2:') && !entry.notebooks.some(nb => nb.id === notebookId && selectedPath.startsWith(`${nb.root}/`))) throw new Error('Path does not belong to the selected notebook.');
+    const selected = notebookId ? entry.notebooks.find(nb => nb.key === notebookId) : undefined;
+    if (selected && selectedPath && !selectedPath.startsWith('r2:') && !selectedPath.startsWith(`${selected.root}/`)) throw new Error('Path does not belong to the selected notebook.');
     if (name === 'git_commit') {
       for (const file of args.files as string[]) {
         if (all.length > 1 && !(await workspace.scope(entry.ref.id)).notebooks.some(nb => file.startsWith(`${nb.root}/`))) throw new Error('git_commit files must be inside the selected notebook repository.');
       }
     }
     ctx = { ...ctx, repoRoot: entry.handle.root, config: await workspace.scope(entry.ref.id) };
+    // The worktree's handlers name the notebook by its local id.
+    if (selected) args = { ...args, notebookId: selected.id };
     if (name === 'read_note' && !args.notebookId && file) args = { ...args, notebookId: ctx.config?.notebooks.find(nb => String(file).startsWith(`${nb.root}/`))?.id };
+    const handler = localToolHandlers[name];
+    if (!handler) throw new Error(`Unknown tool: ${name}`);
+    return keyedResult(await handler(ctx, args) as Record<string, unknown>, entry);
   }
   const handler = localToolHandlers[name];
   if (!handler) {

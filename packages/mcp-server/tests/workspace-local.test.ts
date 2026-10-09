@@ -63,3 +63,34 @@ it('stdio resolves identical note paths, merges listings, reports both statuses,
     await server.close();
   }
 });
+
+it('names notebooks by key, accepts a bare id by the rule old URLs follow, and never falls back from an unknown key', async () => {
+  const home = worktree({ '.mygitnotes.yaml': 'schema_version: 3\nworkspace:\n  title: Test\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n  - id: trpg\n    title: TRPG\n    root: notes/life\n    source: { type: github, repository: owner/campaign }\n', 'notes/life/note.md': '# Home\n' });
+  const campaign = worktree({ 'notes/life/note.md': '# Campaign\n' });
+  const source: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/campaign@main' ? campaign : undefined, manifest: inHome => inHome() }) };
+  const server = createMCPServer(home, source);
+  const client = new Client({ name: 'fixture', version: '1.0.0' });
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  await server.connect(serverTransport);
+  await client.connect(clientTransport);
+  const call = async (name: string, args: Record<string, unknown>) => {
+    const result = await client.callTool({ name, arguments: args });
+    return { ...result, data: JSON.parse((result.content as { text: string; }[])[0].text) };
+  };
+  // The home worktree's alias is its directory's name; the other repository's alias is its name.
+  const life = `${path.basename(home).toLowerCase()}~life`;
+  try {
+    const notebooks = (await call('list_notebooks', {})).data.notebooks;
+    expect(notebooks.map((notebook: { key: string; id: string; repository: string; }) => [notebook.key, notebook.id])).toEqual([[life, 'life'], ['campaign~trpg', 'trpg']]);
+    expect((await call('get_workspace_config', {})).data.config.workspace.default_notebook).toBe(life);
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'campaign~trpg' })).data.note).toMatchObject({ notebookId: 'campaign~trpg', content: expect.stringContaining('Campaign') });
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'trpg' })).data.note).toMatchObject({ notebookId: 'campaign~trpg', content: expect.stringContaining('Campaign') });
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'life' })).data.note).toMatchObject({ notebookId: life, content: expect.stringContaining('Home') });
+    expect((await call('list_notes', {})).data.notes.map((note: { notebookId: string; }) => note.notebookId).sort()).toEqual(['campaign~trpg', life].sort());
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'missing~trpg' })).isError).toBe(true);
+    expect((await call('read_note', { path: 'notes/life/note.md', notebookId: 'missing' })).isError).toBe(true);
+  } finally {
+    await client.close();
+    await server.close();
+  }
+});
