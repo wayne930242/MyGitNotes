@@ -298,9 +298,20 @@ GitHub App 安裝需在 App 設定開啟 **Contents**、**Workflows**、**Action
 
 若舊工作區的 `main` 仍包含產品檔案，先提交或清除變更，再於 `main` 執行一次 `pnpm convert-workspace`。接著以 `git worktree add --track -b core ../mygitnotes-core origin/core` 建立獨立 Core worktree，在其 .env 將 `MYGITNOTES_LOCAL_PATH` 設為轉換後的 checkout，並從 Core worktree 啟動。`pnpm update-core` 僅能在 `core` 執行。
 
+### 線上部署升到 schema 4
+
+這版 Core 的線上部署仍能讀取 schema 3、而且沒有任何筆記本使用 `source` 的 manifest；舊版 Core 則會拒絕 schema 4。所以先部署程式，之後再遷移 manifest，順序如下：
+
+1. 部署前，在部署環境指定產品儲存庫：`MYGITNOTES_PRODUCT_REPOSITORY=owner/name`，或 `mygitnotes.server.yaml` 的 `product_repository`（見 [Core 更新](#core-更新)）。自架的線上部署必須設定它才能保留 Core 更新；沒設定時，「設定」頁不再顯示 Core 更新，更新路由回 404。在 Vercel 上要在部署開始前設好，這次部署才會帶到這個值。
+2. 部署新版 Core，等部署上線。
+3. 確認瀏覽與提交筆記正常、既有的 MCP 連線仍列得出筆記本、「設定」頁有 Core 更新。
+4. 之後再找時間，在筆記儲存庫分支的乾淨 checkout 上，從新版 Core checkout 執行 `pnpm migrate-workspace --workspace <checkout>` 遷移它的 manifest。它會產生 commit `chore: migrate the workspace manifest to schema 4`，內容只改 `schema_version`；用 `git -C <checkout> show --stat HEAD` 確認後再 push。
+
+push 這個 commit 之前，回滾只需要換回舊版程式；push 之後要連同它一起 revert，因為舊版 Core 拒絕 schema 4。仍有筆記本使用 `source` 的 manifest，在這版 Core 會讓所在儲存庫標成無法使用，要先依[轉換 `source` 筆記本](#轉換-source-筆記本)轉換。
+
 ## 筆記本放在其他儲存庫
 
-工作區可以提供多個儲存庫的筆記本。每個儲存庫自己的 `.mygitnotes.yaml`（`schema_version: 4`）宣告它保存的筆記本，`root` 和 `assets` 相對於那個儲存庫，並設定儲存庫的標題、開啟時進入的筆記本與偏好設定。部署指定的儲存庫（`MYGITNOTES_REPOSITORY`、`MYGITNOTES_LOCAL_PATH` 或最上層的 `source:`）是預設儲存庫，工作區從這裡開啟。本機部署在 `mygitnotes.server.yaml` 把其他儲存庫對應到 worktree，`path` 相對於這個設定檔：
+工作區可以提供多個儲存庫的筆記本。每個儲存庫自己的 `.mygitnotes.yaml`（`schema_version: 4`）宣告它保存的筆記本，`root` 和 `assets` 相對於那個儲存庫，並設定儲存庫的標題、開啟時進入的筆記本與偏好設定。部署指定的儲存庫（`MYGITNOTES_REPOSITORY`、`MYGITNOTES_LOCAL_PATH` 或最上層的 `source:`）是預設儲存庫，工作區從這裡開啟。本機部署在 `mygitnotes.server.yaml` 把其他儲存庫對應到 worktree，`path` 相對於這個設定檔；每個儲存庫的分支是它的 worktree 目前 checkout 的分支：
 
 ```yaml
 repositories:
@@ -323,7 +334,9 @@ pnpm convert-sources --workspace ../hub --yes   # 轉換另一個已對應 workt
 
 每個帶 `source` 的筆記本，會原樣（只拿掉 `source`）加進它指定的儲存庫的 manifest。那個儲存庫沒有 manifest 時會新建一份：標題是儲存庫名稱，開啟時進入第一個移入的筆記本，偏好設定複製自轉換中的 manifest，寫入前會完整顯示；已有的 manifest 則保留原本的標題、預設筆記本與偏好設定。接著把筆記本從轉換中的 manifest 移除，兩邊都改成 `schema_version: 4`。以下情況會在寫入任何檔案前拒絕：被指定的儲存庫沒有對應的 worktree、目標已有同 id 但內容不同的筆記本或 root 重疊的筆記本、要改的 manifest 有未提交的變更。轉換中的 manifest 開啟時進入的筆記本被移走時，計畫會列出原本與新的 `default_notebook`（剩下的第一個筆記本）。轉換中的儲存庫的 Focus 與 Study 檔若有被移走筆記本的項目，會列出來並留在原處。
 
-每個儲存庫的變更各是一個 commit。commit 失敗時指令會停下，並印出提交已寫入檔案的指令；提交後再執行一次 `pnpm convert-sources`，已經以相同內容存在於目標儲存庫的筆記本會略過。所有筆記本都會離開轉換中的 manifest 時，指令會停下，除非加上 `--remove-emptied`：它在該儲存庫的 commit 裡刪除那份 manifest，並把該儲存庫從 `mygitnotes.server.yaml` 的 `repositories` 移除；部署本身的來源不能這樣移除，要先換成其他儲存庫。沒有 `source` 的 manifest 用 `pnpm migrate-workspace` 升到 schema 4。低於 schema 3 的 manifest 可能還有只有 schema 3 Core 才會轉換的 Screen 檔：`convert-sources` 會拒絕它，請先在 `fd0fd42` 的 Core checkout 執行 `pnpm migrate-workspace`。
+轉換部署本身的來源時，每個儲存庫的 alias 也會維持不變；alias 是它的筆記本在網址與 Focus 版面裡的 key 開頭。schema 3 依 manifest 的筆記本以 `source` 指定儲存庫的順序產生 alias，這版 Core 則依 `repositories` 的順序產生，所以指令會把筆記本要移入的儲存庫依那個順序排到 `repositories` 最前面，其他項目維持原順序排在後面；計畫會列出新的順序與轉換後的 alias。
+
+每個儲存庫的變更各是一個 commit。commit 失敗時指令會停下，並印出提交已寫入檔案的指令；提交後再執行一次 `pnpm convert-sources`，已經以相同內容存在於目標儲存庫的筆記本會略過。再次執行時若發現這類 manifest 仍未提交，指令會在提交其他儲存庫前停下，並再印一次那個提交指令。所有筆記本都會離開轉換中的 manifest 時，指令會停下，除非加上 `--remove-emptied`：它在該儲存庫的 commit 裡刪除那份 manifest，並把該儲存庫從 `mygitnotes.server.yaml` 的 `repositories` 移除；部署本身的來源不能這樣移除，要先換成其他儲存庫。沒有 `source` 的 manifest 用 `pnpm migrate-workspace` 升到 schema 4。低於 schema 3 的 manifest 可能還有只有 schema 3 Core 才會轉換的 Screen 檔：`convert-sources` 會拒絕它，請先在 `fd0fd42` 的 Core checkout 執行 `pnpm migrate-workspace`。
 
 ## 選用：私有 R2 素材
 
