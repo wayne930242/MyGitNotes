@@ -35,7 +35,7 @@ Default transport is **stdio** for local agent integration (e.g. Claude Desktop,
 The stdio entry resolves `mygitnotes.server.yaml` (or legacy `github-notes.server.yaml`) from its repository argument.
 A local source uses the filesystem tools above; a GitHub or GitLab source exposes
 remote read tools against the configured public repositories. Stdio and hosted
-sessions resolve each notebook against its manifest-declared repository. Path-only
+sessions resolve each notebook against the repository whose own manifest declares it. Path-only
 tools accept an optional `notebookId` to disambiguate identical paths in different
 repositories; an unqualified path must lie in exactly one configured notebook.
 A path outside every notebook is rejected. `cp` and `mv` cannot cross repositories.
@@ -44,9 +44,19 @@ Workspace-wide listings merge available repositories and report unavailable ones
 Hosted `/mcp` uses stateless Streamable HTTP. Settings → Access control creates
 named read-only or write grants and shows a complete `/mcp/<token>` connector URL
 once. ChatGPT uses that URL with No Authentication. Bearer headers at `/mcp`
-remain supported. The URL is a credential scoped to the configured source and
-canonical audience. New grants have no application TTL and survive logout,
-session expiry and deployments; owners revoke individual grants in Settings.
+remain supported. The URL is a credential scoped to the person who made it, the
+deployment's site (`site`, `siteIdentity`) and the canonical audience. `/mcp`
+verifies the grant before it resolves a workspace, then asks the configuration
+source for the settings of the grant's person (`WorkspaceRequest.person`, with the
+browser cookie removed, so a cookie never chooses the person), and every call sees
+that person's visible repositories at the time of the call. A grant made before
+grants bound to a person carries `source` instead: it is still accepted until its
+owner revokes it, reaches only that repository while it is a visible member, and
+lists nothing once the repository is hidden or removed. A community deployment where
+each visitor chooses a repository keeps that choice in a browser cookie, so a grant
+there lists nothing (before this change it answered 503). New grants have no
+application TTL and survive logout, session expiry and deployments; owners revoke
+individual grants in Settings.
 GitLab access tokens, and short-lived GitHub OAuth app tokens issued with a refresh token, refresh through the shared server credential. Revoked provider authorization requires signing in again.
 Rejected requests log a secret-free reason (`[mcp] unauthorized: …`, `[auth] credential rejected: …`, or a record sealed with another `SESSION_SECRET`).
 A rejected request on an existing grant also keeps its reason and time for seven days as `lastRejection` on the Settings grant list (`GET /api/auth/agent-tokens`).

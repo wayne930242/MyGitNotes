@@ -269,20 +269,22 @@ This subsection applies on top of [Vercel through GitHub Actions sparse checkout
 3. For Compose, continue at the build and start step; for plain Docker, continue at the image build and container start steps; for Vercel, run `gh workflow run deploy-vercel-sparse.yml --ref core`.
 4. Open `APP_URL`; sign-in opens the Enterprise site and the Notes view loads.
 
-What follows the site: repository reads and writes, sign-in, the repository picker when `MYGITNOTES_REPOSITORY` is empty, the GitHub App installation link (`<site>/github-apps/<slug>/installations/new`), and Gist publishing (a note's **Open the Gist** link asks the site's Gist API for the Gist's address and opens it there). A notebook in another repository on the same site declares `source: { type: github, url: https://ghe.example.com, repository: team/design }`; without `url` it means github.com, a different site, and does not share the sign-in.
+What follows the site: repository reads and writes, sign-in, the repository picker when `MYGITNOTES_REPOSITORY` is empty, the GitHub App installation link (`<site>/github-apps/<slug>/installations/new`), and Gist publishing (a note's **Open the Gist** link asks the site's Gist API for the Gist's address and opens it there). Every repository of a workspace is on the deployment's site; one on another site is unavailable, since that site's sign-in does not reach it.
 
 Earlier versions ignored `url` on a `github` source. A manifest or server YAML that carries one now names that site, so remove a leftover `url` (for example a repository's web address) from a github.com source, and do not leave it empty.
 
 Differences from github.com:
 
 - **Create from template**: github.com offers the starter template. An Enterprise site offers the create link only when `MYGITNOTES_STARTER_TEMPLATE` names a template on that site; otherwise people pick an existing repository.
-- **Core updates** keep following github.com and are not offered for a repository on an Enterprise site, so the site's token is never sent to github.com.
+- **Core updates** keep following github.com and are not offered for a product repository on an Enterprise site, so the site's token is never sent to github.com.
 - **Archive downloads** accept a redirect only to the site's own codeload (`https://codeload.<host>/…`, or `https://<host>/codeload/…` without subdomain isolation), over HTTPS on the port the site's URL names (none for the default).
 - The Pro service stays github.com only.
 
 ## Core updates
 
 Settings checks the repository's Core revision and the running build separately. Local updates require a clean product checkout on `core`; the workspace branch does not control this operation. After updating, run `pnpm migrate-workspace` with the updated Core and restart the server.
+
+A hosted deployment offers Core updates only for its product repository, the repository whose `core` branch it deploys. Name it with `MYGITNOTES_PRODUCT_REPOSITORY` (`owner/name`) or `product_repository: owner/name` in `mygitnotes.server.yaml`; it is on the deployment's GitHub site (`MYGITNOTES_GITHUB_URL`, github.com when unset). A fork-model deployment, whose notes repository also carries `core`, names that same repository. Without one, Settings shows no Core update and the update routes answer 404 without asking the provider.
 
 For GitHub workspaces, use **Install Core sync** when Settings reports a missing workflow, then **Update Core**. Bootstrap also installs the [canonical workflow](../packages/core/assets/mygitnotes-core-sync.yml) as `.github/workflows/mygitnotes-core-sync.yml` on `main`; repositories with another default branch install it there through Settings. The workflow fetches MyGitNotes upstream and pushes a fast-forward of `core`. Settings follows the correlated run and verifies the resulting revision before reporting success. Existing workflow files are preserved.
 
@@ -298,20 +300,7 @@ To convert an older workspace whose `main` still contains product files, clean t
 
 ## Notebooks in other repositories
 
-A notebook can live in its own repository. Declare it in the home manifest with `source`; the manifest needs `schema_version: 2` (`pnpm migrate-workspace` upgrades a version 1 manifest):
-
-```yaml
-notebooks:
-  - id: trpg
-    title: TRPG
-    root: notes
-    source:
-      type: github
-      repository: owner/trpg-notes
-      branch: main
-```
-
-`branch` defaults to `main`; GitLab also needs `url`, and a GitHub notebook on a GitHub Enterprise site names it with `url`. `root` and `assets` are relative to that repository. A hosted deployment reaches the repository with the signed-in account; phase one requires it on the home repository's platform and site. A local deployment maps it to a worktree in `mygitnotes.server.yaml`, with `path` relative to that file:
+A workspace can serve notebooks from several repositories. Each repository's own `.mygitnotes.yaml` (`schema_version: 4`) declares the notebooks it holds, with `root` and `assets` relative to that repository, and sets the repository's title, the notebook it opens at and its preferences. The repository the deployment names (`MYGITNOTES_REPOSITORY`, `MYGITNOTES_LOCAL_PATH` or the top-level `source:`) is the default repository, where the workspace opens. A local deployment adds further repositories by mapping them to worktrees in `mygitnotes.server.yaml`, with `path` relative to that file:
 
 ```yaml
 repositories:
@@ -320,7 +309,21 @@ repositories:
     path: ../trpg-notes
 ```
 
-A notebook whose repository cannot be reached shows as unavailable with the reason; the other notebooks work normally. Each repository keeps its own Screen, Focus and Study files and Agent files, and a commit that spans repositories creates one commit in each.
+A repository that cannot be reached, or whose manifest does not load, shows as unavailable with the reason; the other repositories work normally, and Settings opens the broken manifest so it can be fixed. Each repository keeps its own Screen, Focus and Study files and Agent files, and a commit that spans repositories creates one commit in each.
+
+### Converting `source` notebooks
+
+Schema 3 let the home manifest declare a notebook of another repository with `source`. Schema 4 removed `source`, and a manifest that still uses it makes its repository unavailable with `Notebook <id> uses source, which schema 4 removed. Run pnpm convert-sources in <repository>.` Convert it once, from the Core checkout whose `mygitnotes.server.yaml` maps each named repository to its worktree:
+
+```sh
+pnpm convert-sources            # shows the plan; asks before writing in a terminal
+pnpm convert-sources --yes      # applies it without asking
+pnpm convert-sources --workspace ../hub --yes   # converts another mapped worktree's manifest
+```
+
+For each notebook with `source`, the command adds the notebook, unchanged but for `source`, to the manifest of the repository it names, creating that manifest when the repository has none (titled by the repository's name, opening at the first notebook moved to it, with a copy of the converting manifest's preferences, shown in full before writing); an existing manifest keeps its title, default notebook and preferences. It then removes the notebook from the converting manifest and moves both to `schema_version: 4`. It refuses before writing anything when a named repository has no mapped worktree, when the target already has a different notebook with the same id or an overlapping root, or when a manifest it touches has uncommitted changes. When the notebook the converting manifest opens at moves away, the plan names the old and the new `default_notebook` (its first remaining notebook). Focus and Study entries of a moved notebook found in the converting repository's files are listed and left in place.
+
+Each repository's change is one commit. When a commit fails, the command stops and prints the command that commits what it wrote; run `pnpm convert-sources` again afterwards, and notebooks already present, identically, in their repository are skipped. When every notebook would leave the converting manifest, the command stops unless `--remove-emptied` is given, which deletes that manifest in its commit and removes the repository from `repositories` in `mygitnotes.server.yaml`; it refuses this for the deployment's own source, which another repository must replace first. A manifest without `source` moves to schema 4 with `pnpm migrate-workspace`. A manifest below schema 3 may still hold a Screen file that only a schema 3 Core converts: `convert-sources` refuses it and asks to run `pnpm migrate-workspace` from a Core checkout at `fd0fd42` first.
 
 ## Optional: private R2 assets
 

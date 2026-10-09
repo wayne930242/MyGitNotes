@@ -269,20 +269,22 @@ Compose 預設將 app 發布於 127.0.0.1:4321，並以 redis-data volume 保存
 3. Compose 接續建置與啟動步驟；單純 Docker 接續映像建置與容器啟動步驟；Vercel 執行 `gh workflow run deploy-vercel-sparse.yml --ref core`。
 4. 開啟 `APP_URL`：登入會前往 Enterprise 站台，筆記檢視成功載入。
 
-下列項目都跟著這個站台：儲存庫讀寫、登入、`MYGITNOTES_REPOSITORY` 留空時的儲存庫選擇器、GitHub App 安裝連結（`<站台>/github-apps/<slug>/installations/new`），以及 Gist 發佈（筆記的「開啟 Gist」連結會向站台的 Gist API 查詢網址，再開到那裡）。位於同一站台其他儲存庫的筆記本這樣宣告：`source: { type: github, url: https://ghe.example.com, repository: team/design }`；沒有 `url` 代表 github.com，是不同的站台，不會共用登入。
+下列項目都跟著這個站台：儲存庫讀寫、登入、`MYGITNOTES_REPOSITORY` 留空時的儲存庫選擇器、GitHub App 安裝連結（`<站台>/github-apps/<slug>/installations/new`），以及 Gist 發佈（筆記的「開啟 Gist」連結會向站台的 Gist API 查詢網址，再開到那裡）。工作區的每個儲存庫都在部署的站台上；位於其他站台的儲存庫會標成無法使用，因為這個站台的登入碰不到它。
 
 舊版會忽略 `github` 來源上的 `url`。現在 manifest 或 server YAML 裡帶了 `url`，就代表那個站台；github.com 的來源若殘留 `url`（例如填了儲存庫的網頁網址），請刪掉，也不要留空值。
 
 與 github.com 的差異：
 
 - **從範本建立**：github.com 提供入門範本。Enterprise 站台只有在 `MYGITNOTES_STARTER_TEMPLATE` 指定該站台上的範本時才顯示建立連結；否則請使用者選擇既有儲存庫。
-- **Core 更新**仍然追蹤 github.com，Enterprise 站台的儲存庫不提供，站台的權杖也就不會送到 github.com。
+- **Core 更新**仍然追蹤 github.com，產品儲存庫在 Enterprise 站台時不提供，站台的權杖也就不會送到 github.com。
 - **封存檔下載**只接受導向該站台自己的 codeload（`https://codeload.<主機>/…`，未啟用子網域隔離時為 `https://<主機>/codeload/…`），必須是 HTTPS，連接埠與站台網址相同（預設連接埠則不帶）。
 - Pro 服務仍然只支援 github.com。
 
 ## Core 更新
 
 「設定」頁會分別檢查儲存庫的 Core 版本與正在執行的 build。本機更新需要位於 `core` 的乾淨產品 checkout；工作區分支不影響此操作。更新後以新版 Core 執行 `pnpm migrate-workspace`，再重新啟動 server。
+
+線上部署只為它的產品儲存庫提供 Core 更新，也就是它部署的 `core` 分支所在的儲存庫。用 `MYGITNOTES_PRODUCT_REPOSITORY`（`owner/name`）或 `mygitnotes.server.yaml` 的 `product_repository: owner/name` 指定；它在部署的 GitHub 站台上（`MYGITNOTES_GITHUB_URL`，未設定時是 github.com）。fork-model 部署的筆記儲存庫同時帶著 `core`，就指定同一個儲存庫。沒有指定時，「設定」頁不顯示 Core 更新，更新路由直接回 404，不會向 provider 發出請求。
 
 GitHub 工作區在「設定」頁提示缺少 workflow 時，先按 **Install Core sync**，再按 **Update Core**。bootstrap 也會把 [canonical workflow](../packages/core/assets/mygitnotes-core-sync.yml) 安裝到 `main` 的 `.github/workflows/mygitnotes-core-sync.yml`；預設分支不是 `main` 的儲存庫，可透過「設定」頁安裝到該分支。workflow 會抓取 MyGitNotes upstream，並 push `core` 的 fast-forward。「設定」頁會追蹤對應的 run，確認更新後的 revision 才回報成功。既有 workflow 檔案會保留。
 
@@ -298,20 +300,7 @@ GitHub App 安裝需在 App 設定開啟 **Contents**、**Workflows**、**Action
 
 ## 筆記本放在其他儲存庫
 
-筆記本可以放在自己的儲存庫。在主儲存庫的 manifest 用 `source` 指定，manifest 需要 `schema_version: 2`（`pnpm migrate-workspace` 會把第 1 版升級）：
-
-```yaml
-notebooks:
-  - id: trpg
-    title: TRPG
-    root: notes
-    source:
-      type: github
-      repository: owner/trpg-notes
-      branch: main
-```
-
-`branch` 預設是 `main`；GitLab 另外要填 `url`，位於 GitHub Enterprise 站台的 GitHub 筆記本也用 `url` 指定站台。`root` 和 `assets` 都相對於那個儲存庫。線上部署會用登入的帳號存取它；第一階段要求它和主儲存庫在同一個平台和站台。本機部署則在 `mygitnotes.server.yaml` 設定對應的 worktree，`path` 相對於這個設定檔：
+工作區可以提供多個儲存庫的筆記本。每個儲存庫自己的 `.mygitnotes.yaml`（`schema_version: 4`）宣告它保存的筆記本，`root` 和 `assets` 相對於那個儲存庫，並設定儲存庫的標題、開啟時進入的筆記本與偏好設定。部署指定的儲存庫（`MYGITNOTES_REPOSITORY`、`MYGITNOTES_LOCAL_PATH` 或最上層的 `source:`）是預設儲存庫，工作區從這裡開啟。本機部署在 `mygitnotes.server.yaml` 把其他儲存庫對應到 worktree，`path` 相對於這個設定檔：
 
 ```yaml
 repositories:
@@ -320,7 +309,21 @@ repositories:
     path: ../trpg-notes
 ```
 
-儲存庫連不上的筆記本會標成無法使用並顯示原因，其他筆記本照常運作。每個儲存庫各自保存 Screen、Focus、Study 設定檔和 Agent 檔案；跨儲存庫的提交會在每個儲存庫各產生一個 commit。
+連不上的儲存庫、或 manifest 無法載入的儲存庫，會標成無法使用並顯示原因，其他儲存庫照常運作；「設定」頁會開啟有問題的 manifest 讓人修正。每個儲存庫各自保存 Screen、Focus、Study 設定檔和 Agent 檔案；跨儲存庫的提交會在每個儲存庫各產生一個 commit。
+
+### 轉換 `source` 筆記本
+
+schema 3 允許主 manifest 用 `source` 宣告其他儲存庫的筆記本。schema 4 移除了 `source`；仍使用它的 manifest 會讓所在儲存庫標成無法使用，原因是 `Notebook <id> uses source, which schema 4 removed. Run pnpm convert-sources in <repository>.`。請在 Core checkout 執行一次轉換，它的 `mygitnotes.server.yaml` 要把每個被指定的儲存庫對應到 worktree：
+
+```sh
+pnpm convert-sources            # 顯示計畫；在終端機中寫入前會先詢問
+pnpm convert-sources --yes      # 不詢問，直接套用
+pnpm convert-sources --workspace ../hub --yes   # 轉換另一個已對應 worktree 的 manifest
+```
+
+每個帶 `source` 的筆記本，會原樣（只拿掉 `source`）加進它指定的儲存庫的 manifest。那個儲存庫沒有 manifest 時會新建一份：標題是儲存庫名稱，開啟時進入第一個移入的筆記本，偏好設定複製自轉換中的 manifest，寫入前會完整顯示；已有的 manifest 則保留原本的標題、預設筆記本與偏好設定。接著把筆記本從轉換中的 manifest 移除，兩邊都改成 `schema_version: 4`。以下情況會在寫入任何檔案前拒絕：被指定的儲存庫沒有對應的 worktree、目標已有同 id 但內容不同的筆記本或 root 重疊的筆記本、要改的 manifest 有未提交的變更。轉換中的 manifest 開啟時進入的筆記本被移走時，計畫會列出原本與新的 `default_notebook`（剩下的第一個筆記本）。轉換中的儲存庫的 Focus 與 Study 檔若有被移走筆記本的項目，會列出來並留在原處。
+
+每個儲存庫的變更各是一個 commit。commit 失敗時指令會停下，並印出提交已寫入檔案的指令；提交後再執行一次 `pnpm convert-sources`，已經以相同內容存在於目標儲存庫的筆記本會略過。所有筆記本都會離開轉換中的 manifest 時，指令會停下，除非加上 `--remove-emptied`：它在該儲存庫的 commit 裡刪除那份 manifest，並把該儲存庫從 `mygitnotes.server.yaml` 的 `repositories` 移除；部署本身的來源不能這樣移除，要先換成其他儲存庫。沒有 `source` 的 manifest 用 `pnpm migrate-workspace` 升到 schema 4。低於 schema 3 的 manifest 可能還有只有 schema 3 Core 才會轉換的 Screen 檔：`convert-sources` 會拒絕它，請先在 `fd0fd42` 的 Core checkout 執行 `pnpm migrate-workspace`。
 
 ## 選用：私有 R2 素材
 
