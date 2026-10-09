@@ -1,4 +1,4 @@
-schema_version: 3
+schema_version: 4
 workspace:
   title: MyGitNotes Example Workspace
   default_notebook: example
