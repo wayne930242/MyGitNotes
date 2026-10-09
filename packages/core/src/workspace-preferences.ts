@@ -11,9 +11,5 @@ const YOUTUBE_DISPLAY_MODES: YouTubeDisplayMode[] = ['thumbnail', 'medium', 'the
 /** Normalizes the optional `preferences` block, casting invalid values to their defaults rather than throwing, matching `default_view`'s lenient style. */
 export function normalizePreferences(raw: unknown): ResolvedPreferences {
   const prefs = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  return {
-    defaultYoutubeDisplayMode: YOUTUBE_DISPLAY_MODES.includes(prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode) ? prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode : DEFAULT_WORKSPACE_PREFERENCES.defaultYoutubeDisplayMode,
-    defaultShowLineNumbers: typeof prefs.defaultShowLineNumbers === 'boolean' ? prefs.defaultShowLineNumbers : DEFAULT_WORKSPACE_PREFERENCES.defaultShowLineNumbers,
-    defaultFocusMode: typeof prefs.defaultFocusMode === 'boolean' ? prefs.defaultFocusMode : DEFAULT_WORKSPACE_PREFERENCES.defaultFocusMode,
-  };
+  return { defaultYoutubeDisplayMode: YOUTUBE_DISPLAY_MODES.includes(prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode) ? prefs.defaultYoutubeDisplayMode as YouTubeDisplayMode : DEFAULT_WORKSPACE_PREFERENCES.defaultYoutubeDisplayMode, defaultShowLineNumbers: typeof prefs.defaultShowLineNumbers === 'boolean' ? prefs.defaultShowLineNumbers : DEFAULT_WORKSPACE_PREFERENCES.defaultShowLineNumbers, defaultFocusMode: typeof prefs.defaultFocusMode === 'boolean' ? prefs.defaultFocusMode : DEFAULT_WORKSPACE_PREFERENCES.defaultFocusMode };
 }

@@ -5,10 +5,7 @@ import type { NotebookConfig, WorkspaceConfig } from './types.js';
 import { DEFAULT_WORKSPACE_PREFERENCES, type ResolvedPreferences } from './workspace-preferences.js';
 
 /** What reading one repository's own manifest file found. */
-export type ManifestRead =
-  | { state: 'file'; config: WorkspaceConfig; revision: string; }
-  | { state: 'missing'; revision: string; }
-  | { state: 'invalid'; text: string; error: string; revision: string; };
+export type ManifestRead = { state: 'file'; config: WorkspaceConfig; revision: string; } | { state: 'missing'; revision: string; } | { state: 'invalid'; text: string; error: string; revision: string; };
 
 /** A repository's own manifest file, read and written in that repository. */
 export interface RepositoryManifestFile {
