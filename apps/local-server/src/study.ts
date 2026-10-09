@@ -4,11 +4,11 @@ import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { parse, stringify } from 'yaml';
-import { compilationRow, emptyStudyWorkspace, parseCompilation, SourceError, STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from '@mygitnotes/core';
+import { compilationRow, emptyStudyWorkspace, keyedItem, parseCompilation, SourceError, STUDY_DOCUMENT, STUDY_FILE, STUDY_MAX_BYTES, StudyWorkspaceSchema } from '@mygitnotes/core';
 import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, parseNoteContent, readNoteFile, reconcileStudyNote, replaceNoteStatus, resolveSafePath, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { notebookRepository, repositoryOrHome } from './request-workspace.js';
+import { keyedDocument, notebookRepository, repositoryOrHome, storedDocument } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 const withinNotebook = (file: string, root: string) => file.startsWith(`${root}/`);
@@ -29,15 +29,16 @@ export function createStudyRouter(): Router {
   const router = Router();
   router.get('/', async (req, res) => {
     try {
-      const { id, handle } = await repositoryOrHome(res, req.query.repository);
+      const { id, alias, handle } = await repositoryOrHome(res, req.query.repository);
+      const keyed = (raw: string | null) => keyedDocument(STUDY_DOCUMENT, alias, decode(raw));
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
-        return res.json({ study: decode(raw), revision: revisionOf(raw), path: STUDY_FILE, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
+        return res.json({ study: keyed(raw), revision: revisionOf(raw), path: STUDY_FILE, writable: await getCurrentBranch(handle.root) === 'main', repository: id });
       }
       const { reader } = handle;
       const snapshot = await reader.getSnapshot();
       const raw = await readSnapshotText(reader, snapshot, STUDY_FILE);
-      res.json({ study: decode(raw), revision: snapshot.sha, path: STUDY_FILE, writable: reader.canWrite(snapshot), repository: id });
+      res.json({ study: keyed(raw), revision: snapshot.sha, path: STUDY_FILE, writable: reader.canWrite(snapshot), repository: id });
     } catch (error) {
       fail(res, error);
     }
@@ -47,26 +48,27 @@ export function createStudyRouter(): Router {
       const validation = StudyLaneActionSchema.safeParse(req.body);
       if (!validation.success) throw new SourceError('Invalid review action.', 400);
       const body = validation.data;
-      // The note and its Study record live in the notebook's repository and change in one commit there.
-      const { handle, config } = await notebookRepository(res, body.notebookId);
+      // The note and its Study record live in the notebook's repository and change in one commit there; the record stores the local id.
+      const { handle, alias, config, notebook: named } = await notebookRepository(res, body.notebookId);
+      const localId = named.id;
       const execute = async () => {
         if (handle.kind === 'remote' && !handle.authenticated) throw new SourceError('Sign in with write access.', 403);
         const reader = handle.kind === 'remote' ? handle.reader : undefined;
         const snapshot = await reader?.getSnapshot();
         if (handle.kind === 'local' && await getCurrentBranch(handle.root) !== 'main') throw new SourceError('Switch to main to review cards.', 403);
-        const notebook = config.notebooks.find(value => value.id === body.notebookId && body.path.startsWith(`${value.root}/`));
+        const notebook = config.notebooks.find(value => value.id === localId && body.path.startsWith(`${value.root}/`));
         if (!notebook || !isNotebookContent(body.path.slice(notebook.root.length + 1), notebook) || !/\.(md|markdown|txt)$/i.test(body.path)) throw new SourceError('Path is not a configured note.', 403);
         const root = handle.kind === 'local' ? handle.root : '';
         const read = async (file: string) => reader ? (await reader.readFile(file)).toString('utf8') : readRegular(root, file);
         const rawStudy = reader ? await readSnapshotText(reader, snapshot!, STUDY_FILE) : await readLocal(root);
         if ((snapshot?.sha || revisionOf(rawStudy)) !== body.revision) throw new SourceError('Study data changed. Reload before reviewing.', 409);
         const currentStudy = decode(rawStudy), rawNote = await read(body.path);
-        const currentNote = reader ? await reader.note(body.path) : readNoteFile(root, body.path, body.notebookId);
+        const currentNote = reader ? await reader.note(body.path) : readNoteFile(root, body.path, localId);
         if (currentNote.content !== body.expected.content || !isDeepStrictEqual(currentNote.metadata, body.expected.metadata)) throw new SourceError('The note changed. Reload before reviewing.', 409);
         let nextStudy, status: string | null;
         if (body.action === 'undo') {
           const event = currentStudy.events.at(-1), note = event && currentStudy.notes.find(note => note.id === event.noteId);
-          if (!event?.transition || event.id !== body.eventId || event.transition.laneId !== body.laneId || !note || note.path !== body.path || note.notebookId !== body.notebookId || currentNote.status !== event.transition.toStatus) throw new SourceError('This review can no longer be undone.', 409);
+          if (!event?.transition || event.id !== body.eventId || event.transition.laneId !== body.laneId || !note || note.path !== body.path || note.notebookId !== localId || currentNote.status !== event.transition.toStatus) throw new SourceError('This review can no longer be undone.', 409);
           nextStudy = undoStudyAction(currentStudy);
           status = event.transition.fromStatus;
         } else {
@@ -96,7 +98,7 @@ export function createStudyRouter(): Router {
           replaceStudyAndNote(root, body.path, rawNote, updated, rawStudy, yaml);
           revision = revisionOf(yaml);
         }
-        res.json({ study: nextStudy, revision, path: STUDY_FILE, writable: true, note: { ...currentNote, ...parsed, status: status ?? undefined, metadata: parsed.metadata, ...(reader ? { revision } : { mtime: Date.now(), size: Buffer.byteLength(updated) }) } });
+        res.json({ study: keyedDocument(STUDY_DOCUMENT, alias, nextStudy), revision, path: STUDY_FILE, writable: true, note: keyedItem(alias)({ ...currentNote, ...parsed, status: status ?? undefined, metadata: parsed.metadata, ...(reader ? { revision } : { mtime: Date.now(), size: Buffer.byteLength(updated) }) }) });
       };
       if (handle.kind === 'local') await serializeWorkspaceMutation(handle.root, execute);
       else await execute();
@@ -109,9 +111,9 @@ export function createStudyRouter(): Router {
       const value = StudyWorkspaceSchema.safeParse(req.body?.study);
       const revision = req.body?.revision;
       if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['study', 'revision', 'repository'].includes(key))) throw new SourceError('Invalid study workspace configuration.', 400);
-      const yaml = stringify(value.data, { lineWidth: 0 });
+      const { id, alias, handle } = await repositoryOrHome(res, req.body.repository);
+      const yaml = stringify(storedDocument(STUDY_DOCUMENT, alias, value.data), { lineWidth: 0 });
       if (Buffer.byteLength(yaml) > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
-      const { id, handle } = await repositoryOrHome(res, req.body.repository);
       if (handle.kind === 'local') {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {

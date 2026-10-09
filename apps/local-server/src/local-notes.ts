@@ -1,7 +1,7 @@
 import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
-import { deleteNoteFile, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookEntries, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
+import { deleteNoteFile, keyedItem, lookupNotes, noteAgenda, noteFacets, noteGraph, type NoteItem, parseNoteQuery, queryNotePaths, queryNotes, readNoteFile, type RepositoryCatalog, resolveSafePath, scanNotebookEntries, scanNotebookNotes, SourceError, StaleRevisionError, writeNoteFile } from '@mygitnotes/core';
 import { changeFile, generateCommitMessage, listChanges, stageAndCommit } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { asLocal, eachRepository, type LocalHandle, notebookRepository, noteRepository, requestCatalog } from './request-workspace.js';
@@ -72,8 +72,8 @@ export function createLocalNotesRouter(): Router {
   router.get('/', async (req: Request, res: Response) => {
     try {
       const notebookId = req.query.notebookId;
-      const repositories = notebookId ? [await notebookRepository(res, notebookId)].map(({ handle, notebook }) => ({ handle, notebooks: [notebook] })) : (await eachRepository(res)).map(({ handle, config }) => ({ handle, notebooks: config.notebooks }));
-      res.json({ notes: repositories.flatMap(({ handle, notebooks }) => notebooks.flatMap(notebook => scanNotebookNotes(asLocal(handle).root, notebook))) });
+      const repositories = notebookId ? [await notebookRepository(res, notebookId)].map(({ handle, alias, notebook }) => ({ handle, alias, notebooks: [notebook] })) : (await eachRepository(res)).map(({ handle, alias, config }) => ({ handle, alias, notebooks: config.notebooks }));
+      res.json({ notes: repositories.flatMap(({ handle, alias, notebooks }) => notebooks.flatMap(notebook => scanNotebookNotes(asLocal(handle).root, notebook).map(keyedItem(alias)))) });
     } catch (err: unknown) {
       res.status(err instanceof SourceError ? err.status : 500).json({ error: err instanceof Error ? err.message : String(err) });
     }
@@ -86,9 +86,9 @@ export function createLocalNotesRouter(): Router {
       if (!relPath) {
         return res.status(400).json({ error: 'path query parameter is required' });
       }
-      const { handle, notebook } = await noteRepository(res, relPath, req.query.notebookId);
+      const { handle, alias, notebook } = await noteRepository(res, relPath, req.query.notebookId);
       const note = readNoteFile(asLocal(handle).root, relPath, notebook.id, notebook.root);
-      res.json({ note });
+      res.json({ note: keyedItem(alias)(note) });
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code === 'ENOENT') return res.status(404).json({ error: 'Note not found.' });
       res.status(err instanceof SourceError ? err.status : 400).json({ error: err instanceof Error ? err.message : String(err) });
@@ -102,12 +102,12 @@ export function createLocalNotesRouter(): Router {
       if (!notePath || typeof content !== 'string') {
         return res.status(400).json({ error: 'path and content are required' });
       }
-      const { handle, notebook } = await noteRepository(res, notePath, notebookId);
+      const { handle, alias, notebook } = await noteRepository(res, notePath, notebookId);
       const repoRoot = asLocal(handle).root;
 
       return await serializeWorkspaceMutation(repoRoot, async () => {
         if (req.body.createOnly && fs.existsSync(resolveSafePath(repoRoot, notePath))) return res.status(409).json({ error: 'A note already exists at this path.' });
-        const saved = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
+        const saved = keyedItem(alias)(writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root));
 
         // If noCommit is requested or commit is false, write file and leave working tree dirty
         if (req.body.noCommit === true || req.body.commit === false) {
@@ -163,12 +163,12 @@ export function createLocalNotesRouter(): Router {
       if (!notePath) {
         return res.status(400).json({ error: 'path is required' });
       }
-      const { handle, notebook } = await noteRepository(res, notePath, notebookId);
+      const { handle, alias, notebook } = await noteRepository(res, notePath, notebookId);
       const repoRoot = asLocal(handle).root;
 
       return await serializeWorkspaceMutation(repoRoot, async () => {
         if (typeof content === 'string') {
-          const restored = writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root);
+          const restored = keyedItem(alias)(writeNoteFile(repoRoot, notePath, content, metadata, notebook.id, notebook.root));
           await restoreLocalVersionFile(repoRoot, notePath);
           return res.json({ success: true, note: restored });
         }
@@ -178,7 +178,7 @@ export function createLocalNotesRouter(): Router {
         const restored = await changeFile(repoRoot, notePath, 'restore', req.body.revision || change.revision);
         await restoreLocalVersionFile(repoRoot, notePath);
         if (!change.tracked) return res.json({ success: true, note: null, ...restored });
-        const restoredNote = readNoteFile(repoRoot, notePath, notebook.id, notebook.root);
+        const restoredNote = keyedItem(alias)(readNoteFile(repoRoot, notePath, notebook.id, notebook.root));
         res.json({ success: true, note: restoredNote });
       });
     } catch (err: unknown) {

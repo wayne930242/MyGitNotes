@@ -6,9 +6,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { FOCUS_PAGE_FILE } from '@mygitnotes/core';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string, url: string;
-const page = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'note', path: 'notes/a/reading.compilation.yml' }] }, { tabs: [] }] }] };
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
+/** As stored, naming its notebook by local id; `page` is the same Focus as the API names it, by key. */
+const storedPage = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: '週報', division: 'major-left', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/guide.md' }] }, { tabs: [{ kind: 'note', path: 'notes/a/reading.compilation.yml' }] }, { tabs: [] }] }] };
+let page: typeof storedPage;
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'focus-yaml-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
@@ -18,6 +23,7 @@ beforeEach(async () => {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api`;
   url = `${base}/focus-page`;
+  page = { ...storedPage, focuses: storedPage.focuses.map(focus => ({ ...focus, notebookId: nb(focus.notebookId) })) };
 });
 afterEach(async () => {
   if (server) await new Promise<void>(resolve => server.close(() => resolve()));
@@ -33,6 +39,8 @@ it('persists named Focus YAML, rejects stale or invalid writes and joins Git rev
   const record = await saved.json();
   expect(record.page).toEqual(page);
   expect(await readFile(path.join(root, FOCUS_PAGE_FILE), 'utf8')).toContain('name: 週報');
+  // The file keeps the local id; only the API names the notebook by key.
+  expect(await readFile(path.join(root, FOCUS_PAGE_FILE), 'utf8')).toContain('notebookId: a\n');
   expect((await put({ version: 1, focuses: [] })).status).toBe(409);
   const duplicate = { ...page, focuses: [page.focuses[0], { ...page.focuses[0], id: 'copy' }] };
   expect((await put(duplicate, record.revision)).status).toBe(400);
@@ -64,14 +72,14 @@ it('rewrites Focus tabs when the file manager moves a note', async () => {
   execFileSync('git', ['add', '.'], { cwd: root });
   execFileSync('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-m', 'fixture'], { cwd: root, stdio: 'pipe' });
   expect((await put(page)).status).toBe(200);
-  const { revision } = await fetch(`${base}/files?notebookId=a`).then(r => r.json());
-  const moved = await fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision, command: { kind: 'move', notebookId: 'a', path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' } }) });
+  const { revision } = await fetch(`${base}/files?notebookId=${nb('a')}`).then(r => r.json());
+  const moved = await fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision, command: { kind: 'move', notebookId: nb('a'), path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' } }) });
   expect(moved.status).toBe(200);
   const stored = await fetch(url).then(r => r.json());
   expect(stored.page.focuses[0].panes[0].tabs).toEqual([{ kind: 'note', path: 'notes/a/one/guide.md' }]);
 });
 it('rejects tabs outside the Focus notebook and hides them in a stored file', async () => {
-  const outside = (tab: unknown) => ({ version: 1, focuses: [{ id: 'f', notebookId: 'a', name: 'F', division: 'single', panes: [{ tabs: [tab] }] }] });
+  const outside = (tab: unknown) => ({ version: 1, focuses: [{ id: 'f', notebookId: nb('a'), name: 'F', division: 'single', panes: [{ tabs: [tab] }] }] });
   expect((await put(outside({ kind: 'note', path: 'notes/b/outside.md' }))).status).toBe(400);
   expect((await put(outside({ kind: 'note', path: 'notes/b/theirs.compilation.yml' }))).status).toBe(400);
   expect((await put(outside({ kind: 'lane', id: 'row' }))).status).toBe(400);

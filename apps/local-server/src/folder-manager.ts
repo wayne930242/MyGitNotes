@@ -159,9 +159,11 @@ export function createFolderManagerRouter(): Router {
   });
   router.post('/', async (req, res) => {
     try {
-      const command = FolderCommandSchema.safeParse(req.body?.command);
-      if (!command.success || typeof req.body?.revision !== 'string') throw new SourceError('Invalid folder request.', 400);
-      const { handle, config } = await notebookRepository(res, command.data.notebookId);
+      const parsed = FolderCommandSchema.safeParse(req.body?.command);
+      if (!parsed.success || typeof req.body?.revision !== 'string') throw new SourceError('Invalid folder request.', 400);
+      const { handle, config, notebook } = await notebookRepository(res, parsed.data.notebookId);
+      // The plan finds the notebook among its repository's notebooks, which carry local ids.
+      const command = { data: { ...parsed.data, notebookId: notebook.id } };
       if (handle.kind === 'local') {
         const { root } = handle;
         return await serializeWorkspaceMutation(root, async () => {

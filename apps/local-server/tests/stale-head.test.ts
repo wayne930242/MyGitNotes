@@ -6,6 +6,9 @@ import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { createRecordStore } from '../src/record-store/index.js';
 
+/** The key of a home-repository notebook: the hosted repository's name is its alias. */
+const nb = (id: string) => `home~${id}`;
+
 const manifest = 'schema_version: 1\nworkspace:\n  title: Hosted\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n';
 const R1 = 'a'.repeat(40), R2 = 'b'.repeat(40);
 let head = R1, root: string, server: Server, base: string;
@@ -46,7 +49,7 @@ const revisionOf = (body: { repositories: { id: string; revision: string; }[]; }
 it('answers a request naming a head this instance has not seen yet, as after another instance committed', async () => {
   expect(revisionOf((await get('/api/workspace')).body)).toBe(R1);
   head = R2;
-  const query = await get(`/api/notes/query?notebookId=life&revisions=${encodeURIComponent(JSON.stringify({ [home]: R2 }))}`);
+  const query = await get(`/api/notes/query?notebookId=${nb('life')}&revisions=${encodeURIComponent(JSON.stringify({ [home]: R2 }))}`);
   expect(query.status).toBe(200);
   expect(query.body.revisions).toEqual({ [home]: R2 });
 });
@@ -55,7 +58,7 @@ it('still refuses a request naming a head the branch has moved past', async () =
   expect(revisionOf((await get('/api/workspace')).body)).toBe(R1);
   head = R2;
   expect(revisionOf((await get('/api/workspace?fresh=1')).body)).toBe(R2);
-  const query = await get(`/api/notes/query?notebookId=life&revisions=${encodeURIComponent(JSON.stringify({ [home]: R1 }))}`);
+  const query = await get(`/api/notes/query?notebookId=${nb('life')}&revisions=${encodeURIComponent(JSON.stringify({ [home]: R1 }))}`);
   expect(query.status).toBe(409);
   expect(query.body.staleRepositories).toEqual([home]);
 });

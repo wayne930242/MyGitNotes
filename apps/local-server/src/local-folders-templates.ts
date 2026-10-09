@@ -1,5 +1,5 @@
 import { Request, Response, Router } from 'express';
-import { formatTemplateDate, loadNoteTemplate, renderNoteTemplate, scanNotebookFolders, SourceError } from '@mygitnotes/core';
+import { formatTemplateDate, keyedItem, loadNoteTemplate, renderNoteTemplate, scanNotebookFolders, SourceError } from '@mygitnotes/core';
 import { asLocal, eachRepository, notebookRepository } from './request-workspace.js';
 
 export function createLocalFoldersTemplatesRouter(): Router {
@@ -7,7 +7,7 @@ export function createLocalFoldersTemplatesRouter(): Router {
 
   router.get('/api/folders', async (_req, res) => {
     try {
-      res.json({ folders: (await eachRepository(res)).flatMap(({ handle, config }) => config.notebooks.flatMap(nb => scanNotebookFolders(asLocal(handle).root, nb))) });
+      res.json({ folders: (await eachRepository(res)).flatMap(({ handle, alias, config }) => config.notebooks.flatMap(nb => scanNotebookFolders(asLocal(handle).root, nb).map(keyedItem(alias)))) });
     } catch (error) {
       res.status(400).json({ error: (error as Error).message });
     }

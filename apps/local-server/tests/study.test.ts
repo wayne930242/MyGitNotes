@@ -8,11 +8,16 @@ import { parse, stringify } from 'yaml';
 import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { applyStudyAction, createStudyNote, emptyStudyWorkspace, parseNoteContent, readNoteFile, STUDY_FILE } from '@mygitnotes/core';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string, server: Server, url: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 const source = { notebookId: 'a', path: 'notes/a/guide.md', title: 'Question', metadata: {}, content: 'Question\n\n---\n\nAnswer' };
 const note = createStudyNote(source, new Date('2026-09-14T04:00:00Z'));
-const study = applyStudyAction(emptyStudyWorkspace(), note, note.cards[0].id, { kind: 'review', rating: 3 }, new Date('2026-09-14T04:00:00Z'));
+/** As stored, naming its notebook by local id; `study` is the same state as the API names it, by key. */
+const storedStudy = applyStudyAction(emptyStudyWorkspace(), note, note.cards[0].id, { kind: 'review', rating: 3 }, new Date('2026-09-14T04:00:00Z'));
+let study: typeof storedStudy;
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'study-yaml-'));
   execFileSync('git', ['init', '-b', 'main', root], { stdio: 'pipe' });
@@ -21,6 +26,7 @@ beforeEach(async () => {
   server = createServer(createApp(root));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   url = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/study`;
+  study = { ...storedStudy, notes: storedStudy.notes.map(item => ({ ...item, notebookId: nb(item.notebookId) })) };
 });
 afterEach(async () => {
   if (server) await new Promise<void>(resolve => server.close(() => resolve()));
@@ -37,6 +43,8 @@ it('persists a study events and memory state and rejects stale writes', async ()
   const record = await saved.json();
   expect(record.study).toEqual(study);
   expect(await readFile(path.join(root, STUDY_FILE), 'utf8')).toContain('algorithm: ts-fsrs@5.4.2');
+  // The file keeps the local id; only the API names the notebook by key.
+  expect(parse(await readFile(path.join(root, STUDY_FILE), 'utf8')).notes[0].notebookId).toBe('a');
   expect((await put(emptyStudyWorkspace())).status).toBe(409);
   expect(await fetch(url).then(r => r.json())).toMatchObject({ study, revision: record.revision });
   const competing = await Promise.all(['first', 'second'].map(name => put({ ...study, notes: [{ ...study.notes[0], title: name }] }, record.revision)));
@@ -70,7 +78,7 @@ async function stageFixture() {
 async function stageRequest(action = 'stage-review', extra: Record<string, unknown> = {}) {
   const current = await fetch(url).then(response => response.json());
   const note = readNoteFile(root, source.path, 'a');
-  return { laneId: 'lane', compilationPath: LANE_PATH, path: source.path, notebookId: 'a', revision: current.revision, expected: { content: note.content, metadata: note.metadata }, action, ...(action === 'stage-review' ? { rating: 4 } : {}), ...extra };
+  return { laneId: 'lane', compilationPath: LANE_PATH, path: source.path, notebookId: nb('a'), revision: current.revision, expected: { content: note.content, metadata: note.metadata }, action, ...(action === 'stage-review' ? { rating: 4 } : {}), ...extra };
 }
 const act = (body: unknown) => fetch(url + '/action', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 it('saves a stage transition with note status, preserves the body and undoes both', async () => {
@@ -194,6 +202,8 @@ it('reads legacy move history without rewriting YAML and keeps its timestamp thr
   const saved = await response.json(), firstAt = saved.study.notes[0].lastMovedAt;
   delete saved.study.notes[0].lastMovedAt;
   for (const event of saved.study.events) if (event.before) delete event.before.lastMovedAt;
+  // A file written before move times were kept, as stored: its notes name their notebook by local id.
+  for (const item of saved.study.notes) item.notebookId = 'a';
   const file = path.join(root, STUDY_FILE), legacy = stringify(saved.study);
   await writeFile(file, legacy);
   const restored = await fetch(url).then(r => r.json());

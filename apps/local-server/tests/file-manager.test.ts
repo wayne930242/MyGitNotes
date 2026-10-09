@@ -7,7 +7,10 @@ import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { applyLocalFilePlan, localFileCatalog, localFileSnapshot } from '../src/file-manager.js';
 import { assetHash, loadWorkspaceConfig, planFileChange } from '@mygitnotes/core';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 let root: string, server: Server, base: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 const write = (file: string, content: string | Buffer) => {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -40,8 +43,8 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   if (root) fs.rmSync(root, { recursive: true, force: true });
 });
-const list = () => fetch(base + '/api/files?notebookId=a').then(r => r.json());
-const post = async (command: Record<string, unknown>, revision?: string) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: { notebookId: 'a', ...command }, revision: revision || (await list()).revision }) });
+const list = () => fetch(base + `/api/files?notebookId=${nb('a')}`).then(r => r.json());
+const post = async (command: Record<string, unknown>, revision?: string) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command: { notebookId: nb('a'), ...command }, revision: revision || (await list()).revision }) });
 
 it('lists notebook files including hidden entries, reads raw text, creates and saves empty files', async () => {
   const listing = await list();
@@ -50,7 +53,7 @@ it('lists notebook files including hidden entries, reads raw text, creates and s
   expect((await post({ kind: 'create', path: 'notes/a/new.json' })).status).toBe(200);
   expect(fs.statSync(path.join(root, 'notes/a/new.json')).size).toBe(0);
   expect((await post({ kind: 'write', path: 'notes/a/new.json', content: '{"saved":true}\r\n' })).status).toBe(200);
-  const read = await fetch(base + '/api/files/read?notebookId=a&path=notes/a/new.json').then(r => r.json());
+  const read = await fetch(base + `/api/files/read?notebookId=${nb('a')}&path=notes/a/new.json`).then(r => r.json());
   expect(read.content).toBe('{"saved":true}\r\n');
   expect(git('log', '--format=%s').toString().trim()).toBe('fixture');
 });
@@ -74,7 +77,7 @@ it('rejects stale revisions, cross-notebook paths, symlinks, overwrite and read-
   expect((await post({ kind: 'create', path: 'notes/a/.hidden.json' })).status).toBe(400);
   fs.symlinkSync(path.join(root, 'notes/b'), path.join(root, 'notes/a/link'));
   expect((await post({ kind: 'create', path: 'notes/a/link/new.txt' })).status).toBe(400);
-  expect((await fetch(base + '/api/files/read?notebookId=a&path=notes/b/other.md')).status).toBe(403);
+  expect((await fetch(base + `/api/files/read?notebookId=${nb('a')}&path=notes/b/other.md`)).status).toBe(403);
   git('checkout', '-b', 'core');
   expect((await list()).writable).toBe(false);
   expect((await post({ kind: 'create', path: 'notes/a/no.txt' })).status).toBe(403);
@@ -124,7 +127,7 @@ it('preserves folder contents or deletes the entire tree and reports deleted dir
 it('rejects old catalog deletion and stale metadata edits after independent directory reads', async () => {
   const initial = await list();
   write('notes/a/one/new.md', '# Not in the initial scope\n');
-  const metadata = await fetch(base + '/api/files/read?notebookId=a&path=notes/a/one').then(response => response.json());
+  const metadata = await fetch(base + `/api/files/read?notebookId=${nb('a')}&path=notes/a/one`).then(response => response.json());
   expect(metadata.revision).not.toBe(initial.revision);
   write('notes/a/one/_dir.yml', 'title: External metadata\n');
   expect((await post({ kind: 'metadata', path: 'notes/a/one', title: 'Stale edit', description: '', order: 0 }, metadata.revision)).status).toBe(409);
@@ -175,7 +178,7 @@ it('serializes concurrent destructive commands so only the first matching revisi
   expect([fs.existsSync(path.join(root, 'notes/a/one')), fs.existsSync(path.join(root, 'notes/a/two'))].filter(Boolean)).toHaveLength(1);
 });
 it('lists asset hashes that follow edits to an asset, even one of the same size', async () => {
-  const hashOf = async () => (await (await fetch(base + '/api/assets?notebookId=a')).json()).assets.find((entry: any) => entry.path === 'notes/a/one/image.png').hash;
+  const hashOf = async () => (await (await fetch(base + `/api/assets?notebookId=${nb('a')}`)).json()).assets.find((entry: any) => entry.path === 'notes/a/one/image.png').hash;
   const gitHash = () => execFileSync('git', ['hash-object', 'notes/a/one/image.png'], { cwd: root }).toString().trim();
   expect(await hashOf()).toBe(gitHash());
   expect(await hashOf()).toBe(gitHash());
@@ -186,10 +189,10 @@ it('browses large binary files without loading their contents and reports the re
   write('notes/a/large.bin', Buffer.alloc(6 * 1024 * 1024));
   const listing = await list();
   expect(listing.entries.find((entry: any) => entry.path === 'notes/a/large.bin').size).toBe(6 * 1024 * 1024);
-  const assets = await fetch(base + '/api/assets?notebookId=a');
+  const assets = await fetch(base + `/api/assets?notebookId=${nb('a')}`);
   expect(assets.status).toBe(200);
   expect((await assets.json()).assets.find((entry: any) => entry.path === 'notes/a/large.bin').size).toBe(6 * 1024 * 1024);
-  expect((await fetch(base + '/api/files/read?notebookId=a&path=notes/a/large.bin')).status).toBe(413);
+  expect((await fetch(base + `/api/files/read?notebookId=${nb('a')}&path=notes/a/large.bin`)).status).toBe(413);
   expect((await post({ kind: 'write', path: 'notes/a/.hidden.json', content: '{"saved":true}\n' })).status).toBe(200);
   expect(fs.statSync(path.join(root, 'notes/a/large.bin')).size).toBe(6 * 1024 * 1024);
   expect((await post({ kind: 'move', path: 'notes/a/one/note.md', destination: 'notes/a/two/note.md' })).status).toBe(200);

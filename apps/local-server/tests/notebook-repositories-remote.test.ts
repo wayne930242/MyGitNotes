@@ -76,15 +76,17 @@ const get = (url: string) => fetch(`${base}${url}`, { headers }).then(async resp
 
 it('opens notebook repositories with the signed-in credential and names why others are unavailable', async () => {
   const { body } = await get('/api/workspace');
-  const byNotebook = Object.fromEntries(body.repositories.map((repository: { notebooks: string[]; }) => [repository.notebooks[0], repository]));
+  // Each repository's alias derives from its name; its notebooks are named by key.
+  const byNotebook = Object.fromEntries(body.repositories.map((repository: { notebooks: string[]; }) => [repository.notebooks[0].split('~')[1], repository]));
+  expect(body.repositories.map((repository: { alias: string; notebooks: string[]; }) => [repository.alias, repository.notebooks])).toEqual([['home', ['home~life']], ['trpg', ['trpg~trpg']], ['secret', ['secret~secret']], ['nobranch', ['nobranch~drafts']], ['lab', ['lab~lab']]]);
   expect(byNotebook.life).toMatchObject({ id: 'github:owner/home@main', revision: 'a'.repeat(40), write: true });
   expect(byNotebook.trpg).toMatchObject({ id: 'github:owner/trpg@main', revision: 'b'.repeat(40), write: true });
   expect(byNotebook.secret).toMatchObject({ write: false, unavailable: { reason: 'no-access' } });
   expect(byNotebook.drafts).toMatchObject({ write: false, unavailable: { reason: 'missing-branch' } });
   expect(byNotebook.lab).toMatchObject({ write: false, unavailable: { reason: 'unsupported-platform' } });
-  expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg')).body.note.content).toContain('TRPG note');
-  expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=life')).body.note.content).toContain('Home note');
-  expect((await get('/api/notes/read?path=notes/secret/a.md&notebookId=secret')).status).toBe(503);
+  expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
+  expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=home~life')).body.note.content).toContain('Home note');
+  expect((await get('/api/notes/read?path=notes/secret/a.md&notebookId=secret~secret')).status).toBe(503);
   const all = (await get('/api/notes/query?notebookId=all&limit=10')).body;
   expect(all.revisions).toEqual({ 'github:owner/home@main': 'a'.repeat(40), 'github:owner/trpg@main': 'b'.repeat(40) });
 });

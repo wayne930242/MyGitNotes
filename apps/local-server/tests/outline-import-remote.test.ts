@@ -42,7 +42,8 @@ for (const provider of ['github', 'gitlab'] as const) {
       server = createServer(createApp(process.cwd(), { configSource }));
       await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
       const base = `http://127.0.0.1:${(server.address() as { port: number; }).port}/api/outline-import`;
-      const input = { repository: home.id, notebookId: 'ex', selectedIds: ['note', 'folder'], path: 'notes/ex/imported.outline.md', title: 'Imported' };
+      // The hosted repository's name is its alias.
+      const input = { repository: home.id, notebookId: provider === 'github' ? 'repo~ex' : 'project~ex', selectedIds: ['note', 'folder'], path: 'notes/ex/imported.outline.md', title: 'Imported' };
       const post = (suffix: string, data: unknown) => fetch(base + suffix, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
       const preview = async () => {
         const response = await post('/preview', input);

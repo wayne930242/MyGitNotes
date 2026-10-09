@@ -99,7 +99,7 @@ describe('a deployment whose repository is on GitHub Enterprise Server', () => {
     await start(configured);
     const cookie = await signIn();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
-    expect(workspace).toMatchObject({ local: false, home: `github:${site}/owner/repo@main`, repositories: [{ id: `github:${site}/owner/repo@main`, type: 'github', branch: 'main', write: true, notebooks: ['ex'] }] });
+    expect(workspace).toMatchObject({ local: false, home: `github:${site}/owner/repo@main`, repositories: [{ id: `github:${site}/owner/repo@main`, type: 'github', alias: 'repo', branch: 'main', write: true, notebooks: ['repo~ex'] }] });
     const notes = await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json());
     const note = notes.notes.find((entry: { title: string; }) => entry.title === 'Alpha');
     const before = fixture.head();

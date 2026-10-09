@@ -7,7 +7,11 @@ import path from 'node:path';
 import { createApp } from '../src/app.js';
 import { BOOKMARKS_FILE, serializeWorkspaceDocument } from '@mygitnotes/core';
 import { revisionOf } from '../src/workspace-files.js';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 let root: string, server: Server, base: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
+/** As stored, naming its notebook by local id. */
 const page = { version: 1, notebooks: [{ notebookId: 'a', groups: [], bookmarks: [{ id: 'guide', label: 'Guide', groupId: null, target: { kind: 'note', path: 'guide.md' } }] }] };
 beforeEach(async () => {
   root = await mkdtemp(path.join(os.tmpdir(), 'bookmarks-'));
@@ -27,7 +31,7 @@ afterEach(async () => {
 });
 const put = (value: unknown, revision = 'missing') => fetch(`${base}/bookmarks`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page: value, revision }) });
 const seed = () => writeFile(path.join(root, BOOKMARKS_FILE), serializeWorkspaceDocument(page));
-const resolveTargets = (targets: unknown[]) => fetch(`${base}/bookmarks/resolve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', targets }) });
+const resolveTargets = (targets: unknown[]) => fetch(`${base}/bookmarks/resolve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: nb('a'), targets }) });
 it('reads without creating files and rejects all retired writes with a typed 410', async () => {
   expect(await fetch(`${base}/bookmarks`).then(r => r.json())).toMatchObject({ page: { version: 1, notebooks: [] }, revision: 'missing', writable: false });
   const responses = await Promise.all([put(page), put(page), put(null)]);
@@ -37,7 +41,8 @@ it('reads without creating files and rejects all retired writes with a typed 410
   }
   expect(await readFile(path.join(root, BOOKMARKS_FILE)).catch(() => null)).toBeNull();
   await seed();
-  expect((await fetch(`${base}/bookmarks`).then(r => r.json())).page).toEqual(page);
+  // The retired file is read as stored and answered by key.
+  expect((await fetch(`${base}/bookmarks`).then(r => r.json())).page).toEqual({ ...page, notebooks: page.notebooks.map(owner => ({ ...owner, notebookId: nb(owner.notebookId) })) });
 });
 it('cannot replace corrupt current data even with the correct revision', async () => {
   const raw = 'version: 8\nnotebooks: []\n';
@@ -59,34 +64,34 @@ it('retires the resolver on writable and read-only branches without writing', as
 it('moves retained metadata atomically while old authoring stays retired; deletion retains refs', async () => {
   await seed();
   const original = await fetch(`${base}/bookmarks`).then(r => r.json());
-  const files = await fetch(`${base}/files?notebookId=a`).then(r => r.json());
+  const files = await fetch(`${base}/files?notebookId=${nb('a')}`).then(r => r.json());
   const mutate = (revision: string, command: unknown) => fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision, command }) });
-  const move = await mutate(files.revision, { kind: 'move', notebookId: 'a', path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' });
+  const move = await mutate(files.revision, { kind: 'move', notebookId: nb('a'), path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' });
   expect(move.status).toBe(200);
   expect((await put(page, original.revision)).status).toBe(410);
   const after = await fetch(`${base}/bookmarks`).then(r => r.json());
   expect(after.page.notebooks[0].bookmarks[0].target.path).toBe('one/guide.md');
-  const updated = await fetch(`${base}/files?notebookId=a`).then(r => r.json());
-  expect((await mutate(updated.revision, { kind: 'delete', notebookId: 'a', path: 'notes/a/one/guide.md' })).status).toBe(200);
+  const updated = await fetch(`${base}/files?notebookId=${nb('a')}`).then(r => r.json());
+  expect((await mutate(updated.revision, { kind: 'delete', notebookId: nb('a'), path: 'notes/a/one/guide.md' })).status).toBe(200);
   expect((await fetch(`${base}/bookmarks`).then(r => r.json())).page).toEqual(after.page);
 });
 it('an external legacy source edit invalidates a reviewed move', async () => {
-  const files = await fetch(`${base}/files?notebookId=a`).then(r => r.json());
+  const files = await fetch(`${base}/files?notebookId=${nb('a')}`).then(r => r.json());
   await seed();
-  const move = await fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: files.revision, command: { kind: 'move', notebookId: 'a', path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' } }) });
+  const move = await fetch(`${base}/files`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ revision: files.revision, command: { kind: 'move', notebookId: nb('a'), path: 'notes/a/guide.md', destination: 'notes/a/one/guide.md' } }) });
   expect(move.status).toBe(409);
   expect(await readFile(path.join(root, 'notes/a/guide.md'), 'utf8')).toContain('# Guide');
 });
 it('direct note deletion and restoration retain bookmarks and cannot edit the metadata artifact', async () => {
   await seed();
   const raw = await readFile(path.join(root, BOOKMARKS_FILE), 'utf8');
-  expect((await fetch(`${base}/notes?path=notes/a/guide.md&notebookId=a&noCommit=true`, { method: 'DELETE' })).status).toBe(200);
-  expect((await fetch(`${base}/notes/read?path=notes/a/guide.md&notebookId=a`)).status).toBe(404);
-  const restored = await fetch(`${base}/notes/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: 'notes/a/guide.md', content: '# Guide', metadata: {} }) });
+  expect((await fetch(`${base}/notes?path=notes/a/guide.md&notebookId=${nb('a')}&noCommit=true`, { method: 'DELETE' })).status).toBe(200);
+  expect((await fetch(`${base}/notes/read?path=notes/a/guide.md&notebookId=${nb('a')}`)).status).toBe(404);
+  const restored = await fetch(`${base}/notes/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: nb('a'), path: 'notes/a/guide.md', content: '# Guide', metadata: {} }) });
   expect(restored.status).toBe(200);
   expect(await readFile(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
   for (const method of ['POST', 'DELETE']) {
-    const response = await fetch(`${base}/notes?path=${BOOKMARKS_FILE}&notebookId=a&noCommit=true`, { method, ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: BOOKMARKS_FILE, content: 'overwrite', metadata: {}, noCommit: true }) } : {}) });
+    const response = await fetch(`${base}/notes?path=${BOOKMARKS_FILE}&notebookId=${nb('a')}&noCommit=true`, { method, ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: nb('a'), path: BOOKMARKS_FILE, content: 'overwrite', metadata: {}, noCommit: true }) } : {}) });
     expect([400, 403]).toContain(response.status);
   }
   expect(await readFile(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
@@ -96,14 +101,14 @@ it.each(['read', 'write', 'delete', 'restore'])('HTTP note %s rejects a symlink 
   const raw = await readFile(path.join(root, BOOKMARKS_FILE), 'utf8');
   await symlink(path.join(root, BOOKMARKS_FILE), path.join(root, 'notes/a/alias.md'));
   const file = 'notes/a/alias.md';
-  const response = operation === 'read' ? await fetch(`${base}/notes/read?path=${file}&notebookId=a`) : operation === 'delete' ? await fetch(`${base}/notes?path=${file}&notebookId=a&noCommit=true`, { method: 'DELETE' }) : await fetch(`${base}/notes${operation === 'restore' ? '/restore' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: file, content: 'broken', metadata: {}, noCommit: true }) });
+  const response = operation === 'read' ? await fetch(`${base}/notes/read?path=${file}&notebookId=${nb('a')}`) : operation === 'delete' ? await fetch(`${base}/notes?path=${file}&notebookId=${nb('a')}&noCommit=true`, { method: 'DELETE' }) : await fetch(`${base}/notes${operation === 'restore' ? '/restore' : ''}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: nb('a'), path: file, content: 'broken', metadata: {}, noCommit: true }) });
   expect(response.status).toBe(403);
   expect(await readFile(path.join(root, BOOKMARKS_FILE), 'utf8')).toBe(raw);
 });
 it.each([[false, '/'], [true, '/'], [false, '\\'], [true, '\\']] as const)('HTTP note writes reject a directory alias when bookmark file exists=%s using %s', async (exists, separator) => {
   if (exists) await seed();
   await symlink(root, path.join(root, 'notes/a/alias'));
-  const response = await fetch(`${base}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'a', path: `notes/a/alias${separator}${BOOKMARKS_FILE}`, content: 'broken', metadata: {}, noCommit: true }) });
+  const response = await fetch(`${base}/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: nb('a'), path: `notes/a/alias${separator}${BOOKMARKS_FILE}`, content: 'broken', metadata: {}, noCommit: true }) });
   expect(response.status).toBe(403);
   const raw = await readFile(path.join(root, BOOKMARKS_FILE), 'utf8').catch(() => null);
   if (exists) expect(raw).toContain('version: 1');

@@ -10,8 +10,11 @@ import { credentialToken, seal, unseal } from '../src/auth.js';
 import { createRecordStore } from '../src/record-store/index.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 let server: Server;
 let base: string;
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
@@ -47,11 +50,13 @@ afterEach(async () => {
 describe('real HTTP local boundaries', () => {
   it('reads through the notebook a request names and requires one for notebook-scoped state', async () => {
     const file = 'notes/example/projects/deep/note.md';
-    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=example`)).status).toBe(200);
+    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=${nb('example')}`)).status).toBe(200);
     expect((await fetch(`${base}/api/notes/read?path=${file}`)).status).toBe(200);
-    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=missing`)).status).toBe(404);
+    // A bare id is the browser's to redirect first; a key no repository serves is not found.
+    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=example`)).status).toBe(400);
+    expect((await fetch(`${base}/api/notes/read?path=${file}&notebookId=${nb('missing')}`)).status).toBe(404);
     expect((await fetch(`${base}/api/folder-manager`)).status).toBe(400);
-    expect((await fetch(`${base}/api/folder-manager?notebookId=example`)).status).toBe(200);
+    expect((await fetch(`${base}/api/folder-manager?notebookId=${nb('example')}`)).status).toBe(200);
   });
   it('no longer serves product reference documents on the Agents page', async () => {
     const product = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-product-'));
@@ -73,13 +78,13 @@ describe('real HTTP local boundaries', () => {
     fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n    templates:\n      - id: reading\n        title: Reading\n        file: .templates/reading.md\n');
     fs.mkdirSync(path.join(root, 'notes/example/.templates'), { recursive: true });
     fs.writeFileSync(path.join(root, 'notes/example/.templates/reading.md'), '---\ntitle: "{{title}}"\nstatus: unread\n---\n\n# {{title}}\n');
-    const rendered = await fetch(`${base}/api/templates/render?notebookId=example&templateId=reading&title=${encodeURIComponent('My Note')}`).then(r => r.json());
+    const rendered = await fetch(`${base}/api/templates/render?notebookId=${nb('example')}&templateId=reading&title=${encodeURIComponent('My Note')}`).then(r => r.json());
     expect(rendered.metadata.title).toBe('My Note');
     expect(rendered.metadata.status).toBe('unread');
     expect(rendered.content).toContain('# My Note');
-    const notes = await fetch(`${base}/api/notes?notebookId=example`).then(r => r.json());
+    const notes = await fetch(`${base}/api/notes?notebookId=${nb('example')}`).then(r => r.json());
     expect(notes.notes.some((n: any) => n.path.includes('.templates'))).toBe(false);
-    expect((await fetch(`${base}/api/templates/render?notebookId=example&templateId=missing&title=x`)).status).toBe(400);
+    expect((await fetch(`${base}/api/templates/render?notebookId=${nb('example')}&templateId=missing&title=x`)).status).toBe(400);
   });
   it('commits a reviewed selection without including other staged files', async () => {
     const file = 'notes/example/projects/deep/note.md', other = 'notes/example/other.md';
@@ -288,17 +293,17 @@ describe('real HTTP local boundaries', () => {
   });
   it('uploads into directories, keeps hash URLs after moves, and restricts deletion to assets', async () => {
     const request = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const uploaded = await fetch(`${base}/api/assets`, request('POST', { notebookId: 'example', filename: 'test.txt', directory: 'projects/images', base64Content: Buffer.from('asset bytes').toString('base64') })).then(r => r.json());
+    const uploaded = await fetch(`${base}/api/assets`, request('POST', { notebookId: nb('example'), filename: 'test.txt', directory: 'projects/images', base64Content: Buffer.from('asset bytes').toString('base64') })).then(r => r.json());
     expect(uploaded.path).toBe('notes/example/assets/projects/images/test.txt');
     expect(uploaded.rawUrl).toMatch(/^\/raw-assets\/by-hash\/[a-f0-9]{40}$/);
     expect(await fetch(base + uploaded.rawUrl).then(r => r.text())).toBe('asset bytes');
     const moved = await fetch(`${base}/api/assets`, request('PATCH', { path: uploaded.path, directory: 'archive' })).then(r => r.json());
     expect(moved.path).toBe('notes/example/assets/archive/test.txt');
     expect(await fetch(base + uploaded.rawUrl).then(r => r.text())).toBe('asset bytes');
-    const listed = await fetch(`${base}/api/assets?notebookId=example`).then(r => r.json());
+    const listed = await fetch(`${base}/api/assets?notebookId=${nb('example')}`).then(r => r.json());
     expect(listed.assets[0]).toMatchObject({ directory: 'archive', rawUrl: uploaded.rawUrl });
     expect((await fetch(`${base}/api/assets?path=notes/example/projects/deep/note.md`, { method: 'DELETE' })).status).toBe(403);
-    expect((await fetch(`${base}/api/assets`, request('POST', { notebookId: 'example', filename: 'x.png', directory: '../escape', base64Content: 'eA==' }))).ok).toBe(false);
+    expect((await fetch(`${base}/api/assets`, request('POST', { notebookId: nb('example'), filename: 'x.png', directory: '../escape', base64Content: 'eA==' }))).ok).toBe(false);
     expect((await fetch(`${base}/api/assets?path=${encodeURIComponent(moved.path)}`, { method: 'DELETE' })).ok).toBe(true);
     expect((await fetch(base + uploaded.rawUrl)).status).toBe(404);
   });
@@ -322,9 +327,9 @@ describe('real HTTP local boundaries', () => {
     fs.writeFileSync(path.join(root, 'my-notes/notes/life/note.md'), '# Life Note');
     git('add', '.');
     git('commit', '-m', 'add life notebook');
-    const read = await fetch(`${base}/api/notes/read?path=my-notes/notes/life/note.md&notebookId=life`).then(r => r.json());
+    const read = await fetch(`${base}/api/notes/read?path=my-notes/notes/life/note.md&notebookId=${nb('life')}`).then(r => r.json());
     expect(read.note.content).toBe('# Life Note');
-    const saved = await fetch(`${base}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'my-notes/notes/life/note.md', content: '# Updated Life Note', notebookId: 'life', noCommit: true }) });
+    const saved = await fetch(`${base}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: 'my-notes/notes/life/note.md', content: '# Updated Life Note', notebookId: nb('life'), noCommit: true }) });
     expect(saved.status).toBe(200);
     expect(fs.readFileSync(path.join(root, 'my-notes/notes/life/note.md'), 'utf8')).toBe('# Updated Life Note');
   });

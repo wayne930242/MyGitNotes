@@ -7,8 +7,11 @@ import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { applyLocalFolderPlan, localFolderSnapshot } from '../src/folder-manager.js';
 import { loadWorkspaceConfig, planFolderChange } from '@mygitnotes/core';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 beforeEach(async () => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'gn-folder-'));
@@ -36,16 +39,16 @@ afterEach(async () => {
   if (root) fs.rmSync(root, { recursive: true, force: true });
   vi.unstubAllEnvs();
 });
-const getRevision = () => fetch(`${base}/api/folder-manager?notebookId=a`).then(r => r.json()).then(data => data.revision);
+const getRevision = () => fetch(`${base}/api/folder-manager?notebookId=${nb('a')}`).then(r => r.json()).then(data => data.revision);
 const post = async (command: unknown, revision?: string) => fetch(`${base}/api/folder-manager`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: revision || await getRevision() }) });
 
 it('creates, nests, reorders and removes folders without deleting notes or staging unrelated work', async () => {
   fs.writeFileSync(path.join(root, 'unrelated.txt'), 'Unrelated');
   git('add', 'unrelated.txt');
-  expect((await post({ kind: 'create', notebookId: 'a', parent: '', name: 'new', title: 'New' })).status).toBe(200);
-  expect((await post({ kind: 'move', notebookId: 'a', path: 'one', parent: 'two' })).status).toBe(200);
+  expect((await post({ kind: 'create', notebookId: nb('a'), parent: '', name: 'new', title: 'New' })).status).toBe(200);
+  expect((await post({ kind: 'move', notebookId: nb('a'), path: 'one', parent: 'two' })).status).toBe(200);
   expect(fs.readFileSync(path.join(root, 'notes/a/two/one/note.md'), 'utf8')).toBe('# Keep me\n');
-  expect((await post({ kind: 'delete', notebookId: 'a', path: 'two/one', destination: '' })).status).toBe(200);
+  expect((await post({ kind: 'delete', notebookId: nb('a'), path: 'two/one', destination: '' })).status).toBe(200);
   expect(fs.readFileSync(path.join(root, 'notes/a/note.md'), 'utf8')).toBe('# Keep me\n');
   expect(fs.existsSync(path.join(root, 'notes/a/child'))).toBe(true);
   expect(git('diff', '--cached', '--name-only').toString().trim()).toBe('unrelated.txt');
@@ -55,28 +58,28 @@ it('keeps a revision taken while files were freshly written valid after their ti
   const revision = await getRevision();
   const later = Date.now() + 5000;
   vi.spyOn(Date, 'now').mockReturnValue(later);
-  expect((await post({ kind: 'create', notebookId: 'a', parent: '', name: 'after-tick' }, revision)).status).toBe(200);
+  expect((await post({ kind: 'create', notebookId: nb('a'), parent: '', name: 'after-tick' }, revision)).status).toBe(200);
   vi.restoreAllMocks();
 });
 it('treats a same-size rewrite since the revision as a change', async () => {
   const file = path.join(root, 'notes/a/one/note.md');
   const revision = await getRevision();
   fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/./, character => character === 'x' ? 'y' : 'x'));
-  expect((await post({ kind: 'delete', notebookId: 'a', path: 'one', destination: '' }, revision)).status).toBe(409);
+  expect((await post({ kind: 'delete', notebookId: nb('a'), path: 'one', destination: '' }, revision)).status).toBe(409);
   expect(await getRevision()).not.toBe(revision);
 });
 it('rejects stale revisions, collisions, protected descendants and non-main writes', async () => {
   const revision = await getRevision();
   fs.writeFileSync(path.join(root, 'notes/a/one/note.md'), 'Newer content');
-  const command = { kind: 'delete', notebookId: 'a', path: 'one', destination: '' };
+  const command = { kind: 'delete', notebookId: nb('a'), path: 'one', destination: '' };
   expect((await post(command, revision)).status).toBe(409);
   fs.writeFileSync(path.join(root, 'notes/a/note.md'), 'Destination');
   expect((await post(command)).ok).toBe(false);
   expect(fs.readFileSync(path.join(root, 'notes/a/note.md'), 'utf8')).toBe('Destination');
   fs.symlinkSync(path.join(root, 'notes/a/two'), path.join(root, 'notes/a/one/link'));
-  expect((await post({ kind: 'move', notebookId: 'a', path: 'one', parent: 'two' })).ok).toBe(false);
+  expect((await post({ kind: 'move', notebookId: nb('a'), path: 'one', parent: 'two' })).ok).toBe(false);
   git('checkout', '-b', 'core');
-  expect((await post({ kind: 'create', notebookId: 'a', parent: '', name: 'forbidden' })).status).toBe(403);
+  expect((await post({ kind: 'create', notebookId: nb('a'), parent: '', name: 'forbidden' })).status).toBe(403);
 });
 it('rolls back completed writes when a later write fails', () => {
   const before = localFolderSnapshot(root, loadWorkspaceConfig(root)!.notebooks);
@@ -96,7 +99,7 @@ it.each(['', 'two'])('moving contents on deletion preserves destination metadata
   fs.writeFileSync(path.join(target, '_dir.yml'), 'title: Destination\ncustom: preserve exactly\n');
   fs.writeFileSync(path.join(root, 'notes/a/one/_dir.yml'), 'title: Deleted folder\norder: 99\n');
   fs.writeFileSync(path.join(root, 'notes/a/one/child/_dir.yml'), 'title: Child\ncustom: keep child\n');
-  const response = await post({ kind: 'delete', notebookId: 'a', path: 'one', destination });
+  const response = await post({ kind: 'delete', notebookId: nb('a'), path: 'one', destination });
   expect(response.status).toBe(200);
   expect(fs.existsSync(path.join(root, 'notes/a/one'))).toBe(false);
   expect(fs.readFileSync(path.join(target, '_dir.yml'), 'utf8')).toBe('title: Destination\ncustom: preserve exactly\n');

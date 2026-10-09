@@ -4,12 +4,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { BOOKMARKS_FILE, type BookmarksPage, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { BOOKMARKS_FILE, type BookmarksPage, deriveAlias, notebookKey, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 
 let roots: string[], server: Server, base: string, repository: string;
+/** The key of a home notebook; the home worktree's alias is its directory's name, the other repository's is `other`. */
+const nb = (id: string) => notebookKey(deriveAlias(roots[0], new Set()), id);
 const page = (id: string) => ({ version: 1, notebooks: [{ notebookId: id, groups: [{ id: 'empty', label: 'Empty group' }], bookmarks: [{ id: 'note', label: 'Note', groupId: null, target: { kind: 'note', path: 'missing.md' } }, { id: 'folder', label: 'Folder', groupId: null, target: { kind: 'folder', path: 'old' } }] }, { notebookId: 'unknown', groups: [], bookmarks: [{ id: 'unknown', label: 'Preserve me', groupId: null, target: { kind: 'url', url: 'https://example.test/' } }] }] });
-const request = () => ({ repository, notebookId: 'a', selectedIds: ['note', 'folder'], path: 'notes/shared/imported.outline.md', title: 'Imported' });
+const request = () => ({ repository, notebookId: nb('a'), selectedIds: ['note', 'folder'], path: 'notes/shared/imported.outline.md', title: 'Imported' });
 const raw = (id: string) => '# exact CRLF source\r\n' + JSON.stringify(page(id), null, 2).replaceAll('\n', '\r\n') + '\r\n';
 const post = (endpoint: string, body: unknown) => fetch(base + '/api/outline-import' + endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 const preview = () =>
@@ -66,8 +68,8 @@ it('previews without writes, exports exact source, requires partial acknowledgem
   expect(execFileSync('git', ['rev-list', '--all', '--count'], { cwd: roots[0], encoding: 'utf8' }).trim()).toBe('0');
 });
 it('imports the named non-home same-root repository only and rejects mismatched or missing identities', async () => {
-  for (const input of [{ ...request(), repository: undefined }, { ...request(), notebookId: 'b' }, { ...request(), selectedIds: ['unknown'] }]) expect((await post('/preview', input)).status).toBeGreaterThanOrEqual(400);
-  const input = { ...request(), repository: 'github:owner/other@main', notebookId: 'b' };
+  for (const input of [{ ...request(), repository: undefined }, { ...request(), notebookId: 'other~b' }, { ...request(), selectedIds: ['unknown'] }]) expect((await post('/preview', input)).status).toBeGreaterThanOrEqual(400);
+  const input = { ...request(), repository: 'github:owner/other@main', notebookId: 'other~b' };
   const record = await post('/preview', input).then(r => r.json());
   expect((await post('', { ...input, token: record.token, acknowledgePartial: true })).status).toBe(200);
   expect(fs.existsSync(path.join(roots[1], input.path))).toBe(true);

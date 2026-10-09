@@ -3,9 +3,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { parse } from 'yaml';
-import { ApplyLegacyOutlineImportSchema, BOOKMARKS_FILE, BOOKMARKS_MAX_BYTES, type BookmarksPage, BookmarksPageSchema, type LegacyOutlineImportRequest, LegacyOutlineImportSchema, PathTraversalError, planLegacyOutlineImport, SourceError, SymlinkEscapeError } from '@mygitnotes/core';
+import { ApplyLegacyOutlineImportSchema, BOOKMARKS_DOCUMENT, BOOKMARKS_FILE, keyedItem, BOOKMARKS_MAX_BYTES, type BookmarksPage, BookmarksPageSchema, type LegacyOutlineImportRequest, LegacyOutlineImportSchema, PathTraversalError, planLegacyOutlineImport, SourceError, SymlinkEscapeError } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { namedRepository, notebookRepository, workspaceOf } from './request-workspace.js';
+import { keyedDocument, namedRepository, notebookRepository, workspaceOf } from './request-workspace.js';
 import { regularPath, revisionOf } from './workspace-files.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 
@@ -68,7 +68,9 @@ async function preview(res: Response, request: LegacyOutlineImportRequest) {
   if (resolved.handle.id !== state.entry.ref.id) throw new SourceError('Notebook does not belong to the named repository.', 403);
   let plan;
   try {
-    plan = planLegacyOutlineImport(decode(state.bytes), resolved.notebook, resolved.config.notebooks, request);
+    // The saved collection and the manifest name notebooks by local id; the answer names them by key.
+    const local = planLegacyOutlineImport(decode(state.bytes), resolved.notebook, resolved.config.notebooks, { ...request, notebookId: resolved.notebook.id });
+    plan = { ...local, retained: local.retained.map(keyedItem(resolved.alias)) };
   } catch (error) {
     if (error instanceof SourceError) throw error;
     throw new SourceError(error instanceof Error ? error.message : 'Invalid legacy selection.', 400);
@@ -128,7 +130,8 @@ export function createOutlineImportRouter(): Router {
       } catch (issue) {
         error = (issue as Error).message;
       }
-      res.json({ repository: state.entry.ref.id, path: BOOKMARKS_FILE, revision: state.revision, writable: state.writable, base64: state.bytes?.toString('base64') ?? null, page: page ?? null, error: error ?? null });
+      // `base64` keeps the stored bytes for export; `page` names notebooks by key.
+      res.json({ repository: state.entry.ref.id, path: BOOKMARKS_FILE, revision: state.revision, writable: state.writable, base64: state.bytes?.toString('base64') ?? null, page: page ? keyedDocument(BOOKMARKS_DOCUMENT, state.entry.alias, page) : null, error: error ?? null });
     } catch (error) {
       fail(res, error);
     }

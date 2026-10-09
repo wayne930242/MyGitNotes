@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { BOOKMARKS_FILE, repositoryRef, serializeWorkspaceDocument, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { BOOKMARKS_FILE, deriveAlias, notebookKey, repositoryRef, serializeWorkspaceDocument, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
 
 /** A worktree on main with the given files committed. */
@@ -42,6 +42,9 @@ notebooks:
 `;
 
 let roots: string[] = [];
+/** The home worktree's alias, its directory's name; the notebook repositories are named `trpg` and `lost` after their repositories. */
+let homeAlias = '';
+const nb = (id: string) => notebookKey(homeAlias, id);
 let server: Server;
 let base: string;
 beforeEach(() => {
@@ -59,6 +62,7 @@ async function serve() {
   const home = worktree({ '.mygitnotes.yaml': manifest, 'notes/life/note.md': '# Home note\n' });
   const trpg = worktree({ 'notes/life/note.md': '# TRPG note\n' });
   roots = [home, trpg];
+  homeAlias = deriveAlias(home, new Set());
   const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/trpg@main' ? trpg : undefined, manifest: inHomeRepository => inHomeRepository() }) };
   server = createServer(createApp(home, { configSource }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -71,22 +75,22 @@ describe('notebooks in their own local repositories', () => {
   it('lists each repository, reports an unmapped one and keeps same-path notes apart', async () => {
     await serve();
     const workspace = (await get('/api/workspace')).body;
-    expect(workspace.repositories.map((repository: { id: string; notebooks: string[]; }) => [repository.notebooks, repository.id.startsWith('local:') ? 'home' : repository.id])).toEqual([[['life'], 'home'], [['trpg'], 'github:owner/trpg@main'], [['lost'], 'github:owner/lost@main']]);
+    expect(workspace.repositories.map((repository: { id: string; notebooks: string[]; }) => [repository.notebooks, repository.id.startsWith('local:') ? 'home' : repository.id])).toEqual([[[nb('life')], 'home'], [['trpg~trpg'], 'github:owner/trpg@main'], [['lost~lost'], 'github:owner/lost@main']]);
     expect(workspace.repositories[1]).toMatchObject({ repository: 'owner/trpg', branch: 'main', write: true });
     expect(workspace.repositories[2]).toMatchObject({ write: false, unavailable: { reason: 'unmapped' } });
-    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=life')).body.note.content).toContain('Home note');
-    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg')).body.note.content).toContain('TRPG note');
+    expect((await get(`/api/notes/read?path=notes/life/note.md&notebookId=${nb('life')}`)).body.note.content).toContain('Home note');
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
     expect((await get('/api/notes/read?path=notes/life/note.md')).status).toBe(400);
-    const lost = await get('/api/notes/read?path=notes/lost/note.md&notebookId=lost');
+    const lost = await get('/api/notes/read?path=notes/lost/note.md&notebookId=lost~lost');
     expect(lost.status).toBe(503);
     expect(lost.body.error).toMatch(/^Lost: No worktree is mapped/);
     const all = (await get('/api/notes/query?notebookId=all&limit=10')).body;
-    expect(all.notes.map((note: { notebookId: string; path: string; }) => `${note.notebookId}:${note.path}`).sort()).toEqual(['life:notes/life/note.md', 'trpg:notes/life/note.md']);
+    expect(all.notes.map((note: { notebookId: string; path: string; }) => `${note.notebookId}:${note.path}`).sort()).toEqual([`${nb('life')}:notes/life/note.md`, 'trpg~trpg:notes/life/note.md']);
   });
 
   it('writes and commits a note in its notebook repository only', async () => {
     const { home, trpg } = await serve();
-    const saved = await fetch(`${base}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'trpg', path: 'notes/life/new.md', content: '# New', metadata: { title: 'New' }, commitMessage: 'docs: add new' }) });
+    const saved = await fetch(`${base}/api/notes`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ notebookId: 'trpg~trpg', path: 'notes/life/new.md', content: '# New', metadata: { title: 'New' }, commitMessage: 'docs: add new' }) });
     expect(saved.status).toBe(200);
     expect(fs.existsSync(path.join(trpg, 'notes/life/new.md'))).toBe(true);
     expect(fs.existsSync(path.join(home, 'notes/life/new.md'))).toBe(false);
@@ -101,10 +105,12 @@ describe('workspace documents in notebook repositories', () => {
     const trpgId = 'github:owner/trpg@main';
     const empty = (await get(`/api/focus-page?repository=${encodeURIComponent(trpgId)}`)).body;
     expect(empty).toMatchObject({ repository: trpgId, page: { version: 1, focuses: [] }, writable: true });
-    const page = { version: 1, focuses: [{ id: 'campaign', notebookId: 'trpg', name: 'Campaign', division: 'single', panes: [{ tabs: [] }] }] };
+    const page = { version: 1, focuses: [{ id: 'campaign', notebookId: 'trpg~trpg', name: 'Campaign', division: 'single', panes: [{ tabs: [] }] }] };
     const saved = await fetch(`${base}/api/focus-page`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision: empty.revision, repository: trpgId }) });
     expect(saved.status).toBe(200);
     expect(fs.readFileSync(path.join(trpg, '.github-notes-focus.yaml'), 'utf8')).toContain('Campaign');
+    // The repository's file names the notebook by its local id.
+    expect(fs.readFileSync(path.join(trpg, '.github-notes-focus.yaml'), 'utf8')).toContain('notebookId: trpg\n');
     expect(fs.existsSync(path.join(home, '.github-notes-focus.yaml'))).toBe(false);
     expect((await get('/api/focus-page')).body).toMatchObject({ page: { focuses: [] } });
     expect((await get('/api/study?repository=github%3Aowner%2Flost%40main')).status).toBe(503);
@@ -122,7 +128,8 @@ describe('bookmarks in distinct notebook repositories', () => {
     fs.writeFileSync(path.join(trpg, BOOKMARKS_FILE), serializeWorkspaceDocument(page));
     expect(fs.existsSync(path.join(home, BOOKMARKS_FILE))).toBe(false);
     const saved = (await get(`/api/bookmarks?repository=${encodeURIComponent(repository)}`)).body;
-    expect(saved).toMatchObject({ page, writable: false });
+    // The file names its notebook by local id; the answer names it by key.
+    expect(saved).toMatchObject({ page: { ...page, notebooks: [{ ...page.notebooks[0], notebookId: 'trpg~trpg' }] }, writable: false });
     expect((await save({ ...page, notebooks: [{ ...page.notebooks[0], notebookId: 'life' }] }, saved.revision)).status).toBe(410);
     expect((await get('/api/bookmarks?repository=github%3Aowner%2Flost%40main')).status).toBe(503);
   });
@@ -171,10 +178,10 @@ describe('assets and edits named by notebook', () => {
       fs.writeFileSync(path.join(root, 'notes/life/assets/map.png'), body);
     }
     const asset = (notebook: string) => fetch(`${base}/raw-assets/notes/life/assets/map.png?notebook=${notebook}`).then(async response => ({ status: response.status, body: await response.text() }));
-    expect(await asset('trpg')).toEqual({ status: 200, body: 'trpg-png' });
-    expect(await asset('life')).toEqual({ status: 200, body: 'home-png' });
+    expect(await asset('trpg~trpg')).toEqual({ status: 200, body: 'trpg-png' });
+    expect(await asset(nb('life'))).toEqual({ status: 200, body: 'home-png' });
     expect((await fetch(`${base}/raw-assets/notes/life/assets/map.png`)).status).toBe(400);
-    const deleted = await fetch(`${base}/api/notes?path=notes/life/note.md&notebookId=trpg&noCommit=true`, { method: 'DELETE' });
+    const deleted = await fetch(`${base}/api/notes?path=notes/life/note.md&notebookId=trpg~trpg&noCommit=true`, { method: 'DELETE' });
     expect(deleted.status).toBe(200);
     expect(fs.existsSync(path.join(trpg, 'notes/life/note.md'))).toBe(false);
     expect(fs.existsSync(path.join(home, 'notes/life/note.md'))).toBe(true);

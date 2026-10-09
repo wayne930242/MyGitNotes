@@ -33,15 +33,15 @@ export function createLocalWorkspaceRouter(): Router {
         if (error instanceof SourceError && error.status === 422) return null;
         throw error;
       });
-      const entries = config ? await workspace.all() : [{ ref: workspace.home.ref, notebooks: [], handle: workspace.home.handle }];
+      const entries = config ? await workspace.all() : [{ ...workspace.home, notebooks: [] }];
       const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus & { gitStatus?: unknown; }> => {
-        const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, revision: '', notebooks: entry.notebooks.map(notebook => notebook.id) };
+        const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, revision: '', alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
         if (!('handle' in entry)) return { ...base, branch: '', write: false, unavailable: entry.unavailable };
         const { root } = entry.handle as LocalHandle;
         const branch = await getCurrentBranch(root);
         return { ...base, branch, write: branch === 'main', gitStatus: await getGitStatus(root) };
       }));
-      const body: WorkspaceStatus = { config, configRevision: '', local: true, home: workspace.home.ref.id, repositories, repoRoot: (workspace.home.handle as LocalHandle).root };
+      const body: WorkspaceStatus = { config, keyedConfig: config ? await workspace.keyedConfig() : null, configRevision: '', local: true, home: workspace.home.ref.id, repositories, repoRoot: (workspace.home.handle as LocalHandle).root };
       res.json(body);
     } catch (err: unknown) {
       res.status(500).json({ error: err instanceof Error ? err.message : String(err) });

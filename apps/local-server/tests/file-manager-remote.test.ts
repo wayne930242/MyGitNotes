@@ -2,6 +2,9 @@ import { expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import { assetHash, GitHubSource, GitLabSource, type RemoteChange } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+
+/** The key of a home-repository notebook: the hosted repository's name is its alias. */
+const nb = (id: string) => `notes~${id}`;
 vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('../src/auth.js')>(), authToken: async () => 'fixture-token' }));
 
 it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-checked commit for text and binary moves', async provider => {
@@ -41,11 +44,11 @@ it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-chec
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
   const post = (command: unknown, expected = revision) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: expected }) });
   try {
-    const listing = await fetch(base + '/api/files?notebookId=a').then(r => r.json());
+    const listing = await fetch(base + `/api/files?notebookId=${nb('a')}`).then(r => r.json());
     expect(listing.remote).toBe(true);
     expect(listing.writable).toBe(true);
     expect(prototype.readBlob).toHaveBeenCalledTimes(1); // Only the manifest; browsing does not download file contents.
-    const moved = await post({ notebookId: 'a', kind: 'move', path: 'notes/a/folder', destination: 'notes/a/renamed' });
+    const moved = await post({ notebookId: nb('a'), kind: 'move', path: 'notes/a/folder', destination: 'notes/a/renamed' });
     expect(moved.status).toBe(200);
     expect(published).toHaveLength(1);
     expect(files.get('notes/a/renamed/image.png')).toEqual(binary);
@@ -54,25 +57,25 @@ it.each(['github', 'gitlab'])('%s file HTTP adapter uses an atomic revision-chec
     expect(files.get('notes/a/renamed/plan.outline.md')!.toString()).toBe('- Parent\r\n  Annotation\r\n  - [Note](../note.md#part)\r\n');
     expect(files.get('notes/a/ref.md')!.toString()).toBe('[Plan](renamed/plan.outline.md)\n');
     expect(published[0].map(change => change.path)).toEqual(expect.arrayContaining(['notes/a/folder/plan.outline.md', 'notes/a/renamed/plan.outline.md', 'notes/a/ref.md']));
-    expect((await post({ notebookId: 'a', kind: 'create', path: 'notes/a/empty.txt' })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'create', path: 'notes/a/empty.txt' })).status).toBe(200);
     expect(files.get('notes/a/empty.txt')!.length).toBe(0);
-    expect((await post({ notebookId: 'a', kind: 'write', path: 'notes/a/.hidden.json', content: '{"new":true}\n' })).status).toBe(200);
-    expect((await post({ notebookId: 'a', kind: 'upload', path: 'notes/a/new.bin', base64: binary.toString('base64') })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'write', path: 'notes/a/.hidden.json', content: '{"new":true}\n' })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'upload', path: 'notes/a/new.bin', base64: binary.toString('base64') })).status).toBe(200);
     expect(files.get('notes/a/new.bin')).toEqual(binary);
-    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/empty.txt' }, 'one')).status).toBe(409);
+    expect((await post({ notebookId: nb('a'), kind: 'delete', path: 'notes/a/empty.txt' }, 'one')).status).toBe(409);
     expect(files.has('notes/a/empty.txt')).toBe(true);
     canPush = false;
-    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/empty.txt' })).status).toBe(403);
+    expect((await post({ notebookId: nb('a'), kind: 'delete', path: 'notes/a/empty.txt' })).status).toBe(403);
     canPush = true;
-    expect((await post({ notebookId: 'a', kind: 'remove-directory', path: 'notes/a/renamed', destination: 'notes/a' })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'remove-directory', path: 'notes/a/renamed', destination: 'notes/a' })).status).toBe(200);
     expect(files.get('notes/a/image.png')).toEqual(binary);
     expect(files.get('notes/a/note.md')!.toString()).toContain('![image](image.png)');
     expect(files.get('notes/a/plan.outline.md')!.toString()).toBe('- Parent\r\n  Annotation\r\n  - [Note](note.md#part)\r\n');
     expect(files.get('notes/a/ref.md')!.toString()).toBe('[Plan](plan.outline.md)\n');
-    expect((await post({ notebookId: 'a', kind: 'mkdir', path: 'notes/a/doomed' })).status).toBe(200);
-    expect((await post({ notebookId: 'a', kind: 'move', path: 'notes/a/image.png', destination: 'notes/a/doomed/image.png' })).status).toBe(200);
-    expect((await post({ notebookId: 'a', kind: 'upload', path: 'notes/a/doomed/.hidden', base64: binary.toString('base64') })).status).toBe(200);
-    const command = { notebookId: 'a', kind: 'delete-directory', path: 'notes/a/doomed' };
+    expect((await post({ notebookId: nb('a'), kind: 'mkdir', path: 'notes/a/doomed' })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'move', path: 'notes/a/image.png', destination: 'notes/a/doomed/image.png' })).status).toBe(200);
+    expect((await post({ notebookId: nb('a'), kind: 'upload', path: 'notes/a/doomed/.hidden', base64: binary.toString('base64') })).status).toBe(200);
+    const command = { notebookId: nb('a'), kind: 'delete-directory', path: 'notes/a/doomed' };
     const publishedBeforeDelete = published.length;
     expect((await post(command, 'one')).status).toBe(409);
     canPush = false;
@@ -131,20 +134,20 @@ it.each(['github', 'gitlab'])('%s note delete and move go through the same atomi
   const base = `http://127.0.0.1:${(server.address() as any).port}`;
   const post = (command: unknown, expected = revision) => fetch(base + '/api/files', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, revision: expected }) });
   try {
-    const moved = await post({ notebookId: 'a', kind: 'move', path: 'notes/a/note.md', destination: 'notes/a/renamed.md' });
+    const moved = await post({ notebookId: nb('a'), kind: 'move', path: 'notes/a/note.md', destination: 'notes/a/renamed.md' });
     expect(moved.status).toBe(200);
     expect(files.has('notes/a/note.md')).toBe(false);
     expect(files.get('notes/a/renamed.md')!.toString()).toBe('# Note\n');
 
-    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' }, 'one')).status).toBe(409);
+    expect((await post({ notebookId: nb('a'), kind: 'delete', path: 'notes/a/second.md' }, 'one')).status).toBe(409);
     expect(files.has('notes/a/second.md')).toBe(true);
 
     canPush = false;
-    expect((await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' })).status).toBe(403);
+    expect((await post({ notebookId: nb('a'), kind: 'delete', path: 'notes/a/second.md' })).status).toBe(403);
     expect(files.has('notes/a/second.md')).toBe(true);
 
     canPush = true;
-    const deleted = await post({ notebookId: 'a', kind: 'delete', path: 'notes/a/second.md' });
+    const deleted = await post({ notebookId: nb('a'), kind: 'delete', path: 'notes/a/second.md' });
     expect(deleted.status).toBe(200);
     expect(files.has('notes/a/second.md')).toBe(false);
     expect(published.at(-1)!.find(change => change.path === 'notes/a/second.md')?.sha).toBeNull();

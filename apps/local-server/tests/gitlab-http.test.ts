@@ -9,6 +9,9 @@ import { credentialToken } from '../src/auth.js';
 import { createRecordStore, RedisRecordBackend } from '../src/record-store/index.js';
 import { gitlabFixture } from '../../../packages/core/tests/fixtures/gitlab.js';
 
+/** The key of a home-repository notebook: the hosted repository's name is its alias. */
+const nb = (id: string) => `project~${id}`;
+
 let root: string, server: Server, base: string, fixture: ReturnType<typeof gitlabFixture>, refreshes: number, cookie: string;
 const site = 'https://gitlab.example.test/gitlab';
 const nativeFetch = globalThis.fetch;
@@ -85,7 +88,7 @@ describe('GitLab HTTP and MCP integration', () => {
     expect((await fetch(`${base}/api/notes`)).status).toBe(404);
     await login();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
-    expect(workspace).toMatchObject({ local: false, repositories: [{ id: workspace.home, type: 'gitlab', branch: 'main', revision: fixture.head, write: true, notebooks: ['ex'] }] });
+    expect(workspace).toMatchObject({ local: false, repositories: [{ id: workspace.home, type: 'gitlab', branch: 'main', revision: fixture.head, write: true, alias: 'project', notebooks: [nb('ex')] }] });
     expect(workspace.configRevision).toBe(fixture.head);
     const notes = await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json());
     expect(notes.notes).toHaveLength(2);
@@ -100,23 +103,23 @@ describe('GitLab HTTP and MCP integration', () => {
   it('answers note queries, facets and lookups over the remote source', async () => {
     await login();
     const headers = { Cookie: cookie };
-    const page = await fetch(`${base}/api/notes/query?notebookId=ex&limit=1&sort=title&order=asc`, { headers }).then(r => r.json());
+    const page = await fetch(`${base}/api/notes/query?notebookId=${nb('ex')}&limit=1&sort=title&order=asc`, { headers }).then(r => r.json());
     expect(page.total).toBe(2);
     expect(page.notes.map((note: any) => note.path)).toEqual(['notes/ex/a.md']);
     expect(page.notes[0].content).toBeUndefined();
     expect(Object.values(page.revisions)).toEqual([fixture.head]);
     const [repository] = Object.keys(page.revisions);
     const revisions = (value: string) => encodeURIComponent(JSON.stringify({ [repository]: value }));
-    const next = await fetch(`${base}/api/notes/query?notebookId=ex&limit=1&sort=title&order=asc&cursor=${encodeURIComponent(page.nextCursor)}`, { headers }).then(r => r.json());
+    const next = await fetch(`${base}/api/notes/query?notebookId=${nb('ex')}&limit=1&sort=title&order=asc&cursor=${encodeURIComponent(page.nextCursor)}`, { headers }).then(r => r.json());
     expect(next.notes.map((note: any) => note.path)).toEqual(['notes/ex/folder/b.md']);
     const facets = await fetch(`${base}/api/notes/facets`, { headers }).then(r => r.json());
-    expect(facets.notebooks.ex).toMatchObject({ total: 2, hidden: 0, tags: { work: 1 } });
-    const lookup = await fetch(`${base}/api/notes/lookup`, post({ notes: [{ notebookId: 'ex', path: 'notes/ex/a.md' }, { notebookId: 'ex', path: 'notes/ex/missing.md' }], content: true })).then(r => r.json());
+    expect(facets.notebooks[nb('ex')]).toMatchObject({ total: 2, hidden: 0, tags: { work: 1 } });
+    const lookup = await fetch(`${base}/api/notes/lookup`, post({ notes: [{ notebookId: nb('ex'), path: 'notes/ex/a.md' }, { notebookId: nb('ex'), path: 'notes/ex/missing.md' }], content: true })).then(r => r.json());
     expect(lookup.notes.map((note: any) => note.path)).toEqual(['notes/ex/a.md']);
     expect(lookup.notes[0].content).toContain('# Alpha');
-    expect((await fetch(`${base}/api/notes/query?notebookId=ex&revisions=${revisions('zz')}`, { headers })).status).toBe(400);
-    expect((await fetch(`${base}/api/notes/query?notebookId=ex&revisions=${revisions(fixture.head)}`, { headers })).status).toBe(200);
-    const stale = await fetch(`${base}/api/notes/query?notebookId=ex&revisions=${revisions('c'.repeat(40))}`, { headers });
+    expect((await fetch(`${base}/api/notes/query?notebookId=${nb('ex')}&revisions=${revisions('zz')}`, { headers })).status).toBe(400);
+    expect((await fetch(`${base}/api/notes/query?notebookId=${nb('ex')}&revisions=${revisions(fixture.head)}`, { headers })).status).toBe(200);
+    const stale = await fetch(`${base}/api/notes/query?notebookId=${nb('ex')}&revisions=${revisions('c'.repeat(40))}`, { headers });
     expect(stale.status).toBe(409);
     expect((await stale.json()).staleRepositories).toEqual([repository]);
   });

@@ -7,8 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { readVersionFile, versionFilePath } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 const write = async (file: string, text: string) => {
   await mkdir(path.dirname(path.join(root, file)), { recursive: true });
@@ -47,30 +50,30 @@ it('lists a note’s history, reads it at a commit, and records, renames and del
   const second = await commit('notes/a/plan.md', '# Plan\none\ntwo\n', 'docs(notes): edit plan.md (Agent, 2026-10-07)\n\nAgent-Edit: 2026-10-07');
   await commit('notes/a/other.md', 'other\n', 'Other');
 
-  const history = await json('/history?notebookId=a&path=notes/a/plan.md').then(response => response.json());
+  const history = await json(`/history?notebookId=${nb('a')}&path=notes/a/plan.md`).then(response => response.json());
   expect(history).toMatchObject({ path: 'notes/a/plan.md', more: false, versions: [], writable: true });
   expect(history.entries.map((entry: { commit: string; agent: boolean; }) => [entry.commit, entry.agent])).toEqual([[second, true], [first, false]]);
-  expect(await json(`/history/file?notebookId=a&path=notes/a/plan.md&commit=${first}`).then(response => response.json())).toMatchObject({ content: '# Plan\none\n' });
+  expect(await json(`/history/file?notebookId=${nb('a')}&path=notes/a/plan.md&commit=${first}`).then(response => response.json())).toMatchObject({ content: '# Plan\none\n' });
 
-  const created = await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'create', commit: first, name: 'Outline', note: 'Only the headings.', today: new Date().toISOString().slice(0, 10) });
+  const created = await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'create', commit: first, name: 'Outline', note: 'Only the headings.', today: new Date().toISOString().slice(0, 10) });
   expect(created.status).toBe(200);
   expect((await created.json()).versions).toMatchObject([{ commit: first, sequence: 1, name: 'Outline', note: 'Only the headings.' }]);
   expect(git('show', '--name-only', '--format=%s', 'HEAD').split('\n').filter(Boolean)).toEqual(['docs(versions): record a version of plan.md', versionFilePath('notes/a/plan.md')]);
   // The version file's commit is not part of the note's own history.
-  expect((await json('/history?notebookId=a&path=notes/a/plan.md').then(response => response.json())).entries).toHaveLength(2);
-  expect((await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'create', commit: first })).status).toBe(409);
+  expect((await json(`/history?notebookId=${nb('a')}&path=notes/a/plan.md`).then(response => response.json())).entries).toHaveLength(2);
+  expect((await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'create', commit: first })).status).toBe(409);
 
-  await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'update', sequence: 1, name: 'Skeleton' });
+  await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'update', sequence: 1, name: 'Skeleton' });
   expect(await versionsOf('notes/a/plan.md')).toMatchObject([{ sequence: 1, name: 'Skeleton' }]);
-  expect((await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'update', sequence: 1, name: 'two\nlines' })).status).toBe(400);
+  expect((await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'update', sequence: 1, name: 'two\nlines' })).status).toBe(400);
 
   // A version's content is readable by its blob; other blobs are not.
   const [version] = await versionsOf('notes/a/plan.md');
-  expect(await json(`/history/file?notebookId=a&path=notes/a/plan.md&blob=${version.blob}`).then(response => response.json())).toMatchObject({ content: '# Plan\none\n' });
+  expect(await json(`/history/file?notebookId=${nb('a')}&path=notes/a/plan.md&blob=${version.blob}`).then(response => response.json())).toMatchObject({ content: '# Plan\none\n' });
   const other = git('rev-parse', 'HEAD:notes/a/other.md');
-  expect((await json(`/history/file?notebookId=a&path=notes/a/plan.md&blob=${other}`)).status).toBe(403);
+  expect((await json(`/history/file?notebookId=${nb('a')}&path=notes/a/plan.md&blob=${other}`)).status).toBe(403);
 
-  await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'delete', sequence: 1 });
+  await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'delete', sequence: 1 });
   expect(syncFs.existsSync(path.join(root, versionFilePath('notes/a/plan.md')))).toBe(false);
   expect(git('status', '--porcelain')).toBe('');
 });
@@ -81,10 +84,10 @@ it('marks the other files a commit changed when asked, and refuses files outside
   git('add', '.');
   git('commit', '-q', '-m', 'Both');
   const both = git('rev-parse', 'HEAD');
-  expect(await json(`/history/commit?notebookId=a&path=notes/a/one.md&commit=${both}`).then(response => response.json())).toMatchObject({ files: ['notes/a/two.md'] });
-  await json('/versions', { notebookId: 'a', path: 'notes/a/one.md', action: 'create', commit: both, include: ['notes/a/two.md'], name: 'Pair' });
+  expect(await json(`/history/commit?notebookId=${nb('a')}&path=notes/a/one.md&commit=${both}`).then(response => response.json())).toMatchObject({ files: ['notes/a/two.md'] });
+  await json('/versions', { notebookId: nb('a'), path: 'notes/a/one.md', action: 'create', commit: both, include: ['notes/a/two.md'], name: 'Pair' });
   expect(await versionsOf('notes/a/two.md')).toMatchObject([{ commit: both, name: 'Pair' }]);
-  expect((await json('/versions', { notebookId: 'a', path: 'notes/a/one.md', action: 'create', commit: both, include: ['.github-notes.yaml'] })).status).toBe(400);
+  expect((await json('/versions', { notebookId: nb('a'), path: 'notes/a/one.md', action: 'create', commit: both, include: ['.github-notes.yaml'] })).status).toBe(400);
   expect((await json('/history?path=.github-notes.yaml')).status).toBe(403);
   expect((await json(`/history?path=${versionFilePath('notes/a/one.md')}`)).status).toBe(403);
   await commit('AGENTS.md', '# Rules\n', 'Rules');
@@ -105,9 +108,9 @@ it('commits a note and its new version together from the quick commit', async ()
 it('moves a note’s version file with the note and removes it with the note until the note is restored', async () => {
   await commit('notes/a/done/keep.md', 'keep\n', 'Folder');
   await commit('notes/a/plan.md', '# Plan\n', 'Start');
-  await json('/versions', { notebookId: 'a', path: 'notes/a/plan.md', action: 'create', commit: git('rev-parse', 'HEAD') });
-  const files = await json('/files?notebookId=a').then(response => response.json());
-  const moved = await json('/files', { command: { kind: 'move', notebookId: 'a', path: 'notes/a/plan.md', destination: 'notes/a/done/plan.md' }, revision: files.revision });
+  await json('/versions', { notebookId: nb('a'), path: 'notes/a/plan.md', action: 'create', commit: git('rev-parse', 'HEAD') });
+  const files = await json(`/files?notebookId=${nb('a')}`).then(response => response.json());
+  const moved = await json('/files', { command: { kind: 'move', notebookId: nb('a'), path: 'notes/a/plan.md', destination: 'notes/a/done/plan.md' }, revision: files.revision });
   expect(moved.status, await moved.clone().text()).toBe(200);
   expect(syncFs.existsSync(path.join(root, versionFilePath('notes/a/done/plan.md')))).toBe(true);
   expect(syncFs.existsSync(path.join(root, versionFilePath('notes/a/plan.md')))).toBe(false);
@@ -119,6 +122,6 @@ it('moves a note’s version file with the note and removes it with the note unt
   const deleted = await fetch(`${base}/notes?path=notes/a/done/plan.md&noCommit=true`, { method: 'DELETE' });
   expect(deleted.status).toBe(200);
   expect(syncFs.existsSync(path.join(root, versionFilePath('notes/a/done/plan.md')))).toBe(false);
-  await json('/notes/restore', { path: 'notes/a/done/plan.md', notebookId: 'a', content: '# Plan\n', metadata: {} });
+  await json('/notes/restore', { path: 'notes/a/done/plan.md', notebookId: nb('a'), content: '# Plan\n', metadata: {} });
   expect(syncFs.existsSync(path.join(root, versionFilePath('notes/a/done/plan.md')))).toBe(true);
 });

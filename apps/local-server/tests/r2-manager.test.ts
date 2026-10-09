@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { assetHash, GitHubSource, r2SettingsFromEnv, type RemoteChange, SourceError } from '@mygitnotes/core';
+import { assetHash, deriveAlias, GitHubSource, notebookKey, r2SettingsFromEnv, type RemoteChange, SourceError } from '@mygitnotes/core';
 import { type AppServices, createApp } from '../src/app.js';
 import type { AssetScope, AssetStorage } from '../src/asset-storage.js';
 
@@ -67,6 +67,9 @@ async function startBucket() {
 }
 
 let root: string, app: Server, base: string, bucket: Awaited<ReturnType<typeof startBucket>>;
+/** The home repository's alias: a local worktree's directory name, a hosted repository's name. */
+let alias = '';
+const nb = (id: string) => notebookKey(alias, id);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 async function start(env: Record<string, string>, services: Partial<AppServices> = {}) {
   bucket = await startBucket();
@@ -78,6 +81,7 @@ async function start(env: Record<string, string>, services: Partial<AppServices>
 }
 async function startLocal(branch = 'main', services: Partial<AppServices> = {}) {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-r2-manager-'));
+  alias = deriveAlias(root, new Set());
   fs.mkdirSync(path.join(root, 'notes/ex'), { recursive: true });
   fs.mkdirSync(path.join(root, 'notes/other'), { recursive: true });
   fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST);
@@ -93,7 +97,7 @@ async function startLocal(branch = 'main', services: Partial<AppServices> = {}) 
   for (const key of ['ex/old/Core Rules.pdf', 'ex/old/map.webp', 'ex/keep.pdf', 'other/secret.pdf']) bucket.objects.set(key, Buffer.from(key));
 }
 const call = (method: string, url: string, body?: unknown, headers: Record<string, string> = {}) => fetch(base + url, { method, redirect: 'manual', headers: { 'Content-Type': 'application/json', ...headers }, body: body === undefined ? undefined : JSON.stringify(body) });
-const operations = (notebookId = 'ex') => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf', size: 10 }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
+const operations = (notebookId = nb('ex')) => [() => call('GET', `/api/r2?notebookId=${notebookId}`), () => call('GET', `/api/r2/raw?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('GET', `/api/r2/references?notebookId=${notebookId}&key=ex/keep.pdf`), () => call('POST', '/api/r2/upload', { notebookId, key: 'ex/new.pdf', size: 10 }), () => call('POST', '/api/r2/mkdir', { notebookId, key: 'ex/folder' }), () => call('POST', '/api/r2/move', { notebookId, key: 'ex/keep.pdf', destination: 'ex/moved.pdf' }), () => call('POST', '/api/r2/delete', { notebookId, key: 'ex/keep.pdf' })];
 
 afterEach(async () => {
   if (app) await new Promise<void>(resolve => app.close(() => resolve()));
@@ -106,20 +110,20 @@ afterEach(async () => {
 describe('R2 management on a local workspace', () => {
   it('signs the declared Content-Length into a direct upload and refuses an upload without one', async () => {
     await startLocal();
-    const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/sized.pdf', size: 1234 }).then(r => r.json());
+    const upload = await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex/docs/sized.pdf', size: 1234 }).then(r => r.json());
     const url = new URL(upload.url);
     expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-length;host;if-none-match');
-    for (const size of [undefined, -1, 1.5, '12', null]) expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/bad.pdf', size })).status).toBe(400);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/huge.pdf', size: 6 * 1024 ** 3 })).status).toBe(413);
+    for (const size of [undefined, -1, 1.5, '12', null]) expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex/docs/bad.pdf', size })).status).toBe(400);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex/docs/huge.pdf', size: 6 * 1024 ** 3 })).status).toBe(413);
   });
 
   it('lists the whole bucket and previews through a presigned redirect', async () => {
     await startLocal();
     bucket.objects.set('top.pdf', Buffer.from('top'));
-    const listing = await call('GET', '/api/r2?notebookId=ex').then(r => r.json());
+    const listing = await call('GET', `/api/r2?notebookId=${nb('ex')}`).then(r => r.json());
     expect(listing.prefix).toBe('');
     expect(listing.objects.map((object: any) => object.key).sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp', 'other/secret.pdf', 'top.pdf']);
-    const raw = await call('GET', '/api/r2/raw?notebookId=ex&key=ex/keep.pdf&download=1');
+    const raw = await call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=ex/keep.pdf&download=1`);
     expect(raw.status).toBe(302);
     const location = new URL(raw.headers.get('location')!);
     expect(location.origin + location.pathname).toBe(`${bucket.endpoint}/private-assets/ex/keep.pdf`);
@@ -129,25 +133,25 @@ describe('R2 management on a local workspace', () => {
 
   it('presigns a direct upload, rejects existing keys and creates folders', async () => {
     await startLocal();
-    const upload = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/docs/big file.pdf', size: 1234 }).then(r => r.json());
+    const upload = await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex/docs/big file.pdf', size: 1234 }).then(r => r.json());
     expect(new URL(upload.url).pathname).toBe('/private-assets/ex/docs/big%20file.pdf');
     expect(new URL(upload.url).searchParams.get('X-Amz-Signature')).toMatch(/^[a-f0-9]{64}$/);
     expect(new URL(upload.url).searchParams.get('X-Amz-SignedHeaders')).toContain('if-none-match');
     expect(bucket.objects.has('ex/docs/big file.pdf')).toBe(false);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex/keep.pdf', size: 1 })).status).toBe(409);
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'ex/new folder' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex/keep.pdf', size: 1 })).status).toBe(409);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: 'ex/new folder' })).status).toBe(200);
     expect(bucket.objects.get('ex/new folder/.keep')).toEqual(Buffer.alloc(0));
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'ex/old' })).status).toBe(409);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: 'ex/old' })).status).toBe(409);
   });
 
   it('moves a folder, rewrites every referencing note and removes the originals', async () => {
     await startLocal();
-    const references = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1').then(r => r.json());
+    const references = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/old&directory=1`).then(r => r.json());
     expect(references.objects.sort()).toEqual(['ex/old/Core Rules.pdf', 'ex/old/map.webp']);
-    expect(references.notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
-    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/archive/2026', directory: true });
+    expect(references.notes).toEqual([{ notebookId: nb('ex'), path: 'notes/ex/rules.md' }, { notebookId: nb('other'), path: 'notes/other/cross.md' }]);
+    const moved = await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old', destination: 'ex/archive/2026', directory: true });
     expect(moved.status).toBe(200);
-    expect((await moved.json()).notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
+    expect((await moved.json()).notes).toEqual([{ notebookId: nb('ex'), path: 'notes/ex/rules.md' }, { notebookId: nb('other'), path: 'notes/other/cross.md' }]);
     expect([...bucket.objects.keys()].sort()).toEqual(['ex/archive/2026/Core Rules.pdf', 'ex/archive/2026/map.webp', 'ex/keep.pdf', 'other/secret.pdf']);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe('# Rules\n\n![Core](<r2:ex/archive/2026/Core Rules.pdf>)\n[map](r2:ex/archive/2026/map.webp) [keep](r2:ex/keep.pdf)\n');
     expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/archive/2026/map.webp)\n');
@@ -157,18 +161,18 @@ describe('R2 management on a local workspace', () => {
   it('refuses a move onto an existing key without touching objects or notes', async () => {
     await startLocal();
     bucket.objects.set('ex/new/map.webp', Buffer.from('taken'));
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/new', directory: true })).status).toBe(409);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old', destination: 'ex/new', directory: true })).status).toBe(409);
     expect(bucket.objects.has('ex/old/map.webp')).toBe(true);
     expect(bucket.objects.has('ex/new/Core Rules.pdf')).toBe(false);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe(NOTE);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/old/inner', directory: true })).status).toBe(400);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old', destination: 'ex/old/inner', directory: true })).status).toBe(400);
   });
 
   it('refuses a move whose referencing note changed during the copies and rolls the copies back', async () => {
     await startLocal();
     const edited = NOTE + '\nSaved while copying.\n';
     bucket.hooks.onCopy = () => fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), edited);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old', destination: 'ex/archive', directory: true })).status).toBe(409);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old', destination: 'ex/archive', directory: true })).status).toBe(409);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe(edited);
     expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/old/map.webp)\n');
     expect([...bucket.objects.keys()].sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp', 'other/secret.pdf']);
@@ -176,33 +180,33 @@ describe('R2 management on a local workspace', () => {
 
   it('deletes a file or folder and leaves notes unchanged', async () => {
     await startLocal();
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/keep.pdf' })).status).toBe(200);
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/old', directory: true }).then(r => r.json())).deleted.sort()).toEqual(['ex/old/Core Rules.pdf', 'ex/old/map.webp']);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/old', directory: true }).then(r => r.json())).deleted.sort()).toEqual(['ex/old/Core Rules.pdf', 'ex/old/map.webp']);
     expect([...bucket.objects.keys()]).toEqual(['other/secret.pdf']);
     expect(fs.readFileSync(path.join(root, 'notes/ex/rules.md'), 'utf8')).toBe(NOTE);
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/keep.pdf' })).status).toBe(404);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/keep.pdf' })).status).toBe(404);
   });
 
   it('manages keys outside notebook prefixes, including the bucket root', async () => {
     await startLocal();
-    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=other/secret.pdf')).status).toBe(302);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'top.pdf', size: 3 })).status).toBe(200);
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'trpg' })).status).toBe(200);
+    expect((await call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=other/secret.pdf`)).status).toBe(302);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'top.pdf', size: 3 })).status).toBe(200);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: 'trpg' })).status).toBe(200);
     expect(bucket.objects.has('trpg/.keep')).toBe(true);
-    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'trpg/map.webp' });
+    const moved = await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old/map.webp', destination: 'trpg/map.webp' });
     expect(moved.status).toBe(200);
     expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:trpg/map.webp)\n');
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'other/secret.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'other/secret.pdf' })).status).toBe(200);
     expect(bucket.objects.has('other/secret.pdf')).toBe(false);
   });
 
   it('rejects keys escaping the bucket', async () => {
     await startLocal();
-    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=/other/secret.pdf')).status).toBe(403);
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'ex/../other/secret.pdf' })).status).toBe(403);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/keep.pdf', destination: '../stolen.pdf' })).status).toBe(403);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'ex//new.pdf', size: 3 })).status).toBe(403);
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: '../escape' })).status).toBe(403);
+    expect((await call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=/other/secret.pdf`)).status).toBe(403);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'ex/../other/secret.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/keep.pdf', destination: '../stolen.pdf' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'ex//new.pdf', size: 3 })).status).toBe(403);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: '../escape' })).status).toBe(403);
     expect(bucket.objects.has('other/secret.pdf')).toBe(true);
     expect(bucket.objects.has('ex/keep.pdf')).toBe(true);
   });
@@ -256,7 +260,7 @@ describe('R2 management through an asset storage', () => {
 
   it('lists only the tenant prefix and reports it as the listing root', async () => {
     await startTenant('r/42/');
-    const listing = await call('GET', '/api/r2?notebookId=ex').then(r => r.json());
+    const listing = await call('GET', `/api/r2?notebookId=${nb('ex')}`).then(r => r.json());
     expect(listing.prefix).toBe('r/42/');
     expect(listing.objects.map((object: any) => object.key).sort()).toEqual(['r/42/ex/keep.pdf', 'r/42/ex/old/map.webp']);
   });
@@ -265,7 +269,7 @@ describe('R2 management through an asset storage', () => {
     await startTenant('r/42/');
     const theirs = 'r/43/ex/theirs.pdf', outside = 'ex/keep.pdf';
     for (const key of [theirs, outside, 'r/42', 'r/4']) {
-      const calls = [call('GET', `/api/r2/raw?notebookId=ex&key=${encodeURIComponent(key)}`), call('GET', `/api/r2/references?notebookId=ex&key=${encodeURIComponent(key)}`), call('POST', '/api/r2/upload', { notebookId: 'ex', key, size: 1 }), call('POST', '/api/r2/uploaded', { notebookId: 'ex', key }), call('POST', '/api/r2/mkdir', { notebookId: 'ex', key }), call('POST', '/api/r2/move', { notebookId: 'ex', key, destination: 'r/42/ex/moved.pdf' }), call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/keep.pdf', destination: key }), call('POST', '/api/r2/delete', { notebookId: 'ex', key })];
+      const calls = [call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=${encodeURIComponent(key)}`), call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=${encodeURIComponent(key)}`), call('POST', '/api/r2/upload', { notebookId: nb('ex'), key, size: 1 }), call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key }), call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key }), call('POST', '/api/r2/move', { notebookId: nb('ex'), key, destination: 'r/42/ex/moved.pdf' }), call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'r/42/ex/keep.pdf', destination: key }), call('POST', '/api/r2/delete', { notebookId: nb('ex'), key })];
       expect((await Promise.all(calls)).map(response => response.status)).toEqual(calls.map(() => 404));
     }
     expect(bucket.requests).toEqual([]);
@@ -275,60 +279,60 @@ describe('R2 management through an asset storage', () => {
 
   it('serves a key inside the prefix', async () => {
     await startTenant('r/42/');
-    expect((await call('GET', '/api/r2/raw?notebookId=ex&key=r/42/ex/keep.pdf')).status).toBe(302);
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/new' })).status).toBe(200);
+    expect((await call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=r/42/ex/keep.pdf`)).status).toBe(302);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: 'r/42/ex/new' })).status).toBe(200);
   });
 
   it('reserves the key and declared size before signing and refuses an upload over the quota or the object limit', async () => {
     const tenant = await startTenant('r/42/', { quota: 500 });
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
     expect(tenant.reserved).toEqual([['r/42/ex/a.pdf', 400]]);
     // The browser sends the body straight to the bucket; the stand-in bucket gets it here.
     bucket.objects.set('r/42/ex/a.pdf', Buffer.alloc(400));
-    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/a.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key: 'r/42/ex/a.pdf' })).status).toBe(200);
     expect(tenant.recorded).toContainEqual(['r/42/ex/a.pdf', 400]);
-    const over = await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/b.pdf', size: 200 });
+    const over = await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/b.pdf', size: 200 });
     expect(over.status).toBe(413);
     expect(await over.json()).toEqual({ error: 'Storage quota exceeded.' });
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/c.pdf', size: 1001 })).status).toBe(413);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/c.pdf', size: 1001 })).status).toBe(413);
     expect(tenant.reserved).toEqual([['r/42/ex/a.pdf', 400], ['r/42/ex/b.pdf', 200]]);
   });
 
   it('counts a signed upload the browser never confirms, so skipping /uploaded saves no quota', async () => {
     const tenant = await startTenant('r/42/', { quota: 500 });
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
     expect(tenant.recorded).toEqual([]);
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/b.pdf', size: 200 })).status).toBe(413);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/b.pdf', size: 200 })).status).toBe(413);
     expect(tenant.used()).toBe(400);
   });
 
   it('confirms an upload by key and changes nothing when the browser confirms it again', async () => {
     const tenant = await startTenant('r/42/');
-    expect((await call('POST', '/api/r2/upload', { notebookId: 'ex', key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
+    expect((await call('POST', '/api/r2/upload', { notebookId: nb('ex'), key: 'r/42/ex/a.pdf', size: 400 })).status).toBe(200);
     bucket.objects.set('r/42/ex/a.pdf', Buffer.alloc(400));
-    for (let confirmation = 0; confirmation < 3; confirmation++) expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/a.pdf' })).status).toBe(200);
+    for (let confirmation = 0; confirmation < 3; confirmation++) expect((await call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key: 'r/42/ex/a.pdf' })).status).toBe(200);
     // Every confirmation carries the same key and the size the bucket reports, which a per-key storage keeps once.
     expect(tenant.recorded).toEqual(Array(3).fill(['r/42/ex/a.pdf', 400]));
     expect(tenant.used()).toBe(400);
-    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'r/42/ex/never-uploaded.pdf' })).status).toBe(404);
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key: 'r/42/ex/never-uploaded.pdf' })).status).toBe(404);
   });
 
   it('records the size of every object a move or delete creates and removes', async () => {
     const tenant = await startTenant('r/42/');
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
     const size = Buffer.from('r/42/ex/old/map.webp').length;
     expect(tenant.recorded).toEqual([['r/42/ex/archive/map.webp', size], ['r/42/ex/old/map.webp', -size]]);
     tenant.recorded.length = 0;
-    expect((await call('POST', '/api/r2/delete', { notebookId: 'ex', key: 'r/42/ex/keep.pdf' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/delete', { notebookId: nb('ex'), key: 'r/42/ex/keep.pdf' })).status).toBe(200);
     expect(tenant.recorded).toEqual([['r/42/ex/keep.pdf', -Buffer.from('r/42/ex/keep.pdf').length]]);
-    expect((await call('POST', '/api/r2/mkdir', { notebookId: 'ex', key: 'r/42/ex/empty' })).status).toBe(200);
+    expect((await call('POST', '/api/r2/mkdir', { notebookId: nb('ex'), key: 'r/42/ex/empty' })).status).toBe(200);
     expect(tenant.recorded.at(-1)).toEqual(['r/42/ex/empty/.keep', 0]);
   });
 
   it('tells a storage that re-keys which key each moved object went to, and records no size change for the move', async () => {
     const tenant = await startTenant('r/42/', { rekey: true });
     tenant.rows.set('r/42/ex/old/map.webp', 7);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(200);
     expect(tenant.movedKeys).toEqual([['r/42/ex/old/map.webp', 'r/42/ex/archive/map.webp', Buffer.from('r/42/ex/old/map.webp').length]]);
     expect(tenant.recorded).toEqual([]);
     expect(bucket.objects.has('r/42/ex/archive/map.webp')).toBe(true);
@@ -341,7 +345,7 @@ describe('R2 management through an asset storage', () => {
     const note = '![map](r2:r/42/ex/old/map.webp)\n';
     fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), note);
     bucket.hooks.onCopy = () => fs.writeFileSync(path.join(root, 'notes/ex/rules.md'), `${note}Saved while copying.\n`);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(409);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'r/42/ex/old', destination: 'r/42/ex/archive', directory: true })).status).toBe(409);
     expect(tenant.movedKeys).toEqual([]);
     expect(tenant.recorded).toEqual([]);
     expect(bucket.objects.has('r/42/ex/archive/map.webp')).toBe(false);
@@ -388,6 +392,7 @@ describe('R2 management on a hosted workspace', () => {
       for (const change of changes) files.set(change.path, Buffer.from(change.content!));
       return revision += '-next';
     });
+    alias = 'notes';
     await start({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'example/notes', MYGITNOTES_BRANCH: 'main' });
     for (const key of ['ex/old/Core Rules.pdf', 'ex/old/map.webp', 'ex/keep.pdf']) bucket.objects.set(key, Buffer.from(key));
   }
@@ -395,8 +400,8 @@ describe('R2 management on a hosted workspace', () => {
   it('commits note rewrites for a writer', async () => {
     canPush = true;
     await startRemote('writer-token');
-    expect((await call('GET', '/api/r2?notebookId=ex')).status).toBe(200);
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(200);
+    expect((await call('GET', `/api/r2?notebookId=${nb('ex')}`)).status).toBe(200);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(200);
     expect(published).toHaveLength(1);
     expect(published[0].map(change => change.path)).toEqual(['notes/ex/rules.md']);
     expect(files.get('notes/ex/rules.md')!.toString()).toContain('[map](r2:ex/maps/region.webp)');
@@ -410,16 +415,16 @@ describe('R2 management on a hosted workspace', () => {
     const snapshots = (GitHubSource.prototype as any).loadSnapshot as ReturnType<typeof vi.fn>;
     await call('GET', '/api/workspace');
     snapshots.mockClear();
-    const response = await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: 'ex/docs/new.pdf' });
+    const response = await call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key: 'ex/docs/new.pdf' });
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ key: 'ex/docs/new.pdf' });
     expect(bucket.requests).toEqual([]);
     const confirmed = snapshots.mock.calls.length;
     snapshots.mockClear();
     // A route that checks write access loads one more, fresh, snapshot than the request itself needs.
-    await call('GET', '/api/r2/raw?notebookId=ex&key=ex/keep.pdf');
+    await call('GET', `/api/r2/raw?notebookId=${nb('ex')}&key=ex/keep.pdf`);
     expect(confirmed).toBeLessThan(snapshots.mock.calls.length);
-    expect((await call('POST', '/api/r2/uploaded', { notebookId: 'ex', key: '../escape' })).status).toBe(403);
+    expect((await call('POST', '/api/r2/uploaded', { notebookId: nb('ex'), key: '../escape' })).status).toBe(403);
   });
 
   it('rolls copied objects back when the rewrite commit hits a revision conflict', async () => {
@@ -428,7 +433,7 @@ describe('R2 management on a hosted workspace', () => {
     bucket.hooks.onCopy = () => {
       revision = 'moved-on';
     };
-    expect((await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(409);
+    expect((await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old/map.webp', destination: 'ex/maps/region.webp' })).status).toBe(409);
     expect(published).toEqual([]);
     expect(files.get('notes/ex/rules.md')!.toString()).toBe(NOTE);
     expect([...bucket.objects.keys()].sort()).toEqual(['ex/keep.pdf', 'ex/old/Core Rules.pdf', 'ex/old/map.webp']);
@@ -447,7 +452,7 @@ describe('R2 management on a hosted workspace', () => {
       return [...files.values()].find(bytes => assetHash(bytes) === sha)!;
     });
     const prefetch = vi.spyOn(prototype, 'prefetchFiles').mockResolvedValue(undefined);
-    const response = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    const response = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/old&directory=1`);
     expect(response.status).toBe(200);
     expect((await response.json()).notes).toHaveLength(201);
     expect(prefetch).toHaveBeenCalledWith(expect.arrayContaining(['notes/ex/rules.md', 'notes/ex/note-199.md']));
@@ -455,7 +460,7 @@ describe('R2 management on a hosted workspace', () => {
     read.mockRejectedValue(new SourceError('GitHub API is temporarily rate limited. Retry in 7 seconds.', 429, 7));
     // Blobs read above are now in the shared cache; a new note forces an uncached platform read.
     files.set('notes/ex/note-new.md', Buffer.from('# New\n\n[map](r2:ex/old/map.webp)\n'));
-    const limited = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    const limited = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/old&directory=1`);
     expect(limited.status).toBe(429);
     expect(limited.headers.get('Retry-After')).toBe('7');
     expect((await limited.json()).retryAfter).toBe(7);
@@ -467,7 +472,7 @@ describe('R2 management on a hosted workspace', () => {
     const prototype = GitHubSource.prototype as any;
     const hugeEntries = Array.from({ length: 8 }, (_, i) => ({ path: `notes/ex/chunk-${i}.md`, type: 'blob', mode: '100644', sha: `chunk-${i}-sha`, size: 4.5 * 1024 * 1024 }));
     vi.spyOn(prototype, 'loadSnapshot').mockImplementation(async () => ({ sha: revision, treeSha: revision, info: { private: true, permissions: { push: canPush }, default_branch: 'main' }, entries: [...[...files].map(([file, bytes]) => ({ path: file, type: 'blob', mode: '100644', sha: assetHash(bytes), size: bytes.length })), ...hugeEntries] }));
-    const response = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old&directory=1');
+    const response = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/old&directory=1`);
     const body = await response.json();
     expect(response.status).toBe(413);
     expect(body.error).toMatch(/32 MiB/);
@@ -510,9 +515,9 @@ describe('R2 references across notebook repositories', () => {
 
   it('lists references of every repository and rewrites each on a move', async () => {
     await startTwoRepositories();
-    const references = await call('GET', '/api/r2/references?notebookId=ex&key=ex/old/map.webp').then(r => r.json());
-    expect(references.notes).toEqual([{ notebookId: 'ex', path: 'notes/ex/rules.md' }, { notebookId: 'trpg', path: 'notes/ex/rules.md' }, { notebookId: 'other', path: 'notes/other/cross.md' }]);
-    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/new.webp' });
+    const references = await call('GET', `/api/r2/references?notebookId=${nb('ex')}&key=ex/old/map.webp`).then(r => r.json());
+    expect(references.notes).toEqual([{ notebookId: nb('ex'), path: 'notes/ex/rules.md' }, { notebookId: 'trpg~trpg', path: 'notes/ex/rules.md' }, { notebookId: nb('other'), path: 'notes/other/cross.md' }]);
+    const moved = await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old/map.webp', destination: 'ex/new.webp' });
     expect(moved.status).toBe(200);
     expect(fs.readFileSync(path.join(second, 'notes/ex/rules.md'), 'utf8')).toBe('![same path](r2:ex/new.webp)\n');
     expect(fs.readFileSync(path.join(root, 'notes/other/cross.md'), 'utf8')).toBe('![x](r2:ex/new.webp)\n');
@@ -521,7 +526,7 @@ describe('R2 references across notebook repositories', () => {
 
   it('refuses a move before copying when a repository whose notes it rewrites is read-only', async () => {
     await startTwoRepositories('draft');
-    const moved = await call('POST', '/api/r2/move', { notebookId: 'ex', key: 'ex/old/map.webp', destination: 'ex/new.webp' });
+    const moved = await call('POST', '/api/r2/move', { notebookId: nb('ex'), key: 'ex/old/map.webp', destination: 'ex/new.webp' });
     expect(moved.status).toBe(403);
     expect((await moved.json()).error).toMatch(/owner\/trpg/);
     expect(bucket.objects.has('ex/new.webp')).toBe(false);

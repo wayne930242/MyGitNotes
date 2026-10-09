@@ -5,8 +5,11 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
+import { deriveAlias, notebookKey } from '@mygitnotes/core';
 
 let root: string, server: Server, base: string;
+/** The key of a home-repository notebook; a local worktree's alias is its directory's name. */
+const nb = (id: string) => notebookKey(deriveAlias(root, new Set()), id);
 const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
 const write = (file: string, content: string) => {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
@@ -41,7 +44,7 @@ it('reads a note without a notebookId query, inferring it from the path', async 
   const res = await fetch(base + '/api/notes/read?path=notes/b/two.md');
   expect(res.status).toBe(200);
   const { note } = await res.json();
-  expect(note.notebookId).toBe('b');
+  expect(note.notebookId).toBe(nb('b'));
   expect(note.content).toBe('# Two\n');
 });
 
@@ -52,6 +55,6 @@ it('returns 404 for a note that no longer exists on disk', async () => {
 
 it('picks up an external edit to the file on the next read', async () => {
   fs.writeFileSync(path.join(root, 'notes/a/one.md'), '# One\nChanged externally.\n');
-  const res = await fetch(base + '/api/notes/read?path=notes/a/one.md&notebookId=a');
+  const res = await fetch(base + `/api/notes/read?path=notes/a/one.md&notebookId=${nb('a')}`);
   expect((await res.json()).note.content).toBe('# One\nChanged externally.\n');
 });

@@ -1,9 +1,9 @@
 import { type Request, type Response, Router } from 'express';
 import fs from 'node:fs';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
+import { copyR2Object, deleteR2Object, isValidR2Key, listR2Objects, managedNotebook, type NotebookConfig, notebookKey, presignR2Object, presignR2Upload, putEmptyR2Object, r2ObjectExists, r2ReferenceKeys, resolveSafePath, rewriteR2References, SourceError, withinPath } from '@mygitnotes/core';
 import { type AssetScope, type AssetStorage, inAssetScope, resolveAssetScope } from './asset-storage.js';
-import { eachRepository, type RepositoryHandle } from './request-workspace.js';
+import { eachRepository, notebookRepository, type RepositoryHandle } from './request-workspace.js';
 import { localFileCatalog } from './file-manager.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { writeFileAtomicSync } from './workspace-files.js';
@@ -13,6 +13,8 @@ const markdown = (file: string) => /\.(md|markdown)$/i.test(file);
 /** One available repository's notes, for scanning and rewriting R2 references. */
 interface RepositoryNotes {
   id: string;
+  /** Names the repository's notebooks by key in answers; `notebooks` carry local ids. */
+  alias: string;
   notebooks: NotebookConfig[];
   /** Whether the requester may rewrite this repository's notes. */
   writable: boolean;
@@ -36,11 +38,12 @@ interface ReferencingNote {
  */
 export function createR2ManagerRouter(storage: AssetStorage): Router {
   const router = Router();
-  const open = async (id: string, handle: RepositoryHandle, config: { notebooks: NotebookConfig[]; }): Promise<RepositoryNotes> => {
+  const open = async (id: string, alias: string, handle: RepositoryHandle, config: { notebooks: NotebookConfig[]; }): Promise<RepositoryNotes> => {
     if (handle.kind === 'local') {
       const { root } = handle;
       return {
         id,
+        alias,
         notebooks: config.notebooks,
         writable: await getCurrentBranch(root) === 'main',
         notes: async () => new Map([...localFileCatalog(root, config.notebooks).files.keys()].filter(markdown).map(file => [file, fs.readFileSync(resolveSafePath(root, file), 'utf8')])),
@@ -58,6 +61,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     const snapshot = handle.authenticated ? await reader.getSnapshot(true) : undefined;
     return {
       id,
+      alias,
       notebooks: config.notebooks,
       writable: Boolean(snapshot && reader.canWrite(snapshot)),
       notes: async () => {
@@ -83,13 +87,14 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
    * repository must be writable: `authorize` checks that (it is checked at once unless `deferAuthorize` is set).
    */
   const context = async (req: Request, res: Response, input: Record<string, unknown>, deferAuthorize = false) => {
+    if (typeof input.notebookId !== 'string' || !input.notebookId) throw new SourceError('Choose a notebook.', 400);
+    const named = await notebookRepository(res, input.notebookId);
     const entries = await eachRepository(res);
-    const target = entries.find(({ config }) => config.notebooks.some(nb => nb.id === input.notebookId));
-    const notebook = target?.config.notebooks.find(nb => nb.id === input.notebookId);
-    if (!target || !notebook) throw new SourceError('Choose a notebook.', 400);
+    const target = entries.find(({ handle }) => handle.id === named.handle.id)!;
+    const { notebook } = named;
     const opened = new Map<string, Promise<RepositoryNotes>>();
-    const openEntry = ({ handle, config }: (typeof entries)[number]) => {
-      if (!opened.has(handle.id)) opened.set(handle.id, open(handle.id, handle, config));
+    const openEntry = ({ handle, alias, config }: (typeof entries)[number]) => {
+      if (!opened.has(handle.id)) opened.set(handle.id, open(handle.id, alias, handle, config));
       return opened.get(handle.id)!;
     };
     const authorize = async () => {
@@ -120,8 +125,10 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
     if (!objects.length) throw new SourceError('R2 folder is empty.', 404);
     return objects;
   };
-  /** Notes of every repository that reference any of `keys`, named by notebook and path: two repositories can hold the same path. */
-  const referencing = (repository: RepositoryNotes, notes: Map<string, string>, keys: string[]): ReferencingNote[] => [...notes].filter(([, content]) => r2ReferenceKeys(content).some(key => keys.includes(key))).map(([file]) => ({ repository: repository.id, notebookId: managedNotebook(file, repository.notebooks)!.id, path: file }));
+  /** A note of one repository named by notebook key and path: two repositories can hold the same path. */
+  const noteOf = (repository: RepositoryNotes, file: string): ReferencingNote => ({ repository: repository.id, notebookId: notebookKey(repository.alias, managedNotebook(file, repository.notebooks)!.id), path: file });
+  /** Notes of every repository that reference any of `keys`. */
+  const referencing = (repository: RepositoryNotes, notes: Map<string, string>, keys: string[]): ReferencingNote[] => [...notes].filter(([, content]) => r2ReferenceKeys(content).some(key => keys.includes(key))).map(([file]) => noteOf(repository, file));
   const byPath = (a: ReferencingNote, b: ReferencingNote) => a.path.localeCompare(b.path) || a.notebookId.localeCompare(b.notebookId);
   const handle = (action: (req: Request, res: Response) => Promise<unknown>) => async (req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'private, no-store');
@@ -247,7 +254,7 @@ export function createR2ManagerRouter(storage: AssetStorage): Router {
         if (moved) await moved(from, moves[from], bytes.get(from)!);
         else await record(from, -bytes.get(from)!);
       }
-      const notes = rewrites.flatMap(({ repository, rewritten }) => [...rewritten.keys()].map(file => ({ repository: repository.id, notebookId: managedNotebook(file, repository.notebooks)!.id, path: file }))).sort(byPath);
+      const notes = rewrites.flatMap(({ repository, rewritten }) => [...rewritten.keys()].map(file => noteOf(repository, file))).sort(byPath);
       res.json({ moves, notes: notes.map(({ notebookId, path }) => ({ notebookId, path })) });
     }),
   );

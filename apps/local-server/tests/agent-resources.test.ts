@@ -108,7 +108,7 @@ it('saves a script of a notebook workspace skill at its Git path', async () => {
 
 it('saves Focus YAML as one remote file with authentication and revision protection', async () => {
   const headers = { Cookie: `gh_notes_session=${session}`, 'Content-Type': 'application/json' };
-  const page = { version: 1, focuses: [{ id: 'weekly', name: 'Weekly', notebookId: 'ex', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/read.md' }, { kind: 'note', path: 'notes/ex/reading.compilation.yml' }] }] }] };
+  const page = { version: 1, focuses: [{ id: 'weekly', name: 'Weekly', notebookId: 'http~ex', division: 'single', panes: [{ tabs: [{ kind: 'note', path: 'notes/ex/read.md' }, { kind: 'note', path: 'notes/ex/reading.compilation.yml' }] }] }] };
   expect(await fetch(`${base}/api/focus-page`).then(r => r.json())).toMatchObject({ writable: false, page: { version: 1, focuses: [] } });
   expect(await fetch(`${base}/api/focus-page`, { headers }).then(r => r.json())).toMatchObject({ writable: true, revision: 'before' });
   const put = (revision: string, authenticated = true) => fetch(`${base}/api/focus-page`, { method: 'PUT', headers: authenticated ? headers : { 'Content-Type': 'application/json' }, body: JSON.stringify({ page, revision }) });

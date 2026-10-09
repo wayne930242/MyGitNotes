@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, localManifest, type NotebookConfig, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -20,6 +20,9 @@ export interface RemoteHandle {
 }
 export type RepositoryHandle = LocalHandle | RemoteHandle;
 export type RequestWorkspace = WorkspaceRepositories<RepositoryHandle>;
+
+/** A notebook as its repository's manifest declares it, without its workspace key. */
+const localNotebook = ({ key: _key, ...notebook }: KeyedNotebook): NotebookConfig => notebook;
 
 /** Opens the workspace of one request: the home repository from its settings, the manifest where the settings keep it, and each notebook repository the manifest declares. */
 export function openWorkspace(settings: WorkspaceSettings, token: string | undefined, cache?: RemoteCache): RequestWorkspace {
@@ -108,9 +111,9 @@ export function workspaceOf(res: express.Response): RequestWorkspace {
 }
 
 /** The home repository's handle with the manifest scope it serves. */
-export async function homeRepository(res: express.Response): Promise<{ handle: RepositoryHandle; config: WorkspaceConfig; }> {
+export async function homeRepository(res: express.Response): Promise<{ handle: RepositoryHandle; alias: string; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
-  return { handle: workspace.home.handle, config: await workspace.scope(workspace.home.ref.id) };
+  return { handle: workspace.home.handle, alias: workspace.home.alias, config: await workspace.scope(workspace.home.ref.id) };
 }
 
 /**
@@ -122,7 +125,7 @@ export async function prewarmLocalScans(configSource: WorkspaceConfigSource): Pr
   if (settings.home.source.type !== 'local') return;
   const repositories = await openWorkspace(settings, undefined).all();
   for (const repository of repositories) {
-    if ('handle' in repository && repository.handle.kind === 'local') await prewarmNotebookScans(repository.handle.root, repository.notebooks);
+    if ('handle' in repository && repository.handle.kind === 'local') await prewarmNotebookScans(repository.handle.root, repository.notebooks.map(localNotebook));
   }
 }
 
@@ -132,15 +135,18 @@ export async function requestCatalog(res: express.Response, revisions: unknown, 
   const workspace = workspaceOf(res);
   const [{ config }, repositories] = await Promise.all([workspace.manifest(), workspace.all()]);
   const available = repositories.filter((repository): repository is AvailableRepository<RepositoryHandle> => 'handle' in repository);
-  return workspaceCatalog(config, available.map(repository => ({ id: repository.ref.id, notebooks: repository.notebooks, catalog: open(repository.handle, repository.notebooks) })), expected);
+  return workspaceCatalog(config, available.map(repository => {
+    const notebooks = repository.notebooks.map(localNotebook);
+    return { id: repository.ref.id, alias: repository.alias, notebooks, catalog: open(repository.handle, notebooks) };
+  }), expected);
 }
 
 /** The repository a workspace-level request names, or the home repository when it names none; with the manifest scope that repository serves. */
-export async function repositoryOrHome(res: express.Response, id: unknown): Promise<{ id: RepositoryId; handle: RepositoryHandle; config: WorkspaceConfig; }> {
+export async function repositoryOrHome(res: express.Response, id: unknown): Promise<{ id: RepositoryId; alias: string; handle: RepositoryHandle; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
   if (id !== undefined && typeof id !== 'string') throw new SourceError('repository must be a string.');
-  const { ref, handle } = id ? await workspace.byId(id) : { ref: workspace.home.ref, handle: workspace.home.handle };
-  return { id: ref.id, handle, config: await workspace.scope(ref.id) };
+  const { ref, alias, handle } = id ? await workspace.byId(id) : workspace.home;
+  return { id: ref.id, alias, handle, config: await workspace.scope(ref.id) };
 }
 
 /** The repository a request names in its `repository` field. */
@@ -163,19 +169,59 @@ export async function namedLocal(res: express.Response, id: unknown): Promise<{ 
   return { root: handle.root, config: await workspaceOf(res).scope(ref.id) };
 }
 
-/** A repository with the manifest scope it serves and, when one was named or found, the notebook. */
+/**
+ * A repository with the manifest scope it serves (local ids) and the notebook a request named or a path fell in.
+ * `notebook.id` is the local id that repository content stores; `key` is how responses name it.
+ */
 export interface ResolvedRepository {
   handle: RepositoryHandle;
+  alias: string;
   config: WorkspaceConfig;
   notebook: NotebookConfig;
+  key: NotebookKey;
 }
 
-/** The repository of the notebook a request names. */
+const resolved = async (workspace: RequestWorkspace, entry: AvailableRepository<RepositoryHandle> & { notebook: KeyedNotebook; }): Promise<ResolvedRepository> => ({ handle: entry.handle, alias: entry.alias, config: await workspace.scope(entry.ref.id), notebook: localNotebook(entry.notebook), key: entry.notebook.key });
+
+/** The repository of the notebook a request names by its key. */
 export async function notebookRepository(res: express.Response, notebookId: unknown): Promise<ResolvedRepository> {
   if (typeof notebookId !== 'string' || !notebookId) throw new SourceError('notebookId is required.');
   const workspace = workspaceOf(res);
-  const entry = await workspace.forNotebook(notebookId);
-  return { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebooks.find(notebook => notebook.id === notebookId)! };
+  return resolved(workspace, await workspace.forNotebook(notebookId));
+}
+
+/** The local id a request's notebook key names inside one repository; a key of another repository is refused. */
+export function localNotebookId(alias: string, notebookId: string): string {
+  const local = localIdIn(alias, notebookId);
+  if (local === null) throw new SourceError(`Notebook ${notebookId} does not belong to this repository.`, 400);
+  return local;
+}
+
+/** A workspace document as a request names it (notebook keys) turned into what the repository stores (local ids), or back. */
+export const storedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => localNotebookId(alias, id));
+export const keyedDocument = <T>(document: WorkspaceDocument<T>, alias: string, value: T): T => document.mapNotebookIds(value, id => notebookKey(alias, id));
+
+/** A workspace document draft a commit request carries. */
+export interface DocumentDraft {
+  path: string;
+  page: unknown;
+  base: unknown;
+}
+
+/**
+ * The workspace document drafts of a commit request with their notebook keys turned into the repository's local ids.
+ * A request without drafts has none; a draft that names no document or fails its schema passes unchanged, for the commit to refuse.
+ */
+export function storedDocumentDrafts(alias: string, documents: unknown): DocumentDraft[] {
+  if (documents === undefined) return [];
+  if (!Array.isArray(documents)) throw new SourceError('Select between 1 and 200 files.');
+  return documents.map((draft: DocumentDraft) => {
+    const document = typeof draft?.path === 'string' ? workspaceDocument(draft.path) : undefined;
+    if (!document) return draft;
+    const page = document.schema.safeParse(draft.page), base = document.schema.safeParse(draft.base);
+    if (!page.success || !base.success) return draft;
+    return { ...draft, page: storedDocument(document, alias, page.data), base: storedDocument(document, alias, base.data) };
+  });
 }
 
 /**
@@ -185,25 +231,24 @@ export async function notebookRepository(res: express.Response, notebookId: unkn
 export async function noteRepository(res: express.Response, file: unknown, notebookId?: unknown): Promise<ResolvedRepository> {
   if (typeof file !== 'string' || !file) throw new SourceError('path is required.');
   if (workspaceDocument(file)) throw new SourceError('Workspace metadata is protected.', 403);
-  let resolved: ResolvedRepository;
+  let found: ResolvedRepository;
   if (notebookId !== undefined && notebookId !== '') {
-    resolved = await notebookRepository(res, notebookId);
-    if (!file.startsWith(`${resolved.notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);
+    found = await notebookRepository(res, notebookId);
+    if (!file.startsWith(`${found.notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);
   } else {
     const workspace = workspaceOf(res);
-    const entry = await workspace.forPath(file);
-    resolved = { handle: entry.handle, config: await workspace.scope(entry.ref.id), notebook: entry.notebook };
+    found = await resolved(workspace, await workspace.forPath(file));
   }
   // Match managed-file policy: a lexical notebook path cannot alias metadata or another owner.
-  if (resolved.handle.kind === 'local') regularPath(resolved.handle.root, file.replace(/\\/g, '/'));
-  return resolved;
+  if (found.handle.kind === 'local') regularPath(found.handle.root, file.replace(/\\/g, '/'));
+  return found;
 }
 
-/** Every available repository of the request's workspace with the manifest scope it serves. */
-export async function eachRepository(res: express.Response): Promise<{ id: RepositoryId; handle: RepositoryHandle; config: WorkspaceConfig; }[]> {
+/** Every available repository of the request's workspace with its alias and the manifest scope it serves. */
+export async function eachRepository(res: express.Response): Promise<{ id: RepositoryId; alias: string; handle: RepositoryHandle; config: WorkspaceConfig; }[]> {
   const workspace = workspaceOf(res);
   const entries = (await workspace.all()).filter((entry): entry is AvailableRepository<RepositoryHandle> => 'handle' in entry);
-  return Promise.all(entries.map(async entry => ({ id: entry.ref.id, handle: entry.handle, config: await workspace.scope(entry.ref.id) })));
+  return Promise.all(entries.map(async entry => ({ id: entry.ref.id, alias: entry.alias, handle: entry.handle, config: await workspace.scope(entry.ref.id) })));
 }
 
 /** A local handle, for routes that exist only in a local workspace. */
