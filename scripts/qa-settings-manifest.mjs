@@ -13,7 +13,8 @@ const { server, base } = await startQaServer(root);
 const browser = await launchQaBrowser(require);
 const page = await browser.newPage();
 const errors = collectPageErrors(page);
-const visit = route => page.goto(base + route, { waitUntil: 'networkidle0' });
+// The local workspace keeps its change stream (/api/workspace/events) open, so a page never reaches networkidle0.
+const visit = route => page.goto(base + route, { waitUntil: 'networkidle2' });
 try {
   await page.setViewport({ width: 1440, height: 1000 });
   await visit('/settings');
@@ -88,4 +89,49 @@ try {
   await browser.close();
   await new Promise(resolve => server.close(resolve));
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+// Two repositories: Settings opened from a notebook of the notebook repository edits that repository's manifest,
+// while the header keeps the default repository's title (decision C10).
+{
+  const home = createQaWorkspace('github-notes-manifest-home-');
+  home.write('.mygitnotes.yaml', 'schema_version: 3\nworkspace:\n  title: Home QA\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n  - id: campaign\n    title: Campaign log\n    root: notes/campaign\n    source: { type: github, repository: demo/campaign, branch: main }\n');
+  home.write('notes/life/home.md', '# Home note\n');
+  home.commitFixture();
+  const campaign = createQaWorkspace('github-notes-manifest-campaign-');
+  campaign.write('.mygitnotes.yaml', 'schema_version: 3\nworkspace:\n  title: Campaign QA\n  default_notebook: campaign\nnotebooks:\n  - id: campaign\n    title: Campaign log\n    root: notes/campaign\n');
+  campaign.write('notes/campaign/session.md', '# Session\n');
+  campaign.commitFixture();
+  const serverConfig = path.join(home.root, '..', `${path.basename(home.root)}.server.yaml`);
+  fs.writeFileSync(serverConfig, `repositories:\n  - type: github\n    repository: demo/campaign\n    path: ${campaign.root}\n`);
+  process.env.MYGITNOTES_SERVER_CONFIG = serverConfig;
+  const { server, base } = await startQaServer(home.root);
+  const browser = await launchQaBrowser(require);
+  const page = await browser.newPage();
+  const errors = collectPageErrors(page);
+  try {
+    await page.setViewport({ width: 1440, height: 1000 });
+    await page.goto(base, { waitUntil: 'networkidle2' });
+    await page.evaluate(() => localStorage.setItem('github-notes:language', 'en'));
+    await page.goto(`${base}/notebooks/campaign~campaign`, { waitUntil: 'networkidle2' });
+    await page.waitForFunction(() => document.querySelector('header h1')?.textContent === 'Campaign QA');
+    // Settings is reached the way a person does, from the navigation, so the app carries the current notebook.
+    await page.click('nav[aria-label="Main navigation"] button[aria-label="Settings"]');
+    await page.waitForSelector('#settings-manifest [role="combobox"]');
+    assert.equal(new URL(page.url()).searchParams.get('notebook'), 'campaign~campaign');
+    assert.equal(await page.$eval('#settings-manifest [role="combobox"]', node => node.textContent), 'Campaign QA · demo/campaign', "Settings opens on the current notebook's repository");
+    assert.equal(await page.$eval('#settings-manifest input[type="text"]', input => input.value), 'Campaign QA');
+    assert.equal(await page.$eval('header h1', node => node.textContent), 'Home QA', 'The header shows the default repository on Settings');
+    await page.goto(`${base}/settings`, { waitUntil: 'networkidle2' });
+    await page.waitForSelector('#settings-manifest [role="combobox"]');
+    assert.equal(await page.$eval('#settings-manifest [role="combobox"]', node => node.textContent.split(' · ')[0]), 'Home QA', 'Settings without a notebook opens on the default repository');
+    assert.deepEqual(errors, []);
+    console.log("PASS Settings opens the manifest of the current notebook's repository, and of the default repository without one");
+  } finally {
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+    delete process.env.MYGITNOTES_SERVER_CONFIG;
+    for (const root of [home.root, campaign.root]) fs.rmSync(root, { recursive: true, force: true });
+    fs.rmSync(serverConfig, { force: true });
+  }
 }

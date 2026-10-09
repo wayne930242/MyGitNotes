@@ -598,7 +598,7 @@ export const AppContent: React.FC = () => {
                     {activeTab === 'settings' && (
                       <main className='workspace-route settings-main has-sidebar-drawer'>
                         <SettingsModal
-                          manifest={{ repositories, homeRepository: sourceId, initialRepository: currentRepository?.id ?? sourceId, onManifestRevision: setManifestRevision }}
+                          manifest={{ repositories, homeRepository: sourceId, initialRepository: repositoryFor(selectedNotebookId)?.id ?? sourceId, onManifestRevision: setManifestRevision }}
                           local={!remote}
                           coreUpdates={!repositoryChoice}
                           accountSettings={
