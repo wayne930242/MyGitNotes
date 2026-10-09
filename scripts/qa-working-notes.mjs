@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { clickButton, collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { clickButton, collectPageErrors, createQaWorkspace, hostedWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 const require = qaRequire();
 const { root, write, commitFixture } = createQaWorkspace('github-notes-browser-');
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
@@ -58,22 +58,25 @@ const replace = async (selector, text) => {
   await page.keyboard.type(text);
 };
 let rev = 1, commits = [], failCommit = false, reads = [], lookups = [];
-const makeNote = (name) => ({ id: name, path: `notes/example/${name}.md`, notebookId: 'example', title: name, content: `# ${name}\n\nFirst line\n\nLast line\n`, metadata: { status: 'inbox', custom: 'keep' }, status: 'inbox', tags: [], revision: String(rev) });
+const hostedConfig = { schema_version: 1, workspace: { title: 'Working notes QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] };
+const hosted = () => hostedWorkspace({ repository: 'working/fixture', config: hostedConfig, revision: String(rev), write: true });
+const example = hosted().key('example');
+const makeNote = (name) => ({ id: name, path: `notes/example/${name}.md`, notebookId: example, title: name, content: `# ${name}\n\nFirst line\n\nLast line\n`, metadata: { status: 'inbox', custom: 'keep' }, status: 'inbox', tags: [], revision: String(rev) });
 let remoteNotes = [makeNote('welcome'), makeNote('second')];
 const bump = () => {
   rev++;
   remoteNotes = remoteNotes.map(note => ({ ...note, revision: String(rev) }));
 };
 await page.setRequestInterception(true);
-const hostedConfig = { schema_version: 1, workspace: { title: 'Working notes QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] };
-const hostedRepository = { revision: async () => String(rev), index: async notebook => remoteNotes.filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
-const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: 'github:working/fixture@main', notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
+const hostedRepository = { revision: async () => String(rev), index: async notebook => remoteNotes.filter(note => note.notebookId === hosted().key(notebook.id)).map(note => ({ ...note, notebookId: notebook.id })), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+// The catalog reads each repository by local id and answers by key, as the server's does.
+const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: hosted().id, alias: hosted().alias, notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
 page.on('request', async request => {
   // A failing mock must fail the run, not leave the request hanging until a navigation times out.
   try {
     const url = new URL(request.url());
     let body, status = 200;
-    if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: String(rev), local: false, home: 'github:working/fixture@main', repositories: [{ id: 'github:working/fixture@main', type: 'github', repository: 'working/fixture', branch: 'main', revision: String(rev), write: true, notebooks: ['example'] }] };
+    if (url.pathname === '/api/workspace') body = hosted().status;
     if (url.pathname === '/api/notes') {
       assert(request.method() === 'GET', 'Edit used immediate remote save');
       body = { notes: remoteNotes };
@@ -140,7 +143,7 @@ const pending = () =>
     }
   });
 const open = async (name) => {
-  await page.goto(base + `/notebooks/example/notes/${name}.md`, { waitUntil: 'networkidle0' });
+  await page.goto(base + `/notebooks/${example}/notes/${name}.md`, { waitUntil: 'networkidle0' });
   await page.waitForSelector('[aria-label="Close note"]');
   await click('Source');
 };
@@ -243,7 +246,7 @@ try {
   await close();
   assert(commits.length === 3 && !reads.includes('notes/example/new-local.md'), 'New local note required remote persistence');
   await page.setViewport({ width: 320, height: 700, isMobile: true, hasTouch: true });
-  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle0' });
+  await page.goto(base + `/notebooks/${example}`, { waitUntil: 'networkidle0' });
   await openCommit();
   const rect = await page.$eval('.changes-dialog', e => {
     const r = e.getBoundingClientRect();
@@ -277,7 +280,7 @@ try {
   // A draft is often blocked because the note vanished from the remote, which is exactly when reading
   // that note fails. Discarding it must stay a local delete, or the draft can never be dismissed.
   await page.evaluate(() => localStorage.removeItem('gh_notes_working:github:working/fixture@main:main'));
-  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle0' });
+  await page.goto(base + `/notebooks/${example}`, { waitUntil: 'networkidle0' });
   await open('welcome');
   await edit('# welcome\n\nDraft about to be orphaned\n\nLast line\n');
   await close();

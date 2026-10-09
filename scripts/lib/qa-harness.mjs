@@ -7,6 +7,7 @@ import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { resolveQaChromePath } from '../qa-chrome.mjs';
 import { assertFreshBuild } from './require-fresh-build.mjs';
+import { DEFAULT_WORKSPACE_PREFERENCES } from '../../packages/core/dist/workspace-preferences.js';
 
 /** The product checkout the qa-*.mjs scripts serve. */
 export const product = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -59,4 +60,19 @@ export function collectPageErrors(page, errors = []) {
 export async function clickButton(page, text) {
   await page.waitForFunction(text => Array.from(document.querySelectorAll('button')).some(b => b.textContent.trim() === text && !b.disabled), {}, text);
   await page.evaluate(text => Array.from(document.querySelectorAll('button')).find(b => b.textContent.trim() === text && !b.disabled).click(), text);
+}
+
+/**
+ * A hosted `GET /api/workspace` answer for one GitHub repository serving `config`'s notebooks, as the server reports it:
+ * notebooks named by key (`<alias>~<id>`, the alias being the repository's name), and the repository's own title,
+ * default notebook, preferences and manifest revision. `key` names a notebook of it for mocked notes and routes; a mocked
+ * catalog takes `alias` and the local manifest, as the server's does.
+ */
+export function hostedWorkspace({ repository, branch = 'main', config, revision, write }) {
+  const id = `github:${repository}@${branch}`;
+  const alias = repository.split('/').pop();
+  const key = localId => `${alias}~${localId}`;
+  const keyedConfig = { ...config, workspace: { ...config.workspace, default_notebook: key(config.workspace.default_notebook) }, notebooks: config.notebooks.map(notebook => ({ ...notebook, id: key(notebook.id) })) };
+  const status = { config, keyedConfig, local: false, home: id, repositories: [{ id, type: 'github', repository, branch, revision, write, alias, notebooks: keyedConfig.notebooks.map(notebook => notebook.id), title: config.workspace.title, defaultNotebook: keyedConfig.workspace.default_notebook, preferences: { ...DEFAULT_WORKSPACE_PREFERENCES, ...config.preferences }, config, configRevision: revision }] };
+  return { id, alias, key, keyedConfig, status };
 }

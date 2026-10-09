@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { clickButton, collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { clickButton, collectPageErrors, createQaWorkspace, hostedWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 const require = qaRequire();
 const { root, write, commitFixture } = createQaWorkspace('github-notes-browser-');
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n');
@@ -17,7 +17,7 @@ await page.setViewport({ width: 1440, height: 1000 });
 const errors = collectPageErrors(page);
 const click = text => clickButton(page, text);
 try {
-  await page.goto(base, { waitUntil: 'networkidle0' });
+  await page.goto(base, { waitUntil: 'networkidle2' });
   // Folders start collapsed; expand the tree before selecting a nested folder.
   await page.waitForSelector('button[aria-label="Expand all"]');
   await page.click('button[aria-label="Expand all"]');
@@ -57,13 +57,15 @@ try {
   let savedPayload;
   let grants = [];
   const demoToken = 'x'.repeat(43);
-  let remoteNotes = [{ id: 'public', path: 'notes/example/public.md', notebookId: 'example', title: 'Public Note', content: '# Public Note\n\n<img src=x onerror="window.__xss=true">', metadata: { custom: 'keep' }, tags: [], revision: 'one', status: 'todo' }];
+  const hostedConfig = { schema_version: 1, workspace: { title: 'Public GitHub QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] };
+  const hosted = (revision, write) => hostedWorkspace({ repository: 'owner/repo', config: hostedConfig, revision, write });
+  let remoteNotes = [{ id: 'public', path: 'notes/example/public.md', notebookId: hosted('', false).key('example'), title: 'Public Note', content: '# Public Note\n\n<img src=x onerror="window.__xss=true">', metadata: { custom: 'keep' }, tags: [], revision: 'one', status: 'todo' }];
   await page.setRequestInterception(true);
   page.on('request', req => {
     const u = new URL(req.url());
     let body;
     let status = 200;
-    if (u.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Public GitHub QA', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, configRevision: remoteNotes[0].revision, local: false, home: 'github:owner/repo@main', repositories: [{ id: 'github:owner/repo@main', type: 'github', repository: 'owner/repo', branch: 'main', revision: remoteNotes[0].revision, write: signedIn, notebooks: ['example'] }] };
+    if (u.pathname === '/api/workspace') body = hosted(remoteNotes[0].revision, signedIn).status;
     if (u.pathname === '/api/notes') {
       if (req.method() === 'POST') {
         savedPayload = JSON.parse(req.postData());
@@ -98,7 +100,7 @@ try {
     if (body) req.respond({ status, contentType: 'application/json', body: JSON.stringify(body) });
     else req.continue();
   });
-  await page.goto(base + '/notes', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notes', { waitUntil: 'networkidle2' });
   await page.waitForSelector('table');
   if (!await page.$('button[title="Card View"]') || !await page.$('button[title="Kanban View"]')) throw new Error('Original view controls missing');
   if (await page.$eval('tbody button[role="combobox"]', e => !e.disabled)) throw new Error('Public status control editable');
@@ -132,7 +134,7 @@ try {
   await page.evaluate(() => Array.from(document.querySelectorAll('button')).find(b => b.textContent.includes('GitHub Dark'))?.click());
   await page.waitForFunction(() => document.documentElement.classList.contains('dark'));
   await page.screenshot({ path: `${product}/artifacts/qa/restored-settings-dark.png`, fullPage: true });
-  await page.reload({ waitUntil: 'networkidle0' });
+  await page.reload({ waitUntil: 'networkidle2' });
   if (!await page.evaluate(() => document.documentElement.classList.contains('dark'))) throw new Error('Theme lost on reload');
   await click('Notes');
   await page.waitForSelector('table');
@@ -145,7 +147,7 @@ try {
   if (await page.$eval('[data-notepath]', e => e.draggable)) throw new Error('Public Kanban draggable');
   console.log('PASS restored navigation, table/cards/Kanban, Settings palettes, theme persistence and readonly controls');
   signedIn = true;
-  await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/settings', { waitUntil: 'networkidle2' });
   // Remote working changes, conflict handling and commits are covered by qa-working-notes.
   await page.waitForSelector('input[aria-label="MCP client name"]');
   await page.type('input[aria-label="MCP client name"]', 'ChatGPT UAT');

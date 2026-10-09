@@ -1,7 +1,7 @@
 import { chooseSelect } from './browser-select.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { collectPageErrors, createQaWorkspace, hostedWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 const require = qaRequire();
 const { root, write, commitFixture } = createQaWorkspace('github-notes-browser-');
 write('notes/.github-notes.yaml', 'schema_version: 1\nworkspace:\n  title: Folder QA\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example workspace with a very long notebook title that must fit inside a mobile select popup\n    root: notes/example\n');
@@ -79,7 +79,7 @@ try {
   // Geometry uses rendered controls, not just body scrollWidth (the app clips overflow).
   for (const width of [320, 390, 430, 820, 1440]) {
     await page.setViewport({ width, height: 844, isMobile: width < 768, hasTouch: width < 1101, deviceScaleFactor: 1 });
-    await page.goto(base + '/notes', { waitUntil: 'networkidle0' });
+    await page.goto(base + '/notes', { waitUntil: 'networkidle2' });
     await fits('nav[aria-label="Main navigation"]');
     assert(!await page.evaluate(() => [...document.querySelectorAll('button')].some(e => e.textContent.trim() === 'Agent access')), 'Header access shortcut remains');
     if (width < 1101) {
@@ -101,7 +101,7 @@ try {
       await fits('button[role="combobox"][aria-label="Note view"]');
       await fits('button[aria-label="New Note"]');
     }
-    await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle0' });
+    await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle2' });
     await page.waitForSelector('.cm-content');
     await fits('button[aria-label="Close note"]');
     await fits('button[aria-label="Document tools"]');
@@ -140,7 +140,7 @@ try {
         assert(await page.$('[aria-label="Note editor"]'), 'Outline Escape closed the note');
       }
     }
-    await page.goto(base + '/agent', { waitUntil: 'networkidle0' });
+    await page.goto(base + '/agent', { waitUntil: 'networkidle2' });
     await page.waitForSelector('.cm-content');
     await fits('[data-markdown-editor]', Math.min(width - 40, 500));
     if (width < 768) {
@@ -150,10 +150,10 @@ try {
     console.log('PASS responsive geometry at ' + width + ' px');
   }
   await page.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
-  await page.goto(base + '/notes', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notes', { waitUntil: 'networkidle2' });
   const recoveryKey = `gh_notes_draft:local:${root}:main:notes/example/root.md`;
   await page.evaluate(key => localStorage.setItem(key, JSON.stringify({ path: 'notes/example/root.md', content: '# Root Note\nRecovered mobile draft\n', metadata: {}, savedAt: Date.now() })), recoveryKey);
-  await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example/notes/root.md', { waitUntil: 'networkidle2' });
   await page.waitForSelector('.editor-notice-actions');
   await page.setViewport({ width: 320, height: 420, isMobile: true, hasTouch: true });
   await fits('.editor-notice-actions');
@@ -203,7 +203,7 @@ try {
   assert(!await page.$('[aria-label="Note editor"]'), 'Swipe opened a note');
   console.log('PASS left-half swipe open, right-half/vertical/short/cancelled gestures and no accidental note');
   for (const route of ['/agent?notebook=example', '/assets?notebook=example', '/settings', '/screen?notebook=example']) {
-    await page.goto(base + route, { waitUntil: 'networkidle0' });
+    await page.goto(base + route, { waitUntil: 'networkidle2' });
     await tap('[data-sidebar-toggle]');
     await page.waitForSelector('[data-responsive-sidebar].is-open');
     const b = await bounds('[data-sidebar-backdrop]');
@@ -211,7 +211,7 @@ try {
     await page.waitForFunction(() => !document.querySelector('[data-responsive-sidebar].is-open'));
   }
   console.log('PASS mobile sidebar drawers on Agent, Assets, Settings and Screen');
-  await page.goto(base + '/notes', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notes', { waitUntil: 'networkidle2' });
   await tap('button[aria-label="Notebooks and filters"]');
   await page.waitForSelector('[data-responsive-sidebar].is-open');
   await page.touchscreen.tap(370, 250);
@@ -222,7 +222,7 @@ try {
   await page.touchscreen.tap(370, 250);
   await page.waitForFunction(() => !document.querySelector('[data-responsive-sidebar].is-open'));
   assert(page.url().includes('folder'), 'Folder selection did not navigate');
-  await page.goto(base + '/notes?view=card', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notes?view=card', { waitUntil: 'networkidle2' });
   await chooseSelect(page, 'button[role="combobox"][aria-label="Status for Root Note"]', 'working');
   await waitDisk('notes/example/root.md', 'status: working');
   assert(!await page.$('[aria-label="Note editor"]'), 'Card status opened note');
@@ -371,13 +371,16 @@ try {
   console.log('PASS mobile create, Live/Source, reduced-height editing, image insert, Agent save and Files navigation');
   // Hosted saving and access settings use fixture credentials and intercepted API calls.
   let saved;
+  const hostedConfig = { schema_version: 1, workspace: { title: 'Mobile GitHub', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] };
+  const hosted = () => hostedWorkspace({ repository: 'owner/repo', config: hostedConfig, revision: remoteNote.revision, write: true });
   const REPOSITORY = 'github:owner/repo@main';
-  const remoteNote = { path: 'notes/example/remote.md', title: 'Remote note', content: '# Remote note\n', metadata: { title: 'Remote note' }, status: 'inbox', tags: [], notebookId: 'example', revision: 'one' };
+  const example = hostedWorkspace({ repository: 'owner/repo', config: hostedConfig, revision: '', write: true }).key('example');
+  const remoteNote = { path: 'notes/example/remote.md', title: 'Remote note', content: '# Remote note\n', metadata: { title: 'Remote note' }, status: 'inbox', tags: [], notebookId: example, revision: 'one' };
   await page.setRequestInterception(true);
   page.on('request', request => {
     const url = new URL(request.url());
     let body;
-    if (url.pathname === '/api/workspace') body = { config: { schema_version: 1, workspace: { title: 'Mobile GitHub', default_notebook: 'example' }, notebooks: [{ id: 'example', title: 'Example', root: 'notes/example' }] }, configRevision: remoteNote.revision, local: false, home: 'github:owner/repo@main', repositories: [{ id: 'github:owner/repo@main', type: 'github', repository: 'owner/repo', branch: 'main', revision: remoteNote.revision, write: true, notebooks: ['example'] }] };
+    if (url.pathname === '/api/workspace') body = hosted().status;
     if (url.pathname === '/api/notes') {
       if (request.method() === 'POST') {
         saved = JSON.parse(request.postData());
@@ -395,7 +398,7 @@ try {
     if (url.pathname === '/api/notes/read-batch') body = { notes: [remoteNote] };
     if (url.pathname === '/api/notes/query') body = url.searchParams.get('select') === 'paths' ? { revisions: { [REPOSITORY]: remoteNote.revision }, paths: [remoteNote.path], total: 1 } : { revisions: { [REPOSITORY]: remoteNote.revision }, notes: [remoteNote], total: 1, nextCursor: null };
     if (url.pathname === '/api/notes/lookup') body = { revisions: { [REPOSITORY]: remoteNote.revision }, notes: [remoteNote] };
-    if (url.pathname === '/api/notes/facets') body = { revisions: { [REPOSITORY]: remoteNote.revision }, notebooks: { example: { total: 1, hidden: 0, statuses: { inbox: 1 }, tags: {}, directories: { 'notes/example': 1 } } } };
+    if (url.pathname === '/api/notes/facets') body = { revisions: { [REPOSITORY]: remoteNote.revision }, notebooks: { [example]: { total: 1, hidden: 0, statuses: { inbox: 1 }, tags: {}, directories: { 'notes/example': 1 } } } };
     if (url.pathname === '/api/notes/agenda') body = { revisions: { [REPOSITORY]: remoteNote.revision }, tasks: [], dated: [] };
     if (url.pathname === '/api/folders') body = { folders: [] };
     if (url.pathname === '/api/assets') body = { assets: [] };
@@ -408,7 +411,7 @@ try {
     if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     else void request.continue();
   });
-  await page.goto(base + '/notebooks/example/notes/remote.md', { waitUntil: 'networkidle0' });
+  await page.goto(base + `/notebooks/${example}/notes/remote.md`, { waitUntil: 'networkidle2' });
   await page.waitForSelector('.cm-content');
   await click('Source');
   await tap('textarea[aria-label="Note content"]');

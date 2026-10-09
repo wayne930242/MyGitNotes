@@ -1,7 +1,7 @@
 import { chooseSelect } from './browser-select.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
-import { clickButton, collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { clickButton, collectPageErrors, createQaWorkspace, hostedWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 /** The path of a browser URL; a string the browser would never report yields no match. */
 const pathnameOf = url => {
   try {
@@ -93,7 +93,7 @@ const showFrontmatter = async () => {
   await page.waitForSelector('[aria-label="Status"]');
 };
 try {
-  await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/settings', { waitUntil: 'networkidle2' });
   // The manifest opens on its form; the raw YAML lives behind the advanced tab.
   await editManifest(manifest);
   await click('Save & Commit');
@@ -101,11 +101,11 @@ try {
   assert(fs.readFileSync(path.join(root, 'notes/.github-notes.yaml'), 'utf8').includes('published'), 'Settings dropped statuses');
   assert(git('log', '--oneline').toString().trim().split('\n').length === 2, 'Config save did not create one commit');
   console.log('PASS notebook definitions persist through Settings validation, commit and reload');
-  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle2' });
   equal(await options(selector('Root Note')), ['', 'inbox', 'working', 'done', 'archived', 'doing'], 'Fallback and legacy options');
-  await page.goto(base + '/notebooks/example/folders/projects/deep', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example/folders/projects/deep', { waitUntil: 'networkidle2' });
   equal(await page.$eval(selector('Nested Note'), e => e.value), '', 'Unassigned note incorrectly shows inbox');
-  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example', { waitUntil: 'networkidle2' });
   await chooseSelect(page, selector('Root Note'), 'working');
   await waitDisk('notes/example/root.md', 'status: working');
   assert(fs.readFileSync(path.join(root, 'notes/example/root.md'), 'utf8').includes('custom: keep'), 'Inline status dropped custom metadata');
@@ -116,19 +116,19 @@ try {
   console.log('PASS default List/Card choices, legacy extension, unassigned display and real inline save');
 
   for (const view of ['list', 'card', 'kanban']) {
-    await page.goto(base + '/notebooks/example?view=' + view, { waitUntil: 'networkidle0' });
+    await page.goto(base + '/notebooks/example?view=' + view, { waitUntil: 'networkidle2' });
     const content = await page.$eval('main', e => e.innerText);
     assert(!content.includes('Archived Note') && !content.includes('Hidden Note'), 'Hidden notes leaked into ' + view);
     assert(content.includes('Visible Archive'), 'Explicit false archive missing from ' + view);
-    await page.goto(base + '/notebooks/example?showHidden=true&view=' + view, { waitUntil: 'networkidle0' });
+    await page.goto(base + '/notebooks/example?showHidden=true&view=' + view, { waitUntil: 'networkidle2' });
     const expanded = await page.$eval('main', e => e.innerText);
     assert(expanded.includes('Archived Note') && expanded.includes('Hidden Note'), 'Show hidden failed for ' + view);
   }
-  await page.goto(base + '/notebooks/example?q=Archived%20Note', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example?q=Archived%20Note', { waitUntil: 'networkidle2' });
   assert(!await page.$(selector('Archived Note')), 'Search revealed hidden archive');
   await page.click('[aria-label="Show hidden notes"]');
   await page.waitForSelector(selector('Archived Note'));
-  await page.goto(base + '/notebooks/example/notes/archived.md', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example/notes/archived.md', { waitUntil: 'networkidle2' });
   await page.waitForSelector('[aria-label="Close note"]');
   await showFrontmatter();
   assert(await page.$eval('[aria-label="Hide note"]', e => e.checked), 'Legacy archive not marked hidden');
@@ -144,14 +144,14 @@ try {
   await page.click('[aria-label="Show hidden notes"]');
   await page.waitForSelector(selector('Root Note'));
   assert(page.url().includes('showHidden=true'), 'Visibility missing from URL');
-  await page.reload({ waitUntil: 'networkidle0' });
+  await page.reload({ waitUntil: 'networkidle2' });
   assert(await page.$eval('[aria-label="Show hidden notes"]', e => e.getAttribute('aria-pressed') === 'true'), 'Visibility preference lost on reload');
   await chooseSelect(page, selector('Root Note'), 'working');
   await waitDisk('notes/example/root.md', 'hiden: false');
   await page.click('[aria-label="Show hidden notes"]');
   await page.waitForFunction(() => !document.querySelector('button[aria-label="Status for Hidden Note"]'));
   assert(await page.$(selector('Root Note')), 'Unarchived note stayed hidden');
-  await page.goto(base + '/notebooks/example/notes/hidden.md', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/example/notes/hidden.md', { waitUntil: 'networkidle2' });
   await showFrontmatter();
   await page.click('[aria-label="Hide note"]');
   await waitDisk('notes/example/hidden.md', 'hiden: false');
@@ -159,7 +159,7 @@ try {
   await page.waitForSelector(selector('Hidden Note'));
   console.log('PASS archived visibility in all views, explicit booleans, direct links, Sidebar/reload, archive/unarchive and manual hiding');
 
-  await page.goto(base + '/notebooks/research?view=kanban', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/research?view=kanban', { waitUntil: 'networkidle2' });
   equal(await columns(), ['capture', 'published', 'Review', 'review'], 'Notebook Kanban order and exact extensions');
   await page.evaluate(() => [...document.querySelectorAll('aside button')].find(b => b.getAttribute('data-status-filter') === 'review').click());
   await page.waitForFunction(() => location.search.includes('status=review'));
@@ -169,7 +169,7 @@ try {
   equal(await options(selector('Research Note')), ['', 'capture', 'published', 'Review', 'review'], 'Filtered note choices');
   console.log('PASS per-notebook isolation, unknown filters, exact values and stable Kanban columns');
 
-  await page.goto(base + '/notebooks/research', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/research', { waitUntil: 'networkidle2' });
   await click('New Note');
   equal(await page.$eval('[aria-label="Initial Status"]', e => e.value), 'capture', 'Custom initial status');
   await page.type('input[aria-describedby="create-note-error"]', 'Created Research');
@@ -182,24 +182,24 @@ try {
   await chooseSelect(page, '[aria-label="Status"]', 'review');
   await waitDisk('notes/research/created-research.md', 'status: review');
   await page.click('[aria-label="Close note"]');
-  await page.goto(base + '/notebooks/research?view=kanban', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/research?view=kanban', { waitUntil: 'networkidle2' });
   await page.click('[data-status-column="published"] button[title="Add note to published"]');
   equal(await page.$eval('[aria-label="Initial Status"]', e => e.value), 'published', 'Kanban creation status');
   await click('Cancel');
   console.log('PASS custom first-status creation, column creation and metadata save');
 
-  await page.goto(base + '/notebooks/research?view=card', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/research?view=card', { waitUntil: 'networkidle2' });
   await chooseSelect(page, selector('Case Note'), 'published');
   await waitDisk('notes/research/other.md', 'status: published');
 
   // A removed definition is still offered when a note uses it; config has no inferred writes.
-  await page.goto(base + '/settings', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/settings', { waitUntil: 'networkidle2' });
   await editManifest(manifest.replace('[capture, published]', '[capture]'));
   await click('Save & Commit');
   await page.waitForFunction(() => document.body.innerText.includes('Workspace configuration saved and committed.'));
   const configBefore = fs.readFileSync(path.join(root, 'notes/.github-notes.yaml'), 'utf8');
   await page.setViewport({ width: 320, height: 700, isMobile: true, hasTouch: true });
-  await page.goto(base + '/notebooks/research?view=card', { waitUntil: 'networkidle0' });
+  await page.goto(base + '/notebooks/research?view=card', { waitUntil: 'networkidle2' });
   equal(await options(selector('Research Note')), ['', 'capture', 'published', 'review'], 'Mobile extension choices');
   await chooseSelect(page, selector('Research Note'), 'published');
   await waitDisk('notes/research/review.md', 'status: published');
@@ -207,22 +207,25 @@ try {
   assert(fs.readFileSync(path.join(root, 'notes/research/review.md'), 'utf8').includes('custom: preserve'), 'Unknown status save dropped metadata');
   await chooseSelect(page, selector('Research Note'), '');
   await page.waitForFunction(() => document.querySelector('button[aria-label="Status for Research Note"]').value === '');
-  await page.reload({ waitUntil: 'networkidle0' });
+  await page.reload({ waitUntil: 'networkidle2' });
   equal(await page.$eval(selector('Research Note'), e => e.value), '', 'No-status clear did not persist');
   assert(!fs.readFileSync(path.join(root, 'notes/research/review.md'), 'utf8').includes('status:'), 'Clear retained status metadata');
   console.log('PASS mobile custom status save and clear, metadata preservation and unchanged manifest');
 
   // The same UI consumes a hosted workspace's manifest and revision-aware save.
-  let remoteNote = { id: 'remote', path: 'notes/research/remote.md', notebookId: 'research', title: 'Remote Note', content: '# Remote Note\n', metadata: { status: 'external', custom: 'remote' }, status: 'external', tags: [], revision: 'one' };
+  const hostedConfig = { schema_version: 1, workspace: { title: 'Hosted', default_notebook: 'research' }, notebooks: [{ id: 'research', title: 'Research', root: 'notes/research', statuses: ['capture', 'published', 'archived'] }] };
+  const hosted = () => hostedWorkspace({ repository: 'fixture/repo', config: hostedConfig, revision: remoteNote.revision, write: true });
+  const research = hostedWorkspace({ repository: 'fixture/repo', config: hostedConfig, revision: '', write: true }).key('research');
+  let remoteNote = { id: 'remote', path: 'notes/research/remote.md', notebookId: research, title: 'Remote Note', content: '# Remote Note\n', metadata: { status: 'external', custom: 'remote' }, status: 'external', tags: [], revision: 'one' };
   let saved;
   await page.setRequestInterception(true);
-  const hostedConfig = { schema_version: 1, workspace: { title: 'Hosted', default_notebook: 'research' }, notebooks: [{ id: 'research', title: 'Research', root: 'notes/research', statuses: ['capture', 'published', 'archived'] }] };
-  const hostedRepository = { revision: async () => remoteNote.revision, index: async notebook => [remoteNote].filter(note => note.notebookId === notebook.id), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
-  const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: 'github:fixture/repo@main', notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
+  const hostedRepository = { revision: async () => remoteNote.revision, index: async notebook => [remoteNote].filter(note => note.notebookId === hosted().key(notebook.id)).map(note => ({ ...note, notebookId: notebook.id })), contents: async notes => new Map(notes.map(note => [note.path, note.content])), memo: (kind, notebooks, compute) => compute() };
+  // The catalog reads each repository by local id and answers by key, as the server's does.
+  const hostedCatalog = () => workspaceCatalog(hostedConfig, [{ id: hosted().id, alias: hosted().alias, notebooks: hostedConfig.notebooks, catalog: hostedRepository }]);
   page.on('request', async request => {
     const url = new URL(request.url());
     let body;
-    if (url.pathname === '/api/workspace') body = { config: hostedConfig, configRevision: remoteNote.revision, local: false, home: 'github:fixture/repo@main', repositories: [{ id: 'github:fixture/repo@main', type: 'github', repository: 'fixture/repo', branch: 'main', revision: remoteNote.revision, write: true, notebooks: ['research'] }] };
+    if (url.pathname === '/api/workspace') body = hosted().status;
     if (url.pathname === '/api/notes/commit') {
       const payload = JSON.parse(request.postData());
       saved = { ...payload.notes[0], revision: payload.revision };
@@ -258,7 +261,7 @@ try {
     if (body) void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
     else void request.continue();
   });
-  await page.goto(base + '/notebooks/research', { waitUntil: 'networkidle0' });
+  await page.goto(base + `/notebooks/${research}`, { waitUntil: 'networkidle2' });
   equal(await options(selector('Remote Note')), ['', 'capture', 'published', 'archived', 'external'], 'Hosted status options');
   await chooseSelect(page, selector('Remote Note'), 'published');
   await page.waitForFunction(() => document.querySelector('button[aria-label="Status for Remote Note"]').value === 'published');
