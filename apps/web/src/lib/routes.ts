@@ -1,5 +1,6 @@
 import { readFilterQuery } from './filter-query.js';
 import { noteWebPath } from '@mygitnotes/core/workspace-links';
+import { isBareNotebookId } from '@mygitnotes/core/notebook-key';
 import { matchPath } from 'react-router-dom';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
@@ -66,6 +67,30 @@ export function legacyAllNotebooksRoute(pathname: string, search: string, defaul
   query.set('notebook', defaultNotebook);
   if (route.allNotebooks) query.set('allNotebooks', 'true');
   return (route.tab === 'notes' && !route.note ? notebookRoute(defaultNotebook) : pathname) + '?' + query.toString();
+}
+/**
+ * The URL a route naming a notebook by its bare local id redirects to, with the path's notebook segment and the
+ * `?notebook=` value replaced by the key `resolve` answers, and the rest of the path and query kept; null when the
+ * route names no bare id or `resolve` finds none, which leaves the route to show "notebook not found".
+ */
+export function bareNotebookRoute(pathname: string, search: string, resolve: (localId: string) => string | null): string | null {
+  const route = parseWorkspaceRoute(pathname, search);
+  if (!route.valid || route.legacyAllNotebooks) return null;
+  const keyOf = (value: string | null) => value !== null && value !== 'all' && isBareNotebookId(value) ? resolve(value) : null;
+  const query = new URLSearchParams(search);
+  const queryKey = keyOf(query.get('notebook'));
+  if (queryKey) query.set('notebook', queryKey);
+  const segment = matchPath('/notebooks/:notebook/*', pathname) ?? matchPath('/notebooks/:notebook', pathname);
+  const pathKey = segment ? keyOf(decodeURIComponent(segment.params.notebook!)) : null;
+  if (!queryKey && !pathKey) return null;
+  const path = pathKey ? pathname.replace(/^\/notebooks\/[^/]+/, `/notebooks/${encodeURIComponent(pathKey)}`) : pathname;
+  return path + (query.size ? '?' + query.toString() : '');
+}
+/** An app URL, as a link inside a note names it, with a bare notebook id replaced by its key; unchanged otherwise. */
+export function keyedAppUrl(url: string, resolve: (localId: string) => string | null): string {
+  const parsed = new URL(url, 'https://workspace.invalid');
+  const keyed = bareNotebookRoute(parsed.pathname, parsed.search, resolve);
+  return keyed ? keyed + parsed.hash : url;
 }
 export function safeRelative(value: string) {
   return Boolean(value) && !value.includes('\\') && !value.includes('\0') && value.split('/').every(part => Boolean(part) && part !== '.' && part !== '..');

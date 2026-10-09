@@ -1,4 +1,5 @@
 import { displayPanes, emptyFocusLayout, findFocusTabInPane, type FocusDivision, type FocusLayout, FocusLayoutSchema, focusTabKey } from '@mygitnotes/core/focus-page';
+import { parseNotebookKey } from '@mygitnotes/core/notebook-key';
 
 export const CURRENT_FOCUS = 'current';
 
@@ -26,14 +27,31 @@ export interface FocusViewState {
   dock: { left: number; top: number; collapsed: boolean; };
 }
 
-export function focusViewStorageKey(scope: string, notebookId: string): string {
-  return `github-notes:focus-view:${scope}:${notebookId}`;
+/** Where this device keeps the Focus view of the notebook named by `notebookKey`. */
+export function focusViewStorageKey(notebookKey: string): string {
+  return `github-notes:focus-view:${notebookKey}`;
+}
+
+/**
+ * The storage key of a notebook's Focus view. A view this device kept before notebook keys, under the workspace's
+ * draft scope and the notebook's local id, is copied to it once; one that cannot be read is dropped by readFocusView.
+ */
+export function adoptedFocusViewKey(scope: string, notebookKey: string): string {
+  const key = focusViewStorageKey(notebookKey);
+  const localId = parseNotebookKey(notebookKey)?.localId;
+  try {
+    if (localId && localStorage.getItem(key) === null) {
+      const legacy = localStorage.getItem(`github-notes:focus-view:${scope}:${localId}`);
+      if (legacy !== null) localStorage.setItem(key, legacy);
+    }
+  } catch { /* The view starts empty when storage refuses it, as any unreadable view does. */ }
+  return key;
 }
 
 /** Whether this device has ever recorded Focus-view state for this notebook: the signal for "has this device already made its own choice." */
-export function hasStoredFocusView(scope: string, notebookId: string): boolean {
+export function hasStoredFocusView(scope: string, notebookKey: string): boolean {
   try {
-    return localStorage.getItem(focusViewStorageKey(scope, notebookId)) !== null;
+    return localStorage.getItem(adoptedFocusViewKey(scope, notebookKey)) !== null;
   } catch {
     return false;
   }

@@ -5,6 +5,7 @@ import { getLocalDraft } from '../lib/storage.js';
 import { noteExternalEdit } from '../lib/external-note-edits.js';
 import { workingDiff, type WorkingNote } from '../lib/working-notes.js';
 import { draftScope } from '../lib/workspace-repositories.js';
+import { isNotebookKey } from '../lib/notebook-keys.js';
 import type { NoteItem } from '../lib/types.js';
 import type { WebToolHandler } from '../lib/pi-agent/session.js';
 import type { WorkspaceState } from './workspace-state.js';
@@ -20,6 +21,7 @@ interface Params {
   updateDraft: WorkspaceState['updateDraft'];
   stageWorkingNote: WorkspaceState['stageWorkingNote'];
   findCommittedNote: ReturnType<typeof useWorkspaceNotes>['findCommittedNote'];
+  resolveBareNotebook: WorkspaceState['resolveBareNotebook'];
 }
 
 const text = (value: unknown, name: string) => {
@@ -31,13 +33,14 @@ const text = (value: unknown, name: string) => {
  * The agent's note tools for a remote workspace: reads see the person's working changes, and writes become
  * working changes of this page, which the person commits. Nothing here commits or reaches the repository host.
  */
-export function useWebAgentTools({ config, activeWorkingNotes, repositoryFor, canWriteNotebook, revisionFor, readDraft, updateDraft, stageWorkingNote, findCommittedNote }: Params): WebToolHandler {
+export function useWebAgentTools({ config, activeWorkingNotes, repositoryFor, canWriteNotebook, revisionFor, readDraft, updateDraft, stageWorkingNote, findCommittedNote, resolveBareNotebook }: Params): WebToolHandler {
   return useCallback<WebToolHandler>(async (tool, args) => {
     /** The notebook a repository-relative path belongs to; `notebookId` tells repositories with the same path apart. */
     const locate = () => {
       const path = text(args.path, 'path');
       if (!isNoteFile(path) || path.split('/').some(part => !part || part === '.' || part === '..')) throw new Error(`${path} is not a note path.`);
-      const named = typeof args.notebookId === 'string' ? args.notebookId : undefined;
+      // A bare local id, as tool calls written before notebook keys name one, resolves as an MCP tool argument does.
+      const named = typeof args.notebookId === 'string' ? isNotebookKey(args.notebookId) ? args.notebookId : resolveBareNotebook(args.notebookId) ?? args.notebookId : undefined;
       const candidates = (config?.notebooks ?? []).filter(notebook => (!named || notebook.id === named) && path.startsWith(`${notebook.root}/`));
       if (!candidates.length) throw new Error(`${path} is not inside ${named ? `notebook ${named}` : 'any notebook'}.`);
       if (candidates.length > 1) throw new Error(`${path} is in several notebooks (${candidates.map(notebook => notebook.id).join(', ')}); name one as notebookId.`);
@@ -119,5 +122,5 @@ export function useWebAgentTools({ config, activeWorkingNotes, repositoryFor, ca
       default:
         throw new Error(`Unknown note tool ${tool}.`);
     }
-  }, [config, activeWorkingNotes, repositoryFor, canWriteNotebook, revisionFor, readDraft, updateDraft, stageWorkingNote, findCommittedNote]);
+  }, [config, activeWorkingNotes, repositoryFor, canWriteNotebook, revisionFor, readDraft, updateDraft, stageWorkingNote, findCommittedNote, resolveBareNotebook]);
 }

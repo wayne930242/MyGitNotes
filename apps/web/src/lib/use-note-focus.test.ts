@@ -9,8 +9,8 @@ import { CURRENT_FOCUS } from './focus-view.js';
 import { focusDocumentClient, type FocusPageController } from './use-focus-page.js';
 import type { WorkspaceDocumentClient } from './use-workspace-document.js';
 
-const SCOPE = 'use-note-focus-test', NOTEBOOK = 'life';
-const storageKey = `github-notes:focus-view:${SCOPE}:${NOTEBOOK}`;
+const SCOPE = 'use-note-focus-test', NOTEBOOK = 'kb~life';
+const storageKey = `github-notes:focus-view:${NOTEBOOK}`;
 
 function fakeController(): FocusPageController {
   return { client: focusDocumentClient as WorkspaceDocumentClient<unknown>, repository: 'local:/workspace', file: '.github-notes-focus.yaml', page: emptyFocusPage(), change: () => {}, save: async () => {}, reload: async () => {}, refresh: async () => {}, loading: false, saving: false, dirty: false, error: '', writable: true, setError: () => {}, diff: '' };

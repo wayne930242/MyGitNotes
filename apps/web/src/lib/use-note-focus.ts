@@ -3,12 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { changeDivision, closeTab, emptyFocusLayout, findFocusTabInPane, FOCUS_MAX_FOCUSES, FOCUS_MAX_TABS, type FocusDivision, FocusError, type FocusLayout, focusPaneCount, type FocusTab, focusTabCount, focusTabKey, moveTab as moveFocusTab, nameFocus, notebookFocuses, placeTab, placeTabs, pruneFocus, removeFocus, renameFocus, updateFocus } from '@mygitnotes/core/focus-page';
 import type { FocusPageController } from './use-focus-page.js';
 import { useNoteLookup } from './use-note-queries.js';
-import { activatePane, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, focusViewStorageKey, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
+import { activatePane, adoptedFocusViewKey, browseTarget, CURRENT_FOCUS, emptyFocusView, entryView, type FocusEntryView, type FocusViewState, readFocusView, shownAfterClose, showTab, sideTarget } from './focus-view.js';
 
 interface NoteFocusOptions {
   page: FocusPageController;
   notebookId: string;
-  /** Separates view state per source. */
+  /** The workspace's view-state scope before notebook keys, from which this notebook's earlier view is adopted. */
   scope: string;
   /** The `focus` URL parameter. */
   focusKey: string | null;
@@ -40,7 +40,7 @@ const noteKeys = (notebookId: string, keys: (string | null)[]) => notePaths(keys
 
 /** Named Focus (Git-synced through the Focus workspace document) and this browser's (current) Focus and view state for one notebook. */
 export function useNoteFocus({ page, notebookId, scope, focusKey, restoreLast = false, defaultFocus = null, writable, flushEditors }: NoteFocusOptions) {
-  const key = focusViewStorageKey(scope, notebookId);
+  const key = adoptedFocusViewKey(scope, notebookId);
   const [stored, setStored] = useState(() => ({ key, view: loadView(key) }));
   const view = stored.key === key ? stored.view : loadView(key);
   const viewRef = useRef(view);

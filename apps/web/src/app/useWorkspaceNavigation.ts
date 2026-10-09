@@ -3,7 +3,7 @@ import { filterParsers, type FilterQuery, writeFilterQuery } from '../lib/filter
 import { legacyFolderPaths } from '@mygitnotes/core/note-filters';
 import type { FilterControls } from '../lib/filter-controls.js';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { legacyAllNotebooksRoute, notebookRoute, parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
+import { bareNotebookRoute, legacyAllNotebooksRoute, notebookRoute, parseWorkspaceRoute, WorkspaceTab } from '../lib/routes.js';
 import React, { useEffect, useRef, useState } from 'react';
 import type { ViewMode } from '../lib/types.js';
 import { useNoteEditorRegistry } from '../lib/note-editing.js';
@@ -28,9 +28,10 @@ interface Params {
   fileManagerRef: React.RefObject<FileManagerHandle>;
   loading: WorkspaceState['loading'];
   editorRoute: ReturnType<typeof parseWorkspaceRoute>;
+  resolveBareNotebook: WorkspaceState['resolveBareNotebook'];
 }
 
-export function useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute }: Params) {
+export function useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute, resolveBareNotebook }: Params) {
   const currentFilterSearch = (patch: Partial<FilterQuery> = {}) => {
     const query = new URLSearchParams(writeFilterQuery(location.search, { ...queryState, folders: selectedFolders, ...patch }));
     query.delete('folder');
@@ -116,7 +117,8 @@ export function useWorkspaceNavigation({ location, queryState, selectedFolders, 
   /* eslint-disable react-hooks/exhaustive-deps -- Canonicalization runs on config or URL arrival; changing the current notebook or navigation helper alone must not replay the redirect. */
   useEffect(() => {
     if (!config) return;
-    const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId);
+    // An old URL naming a notebook by its bare local id moves to the notebook's key once, replacing history.
+    const canonical = legacyAllNotebooksRoute(location.pathname, location.search, selectedNotebookId) ?? bareNotebookRoute(location.pathname, location.search, resolveBareNotebook);
     if (canonical) navigate(canonical + location.hash, { replace: true });
   }, [config, location.pathname, location.search]);
   /* eslint-enable react-hooks/exhaustive-deps */

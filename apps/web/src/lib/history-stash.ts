@@ -1,4 +1,5 @@
 import type { HistoryTarget } from './history-api.js';
+import { parseNotebookKey } from '@mygitnotes/core/notebook-key';
 
 /** A file's text a person had before restoring an older text over it, kept on this device until they discard it. */
 export interface StashedText {
@@ -9,7 +10,24 @@ export interface StashedText {
 }
 
 const PREFIX = 'github-notes:history-stash:';
-const keyOf = (target: HistoryTarget) => PREFIX + JSON.stringify([target.notebookId ?? '', target.repository ?? '', target.path]);
+const storageKey = (notebookId: string, target: HistoryTarget) => PREFIX + JSON.stringify([notebookId, target.repository ?? '', target.path]);
+
+/**
+ * Where a file's kept texts are stored. Texts kept before notebook keys, under the notebook's local id, move to its
+ * key once; they leave the old key so a later discard is not undone.
+ */
+function keyOf(target: HistoryTarget): string {
+  const key = storageKey(target.notebookId ?? '', target);
+  const localId = target.notebookId ? parseNotebookKey(target.notebookId)?.localId : undefined;
+  if (!localId || localStorage.getItem(key) !== null) return key;
+  const legacyKey = storageKey(localId, target);
+  const legacy = localStorage.getItem(legacyKey);
+  if (legacy !== null) {
+    localStorage.setItem(key, legacy);
+    localStorage.removeItem(legacyKey);
+  }
+  return key;
+}
 
 const isStashed = (value: unknown): value is StashedText => {
   const entry = value as StashedText | null;

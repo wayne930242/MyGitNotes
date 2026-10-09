@@ -1,5 +1,6 @@
 import type { RepositoryId, RepositoryStatus, RevisionSet, WorkspaceStatus } from '@mygitnotes/core/repository';
 import type { GitStatus } from './types.js';
+import type { DraftStore } from './working-notes.js';
 
 /** A repository of the workspace; a local worktree also reports its Git status. */
 export type WorkspaceRepository = RepositoryStatus & { gitStatus?: GitStatus; };
@@ -7,6 +8,9 @@ export type WorkspaceAnswer = Omit<WorkspaceStatus, 'repositories'> & { reposito
 
 /** Where one repository's drafts are stored; for the home repository this is the workspace's earlier draft scope, so drafts carry over. */
 export const draftScope = (repository: Pick<RepositoryStatus, 'id' | 'branch'>) => `${repository.id}:${repository.branch}`;
+
+/** Where one repository's working changes are stored, with the alias that names their notebooks by key. */
+export const draftStore = (repository: Pick<RepositoryStatus, 'id' | 'branch' | 'alias'>): DraftStore => ({ scope: draftScope(repository), alias: repository.alias });
 
 export const repositoryOf = <R extends Pick<RepositoryStatus, 'notebooks'>>(repositories: R[], notebookId: string): R | undefined => repositories.find(repository => repository.notebooks.includes(notebookId));
 

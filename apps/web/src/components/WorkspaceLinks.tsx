@@ -11,7 +11,7 @@ import { headingSlug, notebookOfPath, resolveWorkspaceHref } from '../lib/worksp
 import { WorkspaceDialog } from './WorkspaceDialog.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
-import { linkAliases, linkedNote, linkScope, useLinkedNotePreload } from '../lib/use-linked-note-preload.js';
+import { keyedLink, linkAliases, linkedNote, linkScope, useLinkedNotePreload } from '../lib/use-linked-note-preload.js';
 import { useNoteYouTubeEmbed } from '../lib/use-note-youtube-embed.js';
 
 type BeforeNavigate = () => Promise<boolean>;
@@ -50,8 +50,10 @@ export function WorkspaceLinks({ notebooks, folders, children, onOpenNote }: {
     const href = element.dataset.workspaceLink || '';
     const sourcePath = element.dataset.sourcePath || '';
     // A link reaches only the notebooks in its note's repository; a target elsewhere is missing.
-    const reach = linkScope(element, notebooks, scope.repositories);
-    const link = resolveWorkspaceHref(href, sourcePath, linkAliases(reach), window.location.origin);
+    const reach = linkScope(element, notebooks, scope.repositories, scope.sourceId);
+    const resolved = resolveWorkspaceHref(href, sourcePath, linkAliases(reach), window.location.origin);
+    // A link written before notebook keys names a bare id; it opens the notebook that id stands for.
+    const link = resolved && keyedLink(resolved, reach);
     setError('');
     if (!link) {
       setError(t('links.invalid'));

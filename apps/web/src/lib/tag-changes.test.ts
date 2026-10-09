@@ -2,9 +2,9 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { applyTagEntries, PartialTagChangeError } from './tag-changes.js';
 import type { WorkspaceRepository } from './workspace-repositories.js';
 
-const home: WorkspaceRepository = { id: 'github:me/notes@main', type: 'github', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['life'] };
-const other: WorkspaceRepository = { id: 'github:me/campaign@main', type: 'github', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['trpg'] };
-const entries = [{ path: 'notes/life/a.md', notebookId: 'life', tags: ['x'] }, { path: 'trpg/b.md', notebookId: 'trpg', tags: ['x'] }];
+const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'] };
+const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'] };
+const entries = [{ path: 'notes/life/a.md', notebookId: 'notes~life', tags: ['x'] }, { path: 'trpg/b.md', notebookId: 'campaign~trpg', tags: ['x'] }];
 
 afterEach(() => vi.unstubAllGlobals());
 

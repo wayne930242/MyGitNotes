@@ -4,13 +4,17 @@ import { type NoteRef, noteRefKey } from '@mygitnotes/core/note-query';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import type { NotebookConfig } from './types.js';
 import { noteLookupOptions, useNoteQueryScope } from './use-note-queries.js';
-import { parseWorkspaceRoute } from './routes.js';
-import { notebookOfPath, resolveWorkspaceHref } from './workspace-links.js';
+import { keyedAppUrl, parseWorkspaceRoute } from './routes.js';
+import { notebookOfPath, resolveWorkspaceHref, type WorkspaceLink } from './workspace-links.js';
+import type { NotebookKey } from '@mygitnotes/core/notebook-key';
+import { resolveBareId } from './notebook-keys.js';
 
 /** What a link can reach: the notebooks in its source note's repository, and the source notebook when known. */
 export interface LinkScope {
   source?: NotebookConfig;
   notebooks: NotebookConfig[];
+  /** The key an app link's bare notebook id stands for, by the rule that redirects old URLs. */
+  resolve: (localId: string) => NotebookKey | null;
 }
 
 /**
@@ -18,19 +22,25 @@ export interface LinkScope {
  * `data-source-notebook`, since notebook roots may repeat across repositories; without one it
  * is the notebook whose root holds the source path.
  */
-export function linkScope(element: HTMLElement, notebooks: NotebookConfig[], repositories: Record<string, RepositoryId>): LinkScope {
+export function linkScope(element: HTMLElement, notebooks: NotebookConfig[], repositories: Record<string, RepositoryId>, home: RepositoryId): LinkScope {
   const sourceId = element.closest<HTMLElement>('[data-source-notebook]')?.dataset.sourceNotebook;
   const source = notebooks.find(nb => nb.id === sourceId) ?? notebookOfPath(element.dataset.sourcePath || '', notebooks);
   const repository = source && repositories[source.id];
-  return { source, notebooks: source ? notebooks.filter(nb => (repositories[nb.id] ?? '') === (repository ?? '')) : [] };
+  return { source, notebooks: source ? notebooks.filter(nb => (repositories[nb.id] ?? '') === (repository ?? '')) : [], resolve: localId => resolveBareId(repositories, home, localId) };
 }
 
 /** Path aliases come from the source notebook when known. */
 export const linkAliases = (scope: LinkScope) => scope.source ? scope.source.pathAliases ?? {} : scope.notebooks;
 
+/** An app link with a bare notebook id names the notebook's key instead, keeping its path, query and fragment. */
+export function keyedLink(link: WorkspaceLink, scope: LinkScope): WorkspaceLink {
+  return link.kind === 'route' ? { kind: 'route', url: keyedAppUrl(link.url, scope.resolve) } : link;
+}
+
 /** Resolve only note candidates; folders, assets, anchors and external URLs need no speculative reads. */
 export function linkedNote(href: string, source: string, scope: LinkScope, origin: string): NoteRef | null {
-  const link = resolveWorkspaceHref(href, source, linkAliases(scope), origin);
+  const resolved = resolveWorkspaceHref(href, source, linkAliases(scope), origin);
+  const link = resolved && keyedLink(resolved, scope);
   if (link?.kind === 'path' && /\.md$/i.test(link.path) && link.path !== source) {
     const notebook = notebookOfPath(link.path, scope.notebooks);
     return notebook ? { notebookId: notebook.id, path: link.path } : null;
@@ -90,7 +100,7 @@ export function useLinkedNotePreload(surface: RefObject<HTMLElement>, notebooks:
       for (let index = 0; index < Math.min(elements.length, SCAN_LIMIT); index++) {
         const element = elements[index];
         const sourcePath = element.dataset.sourcePath!;
-        const reach = linkScope(element, notebooks, repositories);
+        const reach = linkScope(element, notebooks, repositories, sourceId);
         if (!reach.source) continue;
         const source = noteRefKey({ notebookId: reach.source.id, path: sourcePath });
         if (!sources.has(source) && sources.size >= SOURCE_LIMIT) continue;

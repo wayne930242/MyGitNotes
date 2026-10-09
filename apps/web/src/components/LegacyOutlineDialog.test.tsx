@@ -10,7 +10,7 @@ import { downloadTextFile } from '../lib/note-export.js';
 import type { LegacyOutlinePreview } from '../lib/outline-import.js';
 import type { WorkspaceRepository } from '../lib/workspace-repositories.js';
 vi.mock('../lib/note-export.js', () => ({ downloadTextFile: vi.fn() }));
-const repositories: WorkspaceRepository[] = [{ id: 'repo-a', type: 'local', branch: 'main', revision: '', write: true, notebooks: ['a'] }, { id: 'repo-b', type: 'github', branch: 'main', revision: '', write: false, notebooks: ['b'], unavailable: { reason: 'unmapped', message: 'Unavailable' } }];
+const repositories: WorkspaceRepository[] = [{ id: 'repo-a', alias: 'repo-a', type: 'local', branch: 'main', revision: '', write: true, notebooks: ['a'] }, { id: 'repo-b', alias: 'repo-b', type: 'github', branch: 'main', revision: '', write: false, notebooks: ['b'], unavailable: { reason: 'unmapped', message: 'Unavailable' } }];
 const notebooks = [{ id: 'a', title: 'A', root: 'notes/shared' }, { id: 'b', title: 'B', root: 'notes/shared' }];
 const entry = { id: 'note', label: 'Guide', groupId: null, target: { kind: 'note' as const, path: 'guide.md' } };
 const source = { repository: 'repo-a', path: '.mygitnotes-bookmarks.yaml', revision: 'original', writable: true, base64: 'AP+A', error: null, page: { version: 1, notebooks: [{ notebookId: 'a', groups: [], bookmarks: [entry, { ...entry, id: 'folder', label: 'Folder', target: { kind: 'folder', path: 'chapter' } }] }] } };

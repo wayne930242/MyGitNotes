@@ -9,14 +9,15 @@ import { pendingDocumentDrafts } from './use-workspace-document.js';
 import { WORKSPACE_DOCUMENT_CLIENTS } from './workspace-document-clients.js';
 import { AssetItem, FolderItem, GitStatus, NoteItem, WorkspaceConfig } from './types.js';
 import { fetchAssets, fetchFolders, fetchGitStatus, fetchWorkspace, openWorkspaceEvents } from './api.js';
-import { clearCommittedNotes, readWorkingNotes, updateWorkingNote, type WorkingNote, type WorkingNotes } from './working-notes.js';
+import { clearCommittedNotes, readStoredWorkingNotes, readWorkingNotes, updateWorkingNote, type WorkingNote, type WorkingNotes } from './working-notes.js';
+import { isNotebookKey, resolveBareId } from './notebook-keys.js';
 import { sameValue } from './merge-note.js';
 import { invalidateNoteQueries } from './use-note-queries.js';
 import { setWorkspaceNotebooks } from './workspace-links.js';
 import { setDefaultShowLineNumbers } from './editor-preferences.js';
 import { setDefaultYouTubeDisplayMode } from './youtube-embed.js';
 import { listLocalDrafts } from './storage.js';
-import { draftScope, repositoryOf, type WorkspaceRepository } from './workspace-repositories.js';
+import { draftScope, draftStore, notebookRepositories, repositoryOf, type WorkspaceRepository } from './workspace-repositories.js';
 import { noteRefKey } from '@mygitnotes/core/note-query';
 
 export interface UseWorkspaceSyncOptions {
@@ -48,6 +49,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [manifestDerived, setManifestDerived] = useState(false);
   /** The deployment lets each visitor choose their repository. */
   const [repositoryChoice, setRepositoryChoice] = useState(false);
+  /** The workspace configuration as routes and the app name it: every notebook by its key. */
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   // Children read these defaults while they render — a `useState` initializer runs before any
   // effect — so applying them in an effect would hand the first mount the previous default.
@@ -61,7 +63,11 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   /** Staged remote drafts, by repository. */
   const [workingNotes, setWorkingNotes] = useState<Record<RepositoryId, WorkingNotes>>({});
 
-  const selectedNotebookId = routeNotebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
+  /** The key an old bare local id stands for in the loaded workspace, as the bare-id redirect resolves it. */
+  const resolveBareNotebook = (localId: string) => resolveBareId(notebookRepositories(repositories), sourceId, localId);
+  // A route that still names a bare local id selects the notebook it resolves to while the redirect replaces the URL.
+  const routedNotebook = routeNotebook && !isNotebookKey(routeNotebook) ? resolveBareNotebook(routeNotebook) ?? routeNotebook : routeNotebook;
+  const selectedNotebookId = routedNotebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
 
   const homeRepository = repositories.find(repository => repository.id === sourceId);
   const homeBranch = homeRepository?.branch ?? '';
@@ -75,45 +81,45 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   };
   const available = repositories.filter(repository => !repository.unavailable);
 
-  /** The draft storage scope of the repository serving a notebook. */
-  const draftScopeFor = (notebookId: string) => {
+  /** The draft store of the repository serving a notebook. */
+  const draftStoreFor = (notebookId: string) => {
     const repository = repositoryFor(notebookId);
     if (!repository) throw new Error(`Notebook ${notebookId} is not served by any repository.`);
-    return { repository, scope: draftScope(repository) };
+    return { repository, store: draftStore(repository) };
   };
-  const readDraft = (notebookId: string, path: string): WorkingNote | undefined => readWorkingNotes(draftScopeFor(notebookId).scope)[path];
+  const readDraft = (notebookId: string, path: string): WorkingNote | undefined => readWorkingNotes(draftStoreFor(notebookId).store)[path];
   /** The draft at a path of one repository, as the Changes dialog names it. */
   const readDraftIn = (repositoryId: RepositoryId, path: string): WorkingNote | undefined => {
     const repository = available.find(candidate => candidate.id === repositoryId);
-    return repository ? readWorkingNotes(draftScope(repository))[path] : undefined;
+    return repository ? readWorkingNotes(draftStore(repository))[path] : undefined;
   };
   const updateDraft = (notebookId: string, path: string, entry: WorkingNote | null) => {
-    const { repository, scope } = draftScopeFor(notebookId);
-    const entries = updateWorkingNote(scope, path, entry);
+    const { repository, store } = draftStoreFor(notebookId);
+    const entries = updateWorkingNote(store, path, entry);
     setWorkingNotes(previous => ({ ...previous, [repository.id]: entries }));
   };
   /** Clears the drafts a commit to `repository` sent, keeping any edit made meanwhile. */
   const clearCommittedDrafts = (repository: WorkspaceRepository, sent: WorkingNotes) => {
-    const entries = clearCommittedNotes(draftScope(repository), sent);
+    const entries = clearCommittedNotes(draftStore(repository), sent);
     setWorkingNotes(previous => ({ ...previous, [repository.id]: entries }));
   };
   /** Whether any repository holds staged drafts or unsaved editor drafts. */
   const hasPendingDrafts = () => {
     if (legacyBookmarkRecoveries(repositories.map(repository => repository.id)).length > 0) throw new Error(t('legacyOutline.blocker'));
-    return available.some(repository => Object.keys(readWorkingNotes(draftScope(repository))).length || listLocalDrafts(draftScope(repository)).length) || pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, available.filter(repository => repository.write).map(repository => repository.id)).length > 0;
+    return available.some(repository => Object.keys(readStoredWorkingNotes(draftScope(repository))).length || listLocalDrafts(draftScope(repository)).length) || pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, available.filter(repository => repository.write)).length > 0;
   };
 
   // Workspace documents live in each notebook repository; the open notebook's repository serves Screen and Focus.
   const documentRepository = repositoryFor(selectedNotebookId);
-  const documentRepositoryId = documentRepository && !documentRepository.unavailable ? documentRepository.id : undefined;
+  const documentOwner = documentRepository && !documentRepository.unavailable ? { id: documentRepository.id, alias: documentRepository.alias } : undefined;
   const refreshGitStatus = () => {
     void fetchGitStatus().then((result) => setGitStatus(result.status));
   };
-  const focus = useFocusPage(documentRepositoryId, refreshGitStatus, remote, Boolean(config && sourceId));
+  const focus = useFocusPage(documentOwner, refreshGitStatus, remote, Boolean(config && sourceId));
 
   const documents = [focus];
   // Remote drafts wait in Changes until committed, whichever notebook is open; local ones autosave to the working tree.
-  const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write).map(repository => repository.id)) : [];
+  const pendingDocuments = remote ? pendingDocumentDrafts(WORKSPACE_DOCUMENT_CLIENTS, repositories.filter(repository => repository.write)) : [];
   const writable = repositories.filter(repository => repository.write).map(repository => repository.id).join('\n');
   /** Drafts of the repositories this requester may commit to, by `noteRefKey`: two repositories can hold the same path. */
   const activeWorkingNotes = useMemo<WorkingNotes>(() => (remote ? Object.fromEntries(writable.split('\n').filter(Boolean).flatMap(id => Object.values(workingNotes[id] ?? {})).map(entry => [noteRefKey(entry.note), entry])) : {}), [remote, writable, workingNotes]);
@@ -129,14 +135,14 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   /* eslint-enable react-hooks/exhaustive-deps */
   /* eslint-enable react/use-memo */
 
-  const scopes = available.map(repository => `${repository.id}\t${draftScope(repository)}`).join('\n');
+  const scopes = available.map(repository => `${repository.id}\t${draftScope(repository)}\t${repository.alias}`).join('\n');
   useEffect(() => {
     const refresh = (event: StorageEvent) => {
       for (const line of scopes.split('\n').filter(Boolean)) {
-        const [id, scope] = line.split('\t');
+        const [id, scope, alias] = line.split('\t');
         if (event.key !== `gh_notes_working:${scope}`) continue;
         try {
-          setWorkingNotes(previous => ({ ...previous, [id]: readWorkingNotes(scope) }));
+          setWorkingNotes(previous => ({ ...previous, [id]: readWorkingNotes({ scope, alias }) }));
         } catch (error) {
           setActionError((error as Error).message);
         }
@@ -157,7 +163,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       const ws = await fetchWorkspace(fresh === true);
       if (request !== refreshRequest.current) return;
       const folderRequest = fetchFolders();
-      const workspace = JSON.stringify([ws.home, ws.repositories.map((repository) => [repository.id, repository.branch]), ws.config?.notebooks.map((nb) => [nb.id, nb.root])]);
+      const workspace = JSON.stringify([ws.home, ws.repositories.map((repository) => [repository.id, repository.branch]), ws.keyedConfig?.notebooks.map((nb) => [nb.id, nb.root])]);
       // A local workspace has no revisions, so its cached answers are refetched by hand.
       if (ws.local && loadedWorkspace.current) void invalidateNoteQueries(queryClient);
       loadedWorkspace.current = workspace;
@@ -169,8 +175,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setRepoRoot(ws.repoRoot ?? '');
       setManifestDerived(ws.manifest === 'derived');
       setRepositoryChoice(ws.repositoryChoice === true);
-      setConfig((previous) => (sameValue(previous, ws.config) ? previous : ws.config));
-      setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftScope(repository))])));
+      setConfig((previous) => (sameValue(previous, ws.keyedConfig) ? previous : ws.keyedConfig));
+      setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftStore(repository))])));
       setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
       setLoading(false);
 
@@ -233,5 +239,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

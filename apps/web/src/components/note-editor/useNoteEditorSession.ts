@@ -14,7 +14,7 @@ import { useEditorRegistry } from '../../lib/note-editing.js';
 import type { NoteEditorSession, NoteEditorSharedProps } from './types.js';
 import type { NewVersionRequest } from '../../lib/history-api.js';
 import { externalEditCount, subscribeExternalEdits } from '../../lib/external-note-edits.js';
-import { readWorkingNotes } from '../../lib/working-notes.js';
+import { readStoredWorkingNotes } from '../../lib/working-notes.js';
 
 /** Server-managed on every save; excluded when deciding whether there is a new edit to save. */
 function sameIgnoringTimestamps(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
@@ -264,7 +264,7 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   const externalEdits = useSyncExternalStore(subscribeExternalEdits, () => externalEditCount(noteRefKey(note)));
   useEffect(() => {
     if (!externalEdits || !draftScope) return;
-    const entry = readWorkingNotes(draftScope)[note.path];
+    const entry = readStoredWorkingNotes(draftScope)[note.path];
     if (!entry || entry.deleted) return;
     /* eslint-disable react/set-state-in-effect -- An edit made outside the editor arrives through this store; the editor takes it as its saved text. */
     setContent(entry.note.content);

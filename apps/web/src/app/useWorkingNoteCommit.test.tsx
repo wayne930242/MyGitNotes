@@ -3,16 +3,16 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useWorkingNoteCommit } from './useWorkingNoteCommit.js';
 import { deletionEntry, readWorkingNotes, updateWorkingNote } from '../lib/working-notes.js';
-import { draftScope, repositoryOf, type WorkspaceRepository } from '../lib/workspace-repositories.js';
+import { draftStore, repositoryOf, type WorkspaceRepository } from '../lib/workspace-repositories.js';
 import type { FileChange, NoteItem } from '../lib/types.js';
 import { documentDraftKey } from '../lib/use-workspace-document.js';
 import { focusDocumentClient } from '../lib/use-focus-page.js';
 
-const home: WorkspaceRepository = { id: 'github:me/notes@main', type: 'github', repository: 'me/notes', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['life'] };
-const other: WorkspaceRepository = { id: 'github:me/campaign@main', type: 'github', repository: 'me/campaign', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['trpg'] };
+const home: WorkspaceRepository = { id: 'github:me/notes@main', alias: 'notes', type: 'github', repository: 'me/notes', branch: 'main', revision: 'a'.repeat(40), write: true, notebooks: ['notes~life'] };
+const other: WorkspaceRepository = { id: 'github:me/campaign@main', alias: 'campaign', type: 'github', repository: 'me/campaign', branch: 'main', revision: 'b'.repeat(40), write: true, notebooks: ['campaign~trpg'] };
 const repositories = [home, other];
 const note = (path: string, notebookId: string, content: string, revision: string): NoteItem => ({ id: path, path, notebookId, title: path, content, metadata: {}, tags: [], revision });
-const base = note('notes/life/a.md', 'life', '# A', home.revision);
+const base = note('notes/life/a.md', 'notes~life', '# A', home.revision);
 const change = (path: string, repository: WorkspaceRepository): FileChange => ({ path, repository: repository.id, kind: 'modified', tracked: true, revision: '', staged: false, unstaged: true });
 
 let commits: any[];
@@ -36,7 +36,7 @@ function stubServer(failFor?: string) {
 
 function commitHook() {
   const stageWorkingNote = (draft: NoteItem, draftBase: NoteItem | null, blocked?: string, deleted?: boolean) => {
-    updateWorkingNote(draftScope(repositoryOf(repositories, draft.notebookId)!), draft.path, { note: draft, base: draftBase, ...(blocked ? { blocked } : {}), ...(deleted ? { deleted: true as const } : {}) });
+    updateWorkingNote(draftStore(repositoryOf(repositories, draft.notebookId)!), draft.path, { note: draft, base: draftBase, ...(blocked ? { blocked } : {}), ...(deleted ? { deleted: true as const } : {}) });
     return draft;
   };
   const clearCommittedDrafts = vi.fn();
@@ -47,8 +47,8 @@ function commitHook() {
 
 beforeEach(() => {
   localStorage.clear();
-  updateWorkingNote(draftScope(home), base.path, { note: { ...base, content: '# A edited' }, base });
-  updateWorkingNote(draftScope(other), 'trpg/b.md', { note: note('trpg/b.md', 'trpg', '# B', other.revision), base: null });
+  updateWorkingNote(draftStore(home), base.path, { note: { ...base, content: '# A edited' }, base });
+  updateWorkingNote(draftStore(other), 'trpg/b.md', { note: note('trpg/b.md', 'campaign~trpg', '# B', other.revision), base: null });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -67,7 +67,7 @@ it('stops at the first repository that fails and names the repositories already 
   await expect(commitWorkingNotes([change(base.path, home), change('trpg/b.md', other)], 'docs: update')).rejects.toThrow(/changes\.partialCommit .*me\/notes.*The repository changed/);
   expect(clearCommittedDrafts.mock.calls.map(([repository]) => repository.id)).toEqual([home.id]);
   expect(setRepositoryRevision.mock.calls).toEqual([[home.id, `${home.id}-next`]]);
-  expect(Object.keys(readWorkingNotes(draftScope(other)))).toEqual(['trpg/b.md']);
+  expect(Object.keys(readWorkingNotes(draftStore(other)))).toEqual(['trpg/b.md']);
 });
 
 it('refuses a repository the requester may not write', async () => {
@@ -84,12 +84,12 @@ it('refuses a repository the requester may not write', async () => {
 
 it('commits equal paths of two repositories to their own repositories', async () => {
   stubServer();
-  const twin = note(base.path, 'trpg', '# Twin', other.revision);
-  updateWorkingNote(draftScope(other), base.path, { note: twin, base: null });
+  const twin = note(base.path, 'campaign~trpg', '# Twin', other.revision);
+  updateWorkingNote(draftStore(other), base.path, { note: twin, base: null });
   const { commitWorkingNotes } = commitHook();
   await commitWorkingNotes([change(base.path, other)], 'docs: update');
   expect(commits.map(commit => [commit.repository, commit.notes.map((item: any) => item.content)])).toEqual([[other.id, ['# Twin']]]);
-  expect(Object.keys(readWorkingNotes(draftScope(home)))).toEqual([base.path]);
+  expect(Object.keys(readWorkingNotes(draftStore(home)))).toEqual([base.path]);
 });
 
 it('commits a document draft with the group of the repository that holds it', async () => {
@@ -99,12 +99,14 @@ it('commits a document draft with the group of the repository that holds it', as
   const { commitWorkingNotes } = commitHook();
   await commitWorkingNotes([change('.github-notes-focus.yaml', other)], 'docs: focus');
   expect(commits.map(commit => [commit.repository, commit.documents.map((document: any) => document.path)])).toEqual([[other.id, ['.github-notes-focus.yaml']]]);
+  // A draft saved before notebook keys stores the local id; the commit names the notebook by key for the server to store locally again.
+  expect(commits[0].documents[0].page.focuses[0].notebookId).toBe('campaign~trpg');
   expect(localStorage.getItem(documentDraftKey(focusDocumentClient, other.id))).toBeNull();
 });
 
 it('commits a deletion as a delete entry when the note is as it was deleted', async () => {
   stubServer();
-  updateWorkingNote(draftScope(home), base.path, deletionEntry(base));
+  updateWorkingNote(draftStore(home), base.path, deletionEntry(base));
   const { commitWorkingNotes, clearCommittedDrafts } = commitHook();
   await commitWorkingNotes([change(base.path, home)], 'docs: remove a');
   expect(commits[0].notes).toEqual([{ path: base.path, delete: true }]);
@@ -113,9 +115,9 @@ it('commits a deletion as a delete entry when the note is as it was deleted', as
 
 it('blocks a deletion of a note that changed remotely since, keeping it in the trash', async () => {
   stubServer();
-  updateWorkingNote(draftScope(home), base.path, deletionEntry({ ...base, content: '# Older A' }));
+  updateWorkingNote(draftStore(home), base.path, deletionEntry({ ...base, content: '# Older A' }));
   const { commitWorkingNotes } = commitHook();
   await expect(commitWorkingNotes([change(base.path, home)], 'docs: remove a')).rejects.toThrow(/changed remotely after it was deleted/);
   expect(commits).toEqual([]);
-  expect(readWorkingNotes(draftScope(home))[base.path]).toMatchObject({ deleted: true, blocked: expect.stringContaining('Restore it from the trash') });
+  expect(readWorkingNotes(draftStore(home))[base.path]).toMatchObject({ deleted: true, blocked: expect.stringContaining('Restore it from the trash') });
 });

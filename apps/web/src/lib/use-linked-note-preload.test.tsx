@@ -7,7 +7,7 @@ import type { NotebookConfig } from './types.js';
 import { linkedNote, linkScope, useLinkedNotePreload } from './use-linked-note-preload.js';
 import { noteLookupOptions, setNoteQueryScope } from './use-note-queries.js';
 
-const notebooks: NotebookConfig[] = [{ id: 'n', title: 'Notes', root: 'notes' }];
+const notebooks: NotebookConfig[] = [{ id: 'kb~n', title: 'Notes', root: 'notes' }];
 const scope = { sourceId: 'local:test', revisions: {}, repositories: {}, drafts: {} };
 let client: QueryClient;
 let idle: Map<number, IdleRequestCallback>;
@@ -47,25 +47,29 @@ const tick = async () => {
 it('resolves note paths, aliases and same-origin note routes while excluding other destinations', () => {
   const source = document.createElement('a');
   source.dataset.sourcePath = 'notes/source.md';
-  const reach = linkScope(source, notebooks, {});
-  const target = { notebookId: 'n', path: 'notes/target.md' };
+  const reach = linkScope(source, notebooks, { 'kb~n': 'repo' }, 'repo');
+  const target = { notebookId: 'kb~n', path: 'notes/target.md' };
   expect(linkedNote('target.md#heading', 'notes/source.md', reach, 'https://notes.test')).toEqual(target);
+  expect(linkedNote('https://notes.test/notebooks/kb~n/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual(target);
+  // A link written before notebook keys names the bare id and reaches the notebook it stands for.
   expect(linkedNote('https://notes.test/notebooks/n/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual(target);
   const aliased = [{ ...notebooks[0], pathAliases: { '@/*': 'notes/*' } }];
-  expect(linkedNote('@/target.md', 'notes/source.md', linkScope(source, aliased, {}), 'https://notes.test')).toEqual(target);
+  expect(linkedNote('@/target.md', 'notes/source.md', linkScope(source, aliased, {}, 'repo'), 'https://notes.test')).toEqual(target);
   for (const href of ['#heading', 'source.md', 'image.png', 'folder', 'https://other.test/a.md', '../../outside.md', '/graph']) expect(linkedNote(href, 'notes/source.md', reach, 'https://notes.test')).toBeNull();
 });
 
 it('keeps equal roots and note paths in the source repository and never preloads a foreign route', () => {
-  const shared = [{ id: 'home', root: 'notes', title: 'Home' }, { id: 'other', root: 'notes', title: 'Other' }] as NotebookConfig[];
+  const shared = [{ id: 'home~n', root: 'notes', title: 'Home' }, { id: 'other~n', root: 'notes', title: 'Other' }] as NotebookConfig[];
   const source = document.createElement('div');
-  source.dataset.sourceNotebook = 'home';
+  source.dataset.sourceNotebook = 'home~n';
   const element = document.createElement('a');
   element.dataset.sourcePath = 'notes/source.md';
   source.append(element);
-  const reach = linkScope(element, shared, { home: 'repo-home', other: 'repo-other' });
-  expect(linkedNote('target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual({ notebookId: 'home', path: 'notes/target.md' });
-  expect(linkedNote('/notebooks/other/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toBeNull();
+  const reach = linkScope(element, shared, { 'home~n': 'repo-home', 'other~n': 'repo-other' }, 'repo-home');
+  expect(linkedNote('target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual({ notebookId: 'home~n', path: 'notes/target.md' });
+  expect(linkedNote('/notebooks/other~n/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toBeNull();
+  // A bare id two repositories share resolves to the default (home) repository's notebook.
+  expect(linkedNote('/notebooks/n/notes/target.md', 'notes/source.md', reach, 'https://notes.test')).toEqual({ notebookId: 'home~n', path: 'notes/target.md' });
 });
 
 it('waits for idle, bounds reads to eight and shares the editor body cache', async () => {
@@ -74,7 +78,7 @@ it('waits for idle, bounds reads to eight and shares the editor body cache', asy
   for (let index = 0; index < 12; index++) await tick();
   expect(fetcher).toHaveBeenCalledTimes(8);
   for (const [, init] of fetcher.mock.calls) expect(JSON.parse(init.body as string).content).toBe(true);
-  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true));
+  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'kb~n', path: 'notes/target-0.md' }], true));
   expect(fetcher).toHaveBeenCalledTimes(8);
 });
 
@@ -112,7 +116,7 @@ it('leaves a failed speculative read retryable by an explicit open', async () =>
   await tick();
   await tick();
   expect(fetcher).toHaveBeenCalledTimes(1);
-  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true));
+  await client.fetchQuery(noteLookupOptions(scope, [{ notebookId: 'kb~n', path: 'notes/target-0.md' }], true));
   expect(fetcher).toHaveBeenCalledTimes(2);
 });
 
@@ -123,8 +127,8 @@ it('separates preloaded bodies by workspace revision', async () => {
   await tick();
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(JSON.parse(fetcher.mock.calls[1][1].body as string).revisions).toEqual({ 'github:me/notes': 'next' });
-  expect(client.getQueryData(noteLookupOptions(scope, [{ notebookId: 'n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
-  expect(client.getQueryData(noteLookupOptions({ ...scope, revisions: { 'github:me/notes': 'next' } }, [{ notebookId: 'n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
+  expect(client.getQueryData(noteLookupOptions(scope, [{ notebookId: 'kb~n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
+  expect(client.getQueryData(noteLookupOptions({ ...scope, revisions: { 'github:me/notes': 'next' } }, [{ notebookId: 'kb~n', path: 'notes/target-0.md' }], true).queryKey)).toBeDefined();
 });
 
 it('pauses idle reads in hidden tabs and resumes when visible', async () => {

@@ -3,10 +3,11 @@ import { stringify } from 'yaml';
 import type { WorkspaceDocument } from '@mygitnotes/core';
 import { type TranslationKey, useTranslation } from './i18n/index.js';
 import { createUnifiedDiff } from './unified-diff.js';
+import { notebookIdCodec } from './notebook-keys.js';
 
 /** How the browser reaches one workspace document and names its failures. */
 export interface WorkspaceDocumentClient<T> {
-  document: Pick<WorkspaceDocument<T>, 'file' | 'schema' | 'empty' | 'read'>;
+  document: Pick<WorkspaceDocument<T>, 'file' | 'schema' | 'empty' | 'read' | 'mapNotebookIds'>;
   endpoint: string;
   /** Local storage key prefix for the device draft, scoped by repository. */
   draftKey: string;
@@ -28,15 +29,33 @@ export interface WorkspaceDocumentDraft<T> {
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
+/** The repository a document draft belongs to: its id names the draft's storage key, its alias names its notebooks by key. */
+export interface DocumentRepository {
+  id: string;
+  alias: string;
+}
+
 /** Where one repository's draft of a document is stored; for the home repository this is the key drafts used before documents moved per repository. */
 export const documentDraftKey = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => `github-notes:${client.draftKey}:${repository}`;
 
-/** A stored draft; drafts saved before a format change migrate the same way as the stored file. */
-export function readDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: string, fallbackBase: T): WorkspaceDocumentDraft<T> | undefined {
-  const raw = localStorage.getItem(documentDraftKey(client, repository));
+/**
+ * A stored draft, its notebooks named by key; drafts saved before a format change migrate the same way as the stored
+ * file. The draft keeps the repository's local notebook ids in storage, as the file does.
+ */
+export function readDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: DocumentRepository, fallbackBase: T): WorkspaceDocumentDraft<T> | undefined {
+  const raw = localStorage.getItem(documentDraftKey(client, repository.id));
   if (!raw) return;
   const value = JSON.parse(raw);
-  return { page: client.document.read(value.page), base: value.base ? client.document.read(value.base) : fallbackBase, revision: String(value.revision), legacy: !value.base, id: typeof value.id === 'string' ? value.id : undefined, ancestors: Array.isArray(value.ancestors) && value.ancestors.every((id: unknown) => typeof id === 'string') ? value.ancestors : [] };
+  const { toKey } = notebookIdCodec(repository.alias);
+  const keyed = (stored: unknown) => client.document.mapNotebookIds(client.document.read(stored), toKey);
+  return { page: keyed(value.page), base: value.base ? keyed(value.base) : fallbackBase, revision: String(value.revision), legacy: !value.base, id: typeof value.id === 'string' ? value.id : undefined, ancestors: Array.isArray(value.ancestors) && value.ancestors.every((id: unknown) => typeof id === 'string') ? value.ancestors : [] };
+}
+
+/** Stores a draft whose notebooks are named by key with the repository's local ids. */
+function writeDocumentDraft<T>(client: WorkspaceDocumentClient<T>, repository: DocumentRepository, draft: WorkspaceDocumentDraft<T>) {
+  const { toLocal } = notebookIdCodec(repository.alias);
+  const stored = (page: T) => client.document.mapNotebookIds(page, toLocal);
+  localStorage.setItem(documentDraftKey(client, repository.id), JSON.stringify({ ...draft, page: stored(draft.page), base: stored(draft.base) }));
 }
 
 /** A document draft of one repository, waiting in Changes for a remote commit. */
@@ -52,16 +71,16 @@ export interface PendingDocument {
 const documentDiff = (file: string, base: unknown, page: unknown) => createUnifiedDiff(file, file, stringify(base), stringify(page));
 
 /** Every stored document draft of the given repositories, whichever notebook is open. */
-export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[], repositories: string[]): PendingDocument[] {
+export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[], repositories: DocumentRepository[]): PendingDocument[] {
   return repositories.flatMap(repository =>
     clients.flatMap(client => {
       let draft;
       try {
         draft = readDocumentDraft(client, repository, client.document.empty());
       } catch (error) {
-        return [{ repository, file: client.document.file, page: undefined, base: undefined, diff: '', error: (error as Error).message }];
+        return [{ repository: repository.id, file: client.document.file, page: undefined, base: undefined, diff: '', error: (error as Error).message }];
       }
-      return draft ? [{ repository, file: client.document.file, page: draft.page, base: draft.base, diff: documentDiff(client.document.file, draft.base, draft.page) }] : [];
+      return draft ? [{ repository: repository.id, file: client.document.file, page: draft.page, base: draft.base, diff: documentDiff(client.document.file, draft.base, draft.page) }] : [];
     })
   );
 }
@@ -70,15 +89,14 @@ export function pendingDocumentDrafts(clients: WorkspaceDocumentClient<unknown>[
 export const discardDocumentDraft = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => localStorage.removeItem(documentDraftKey(client, repository));
 
 /** Settles a committed draft: clears it, or keeps later edits on top of the committed page. */
-export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, repository: string, sent: { page: unknown; base?: unknown; id?: string; }, revision: string): boolean {
-  const key = documentDraftKey(client, repository);
+export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, repository: DocumentRepository, sent: { page: unknown; base?: unknown; id?: string; }, revision: string): boolean {
   const latest = readDocumentDraft(client, repository, sent.page);
   if (!latest) return true;
   const identical = same(latest.page, sent.page) && same(latest.base, sent.base);
   const descends = Boolean(sent.id && (latest.id === sent.id || latest.ancestors?.includes(sent.id)));
   if (!identical && !descends) return false;
-  if (same(latest.page, sent.page)) localStorage.removeItem(key);
-  else localStorage.setItem(key, JSON.stringify({ ...latest, base: sent.page, revision }));
+  if (same(latest.page, sent.page)) localStorage.removeItem(documentDraftKey(client, repository.id));
+  else writeDocumentDraft(client, repository, { ...latest, base: sent.page, revision });
   return true;
 }
 
@@ -86,8 +104,9 @@ export function settleDocumentDraft(client: WorkspaceDocumentClient<unknown>, re
  * Device draft, autosave on local main, and commit handoff for one workspace document of `repository`,
  * the repository of the open notebook.
  */
-export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repository: string | undefined, onSaved: () => void, remote = false, enabled = true) {
+export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, owner: DocumentRepository | undefined, onSaved: () => void, remote = false, enabled = true) {
   const { t } = useTranslation();
+  const repository = owner?.id, alias = owner?.alias ?? '';
   const { document, endpoint, messages } = client;
   const [page, setPage] = useState<T>(document.empty);
   const [snapshot, setSnapshot] = useState<Snapshot<T>>();
@@ -106,7 +125,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repo
   /* eslint-disable react/refs -- Document callbacks and the saved comparison baseline remain current without restarting loads. */
   currentKey.current = key;
   /* eslint-enable react/refs */
-  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => readDocumentDraft(client, repository ?? '', base.current), [client, repository]);
+  const readDraft = useCallback((): WorkspaceDocumentDraft<T> | undefined => readDocumentDraft(client, { id: repository ?? '', alias }, base.current), [client, repository, alias]);
   const load = useCallback(async (discard = false) => {
     const request = ++loadRequest.current;
     if (!enabled || !repository) {
@@ -170,7 +189,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repo
         return;
       }
       const id = crypto.randomUUID();
-      localStorage.setItem(key, JSON.stringify({ page: result.data, base: base.current, revision: revision.current, id, ancestors: [...(previous?.ancestors ?? []), ...(previous?.id ? [previous.id] : [])].slice(-100) }));
+      writeDocumentDraft(client, { id: repository, alias }, { page: result.data, base: base.current, revision: revision.current, id, ancestors: [...(previous?.ancestors ?? []), ...(previous?.id ? [previous.id] : [])].slice(-100) });
       draftIdentity.current = id;
       current.current = result.data;
       setPage(result.data);
@@ -194,7 +213,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repo
       const record: Snapshot<T> = await response.json();
       if (currentKey.current !== key) return;
       const latest = readDraft();
-      const settled = settleDocumentDraft(client as WorkspaceDocumentClient<unknown>, repository ?? '', sentDraft, record.revision);
+      const settled = settleDocumentDraft(client as WorkspaceDocumentClient<unknown>, { id: repository ?? '', alias }, sentDraft, record.revision);
       if (!settled) {
         if (latest) {
           current.current = latest.page;
@@ -222,7 +241,7 @@ export function useWorkspaceDocument<T>(client: WorkspaceDocumentClient<T>, repo
     } finally {
       if (currentKey.current === key) setSaving(false);
     }
-  }, [remote, saving, loading, error, snapshotKey, snapshot, dirty, key, readDraft, t, target, repository, messages, client]);
+  }, [remote, saving, loading, error, snapshotKey, snapshot, dirty, key, readDraft, t, target, repository, alias, messages, client]);
   useEffect(() => {
     if (!enabled || loading || remote || !dirty || saving || error) return;
     const timer = setTimeout(() => void save(), 350);
