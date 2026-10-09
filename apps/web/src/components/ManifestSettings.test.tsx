@@ -7,7 +7,6 @@ import YAML from 'yaml';
 import { DEFAULT_WORKSPACE_PREFERENCES } from '@mygitnotes/core/workspace-preferences';
 import type { WorkspaceConfig } from '@mygitnotes/core';
 import type { WorkspaceRepository } from '../lib/workspace-repositories.js';
-import { ApiError } from '../lib/api.js';
 import { ManifestSettings, type ManifestSettingsProps } from './ManifestSettings.js';
 
 const updateWorkspaceConfig = vi.hoisted(() => vi.fn(async (_repository: string, _yaml: string, _revision: string) => ({ success: true, configRevision: 'next' })));
@@ -21,6 +20,7 @@ beforeAll(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.unstubAllGlobals();
   updateWorkspaceConfig.mockReset();
   updateWorkspaceConfig.mockImplementation(async () => ({ success: true, configRevision: 'next' }));
 });
@@ -137,9 +137,13 @@ it("refreshes the repository on a conflict, keeping the person's text so it can 
   view = render(createElement(ManifestSettings, props([home, campaign], { onRefreshWorkspace })));
   showYaml();
   fireEvent.change(screen.getByRole('textbox', { name: 'Workspace Manifest (.mygitnotes.yaml)' }), { target: { value: 'mine: yes\n' } });
-  updateWorkspaceConfig.mockRejectedValueOnce(new ApiError('The workspace manifest changed since it was read. Reload before saving.', 409));
+  // The server's 409 goes through the real client, which must report its status.
+  const { updateWorkspaceConfig: send } = await vi.importActual<typeof import('../lib/api.js')>('../lib/api.js');
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'The workspace manifest changed since it was read. Reload before saving.' }), { status: 409 })));
+  updateWorkspaceConfig.mockImplementationOnce(send);
   fireEvent.click(screen.getByTitle('Save & Commit'));
   await screen.findByText(/changed on the server/);
+  vi.unstubAllGlobals();
   expect(onRefreshWorkspace).toHaveBeenCalledTimes(1);
   expect(editorText()).toBe('mine: yes\n');
   fireEvent.click(screen.getByTitle('Save & Commit'));

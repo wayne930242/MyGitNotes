@@ -65,10 +65,8 @@ export const openWorkspaceEvents = () => new EventSource(`${API_BASE}/workspace/
 /** Commits one repository's manifest, refused with 409 when `configRevision` is no longer that manifest's revision. */
 export async function updateWorkspaceConfig(repository: string, configYaml: string, configRevision: string): Promise<{ success: boolean; configRevision: string; }> {
   const res = await fetch(`${API_BASE}/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, configYaml, configRevision }) });
-  if (!res.ok) {
-    const err = await res.json();
-    throw new Error(err.error || 'Failed to update workspace configuration');
-  }
+  // The status tells Settings a 409 (the manifest moved) from a refusal.
+  if (!res.ok) throw await responseError(res, 'Failed to update workspace configuration');
   return res.json();
 }
 
