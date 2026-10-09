@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { stringify as stringifyYaml } from 'yaml';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -121,6 +122,23 @@ describe('a local manifest store', () => {
     expect(read).toMatchObject({ state: 'invalid', text: 'schema_version: 3\nworkspace: [broken\n' });
     await store.save(manifest('Fixed'), read.revision);
     expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toContain('Fixed');
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('saves a manifest read from the example layout so it reloads with the same roots', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-local-manifest-'));
+    fs.mkdirSync(path.join(root, 'examples/workspace/notes/ex'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'examples/workspace/.mygitnotes.yaml'), manifest('Example'));
+    const commit = vi.fn(async () => undefined);
+    const store = localManifest(root, commit);
+    const loaded = await store.load();
+    expect(loaded.config.notebooks[0].root).toBe('examples/workspace/notes/ex');
+    // Settings sends back the manifest as it was shown, with the roots the example layout resolved.
+    const saved = await store.save(stringifyYaml({ ...loaded.config, workspace: { ...loaded.config.workspace, title: 'Saved' } }), loaded.revision);
+    expect(saved.config.workspace.title).toBe('Saved');
+    expect(saved.config.notebooks[0].root).toBe('examples/workspace/notes/ex');
+    expect((await localManifest(root, commit).load()).config.notebooks[0].root).toBe('examples/workspace/notes/ex');
+    expect(commit).toHaveBeenCalledWith(root, ['notes/.mygitnotes.yaml'], 'chore(workspace): update configuration');
     fs.rmSync(root, { recursive: true, force: true });
   });
 

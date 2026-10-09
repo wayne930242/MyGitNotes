@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { loadedWorkspaceConfigFile, parseWorkspaceConfig, parseWorkspaceConfigAt, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
+import { loadedWorkspaceConfigFile, parseWorkspaceConfig, parseWorkspaceConfigAt, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { SourceError } from './github-api.js';
 import type { ManifestRead, RepositoryManifestFile } from './repository-manifest.js';
 import type { ManifestStore } from './workspace-config-source.js';
@@ -59,10 +59,12 @@ export function localManifest(root: string, commit: LocalCommit, newFile = path.
     load,
     read,
     async save(yaml: string, revision: string) {
-      const { found, revision: actual } = current();
+      const { revision: actual } = current();
       if (revision !== actual) throw new SourceError('The workspace manifest changed since it was read. Reload before saving.', 409);
       const validated = parseWorkspaceConfig(yaml);
-      const file = found?.file ?? newFile;
+      // A manifest read from the example layout came with its roots resolved from there; it is written where roots
+      // read as written, so a reload does not resolve them a second time.
+      const file = resolveWorkspaceConfigPath(root) ?? newFile;
       const target = path.join(root, file);
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, serializeWorkspaceConfig(validated), 'utf-8');
