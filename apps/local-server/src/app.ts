@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, productRepository, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -12,7 +12,7 @@ import { createRemoteMCP } from './mcp.js';
 import { createRemoteCoreUpdateRouter } from './remote-core-update.js';
 import { createLocalApp } from './local-app.js';
 import { createAuth } from './auth.js';
-import { asLocal, asRemote, eachRepository, homeRepository, namedRemote, namedRepository, notebookRepository, noteRepository, type RemoteHandle, remoteHome, repositoryOrHome, requestCatalog, requestWorkspace, storedDocumentDrafts, workspaceOf } from './request-workspace.js';
+import { asLocal, asRemote, defaultRepository, eachRepository, namedRemote, namedRepository, notebookRepository, noteRepository, type RemoteHandle, repositoryOrDefault, requestCatalog, requestToken, requestWorkspace, storedDocumentDrafts, workspaceOf } from './request-workspace.js';
 import { createStudyRouter } from './study.js';
 import { createOutlineImportRouter } from './outline-import.js';
 import { createWorkspaceDocumentRouter } from './workspace-document.js';
@@ -67,6 +67,10 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   const recordStore = overrides.recordStore ?? (lightweight ? new NoRecordStore() : createRecordStore(base));
   const services: AppServices = { ...overrides, configSource, recordStore, workspaceChoices, sessions: overrides.sessions ?? (lightweight ? cookieSessions() : storedSessions(recordStore)), assetStorage: overrides.assetStorage ?? envAssetStorage(), remoteCache: 'remoteCache' in overrides ? overrides.remoteCache : local ? undefined : createRemoteCache(), webDist: overrides.webDist ?? path.join(base, 'apps/web/dist') };
   const { remoteCache: cache, piAgent, sessions, assetStorage, publishing } = services;
+  // Core updates of a remote deployment act on its product repository; without one they are not offered. Visitors who
+  // choose their own repository never update the deployment's Core, as before product repositories.
+  const product = local ? null : productRepository(base);
+  if (product && choosesRepository()) throw new Error("A product repository (MYGITNOTES_PRODUCT_REPOSITORY or product_repository) offers Core updates, which a deployment where each visitor chooses a repository does not give its visitors. Remove it, or name the deployment's repository with MYGITNOTES_REPOSITORY.");
   const app = express();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -96,6 +100,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   services.routes?.(app, services);
   app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
   app.get('/api/history/events', serverlessHistoryEvents);
+  // Core updates act on the product repository, not on the workspace, so they open no repository of it.
+  if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
@@ -122,15 +128,15 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     app.use(createLocalApp(base));
   } else {
     /** Whether the request carries a signed-in session; each repository still checks its own access. */
-    const signedIn = (res: express.Response) => remoteHome(res).authenticated;
+    const signedIn = (res: express.Response) => Boolean(requestToken(res));
     /** The remote repository of a notebook key, with that notebook's local id and the alias that keys its answers. */
     const remoteNotebook = async (res: express.Response, notebookId: unknown) => {
       const { handle, alias, notebook } = await notebookRepository(res, notebookId);
       return { ...asRemote(handle), alias, localId: notebook.id };
     };
-    /** Without a notebook a listing covers the home repository's first notebook. */
-    const homeNotebook = async (res: express.Response) => {
-      const { handle, alias, config } = await homeRepository(res);
+    /** Without a notebook a listing covers the default repository's first notebook. */
+    const defaultNotebook = async (res: express.Response) => {
+      const { handle, alias, config } = await defaultRepository(res);
       return { ...asRemote(handle), alias, localId: config.notebooks[0]?.id };
     };
     const remoteNote = async (res: express.Response, file: unknown, notebookId?: unknown) => {
@@ -138,29 +144,27 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       return { ...asRemote(handle), alias };
     };
     const remoteRepositories = async (res: express.Response) => (await eachRepository(res)).map(({ handle, alias }) => ({ ...asRemote(handle), alias }));
-    app.use('/api/core', createRemoteCoreUpdateRouter({ store: recordStore, sessions }));
     app.use(createGistRouter());
     /** Pushes committed notes that name a Gist to it; notes that name none cost nothing. */
     const publishedGists = async (res: express.Response, notes: { path: string; content: string; metadata: Record<string, unknown>; }[]) => {
       const token = gistToken(res);
       return token && notes.some(note => noteGist(note.metadata)) ? { gists: await syncGists(token, notes, gistSite(res)) } : {};
     };
-    app.get('/api/workspace', async (req, res) => {
+    app.get('/api/workspace', async (_req, res) => {
       try {
         const workspace = workspaceOf(res);
-        const fresh = req.query.fresh === '1';
-        // The manifest is read from the home repository, so a fresh answer reloads it first.
-        if (fresh) await remoteHome(res).reader.getSnapshot(true);
-        const [{ config }, keyedConfig, entries] = await Promise.all([workspace.manifest(), workspace.keyedConfig(), workspace.all()]);
+        // `?fresh=1` opened every repository at its current branch head, and each manifest is read from that snapshot.
+        const [keyedConfig, entries] = await Promise.all([workspace.keyedConfig(), workspace.all()]);
         const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
           const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
-          if (!('handle' in entry)) return { ...base, ...repositoryManifestStatus(await workspace.manifestOf(entry.ref.id)), branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, unavailable: entry.unavailable };
-          const handle = entry.handle as RemoteHandle;
-          // The repository's own manifest is read from the snapshot this answer reports, fresh when asked.
-          const snapshot = await handle.reader.getSnapshot(fresh && entry.ref.id !== workspace.home.ref.id);
-          return { ...base, ...repositoryManifestStatus(await workspace.manifestOf(entry.ref.id)), branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot) };
+          const manifest = repositoryManifestStatus(await workspace.manifestOf(entry.ref.id));
+          // A repository whose manifest does not load is still read, so Settings can fix that manifest.
+          const handle = ('handle' in entry ? entry.handle : await workspace.handleOf(entry.ref.id)) as RemoteHandle | undefined;
+          if (!handle) return { ...base, ...manifest, branch: entry.ref.source.type === 'local' ? '' : entry.ref.source.branch, revision: '', write: false, ...('unavailable' in entry ? { unavailable: entry.unavailable } : {}) };
+          const snapshot = await handle.reader.getSnapshot();
+          return { ...base, ...manifest, branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot), ...('unavailable' in entry ? { unavailable: entry.unavailable } : {}) };
         }));
-        const body: WorkspaceStatus = { config, keyedConfig, local: false, home: workspace.home.ref.id, repositories, ...(choosesRepository() ? { repositoryChoice: true } : {}) };
+        const body: WorkspaceStatus = { keyedConfig, local: false, defaultRepository: workspace.default?.ref.id ?? null, repositories, coreUpdate: Boolean(product), ...(choosesRepository() ? { repositoryChoice: true } : {}) };
         res.json(body);
       } catch (error) {
         fail(res, error);
@@ -261,7 +265,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     });
     app.get('/api/assets', async (req, res) => {
       try {
-        const { reader, localId } = req.query.notebookId ? await remoteNotebook(res, req.query.notebookId) : await homeNotebook(res);
+        const { reader, localId } = req.query.notebookId ? await remoteNotebook(res, req.query.notebookId) : await defaultNotebook(res);
         res.json({ assets: await reader.assets(localId) });
       } catch (error) {
         fail(res, error);
@@ -381,8 +385,15 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         fail(res, error);
       }
     });
-    // Agent routes act on the repository a request names, the home repository by default.
-    app.get('/api/git/status', (req, res) => res.json({ status: { branch: remoteHome(res).reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] }));
+    // Agent routes act on the repository a request names, the default repository otherwise.
+    app.get('/api/git/status', async (req, res) => {
+      try {
+        const { handle } = await repositoryOrDefault(res, req.query.repository);
+        res.json({ status: { branch: asRemote(handle).reader.branch, isClean: true, staged: [], modified: [], untracked: [] }, commits: [] });
+      } catch (error) {
+        fail(res, error);
+      }
+    });
     // Every workspace file of one snapshot, so a listing never mixes two commits.
     const snapshotFiles = (entries: { path: string; type: string; mode: string; }[], notebooks: NotebookConfig[]) => entries.flatMap(entry => entry.type === 'blob' && entry.mode !== '120000' ? [agentWorkspaceFile(entry.path, notebooks)].filter(file => file !== undefined) : []).sort((a, b) => a.path.localeCompare(b.path, 'en'));
     app.get('/api/agent-resources/workspaces', async (_req, res) => {
@@ -396,7 +407,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
     });
     app.get('/api/agent-resources', async (req, res) => {
       try {
-        const { handle, config } = await repositoryOrHome(res, req.query.repository);
+        const { handle, config } = await repositoryOrDefault(res, req.query.repository);
         const { reader, authenticated } = asRemote(handle);
         const snapshot = await reader.getSnapshot();
         const editable = Boolean(authenticated && snapshot.info.permissions?.push && reader.branch === 'main');
@@ -410,7 +421,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         const targetPath = req.query.path as string;
         if (!targetPath) throw new SourceError('path query required', 400);
-        const { handle, config } = await repositoryOrHome(res, req.query.repository);
+        const { handle, config } = await repositoryOrDefault(res, req.query.repository);
         if (!agentWorkspaceFile(targetPath, config.notebooks)) throw new SourceError('Path is not an agent workspace file.', 403);
         const { reader } = asRemote(handle);
         const buf = await reader.readFile(targetPath);
@@ -423,7 +434,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
         const { path: file, content, revision, create, repository } = req.body;
-        const result = await asRemote((await repositoryOrHome(res, repository)).handle).reader.saveAgentResource(file, content, revision, create);
+        const result = await asRemote((await repositoryOrDefault(res, repository)).handle).reader.saveAgentResource(file, content, revision, create);
         res.json({ ...result, path: file });
       } catch (error) {
         fail(res, error);
@@ -433,7 +444,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
       try {
         if (!signedIn(res)) throw new SourceError('Sign in with write permission to edit Agent documents.', 403);
         const { path: file, slug, content, revision, repository } = req.body;
-        const result = await asRemote((await repositoryOrHome(res, repository)).handle).reader.renameAgentSkill(file, slug, content, revision);
+        const result = await asRemote((await repositoryOrDefault(res, repository)).handle).reader.renameAgentSkill(file, slug, content, revision);
         res.json(result);
       } catch (error) {
         fail(res, error);

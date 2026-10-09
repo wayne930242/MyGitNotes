@@ -98,6 +98,28 @@ export function loadSourceConfig(base: string, env: NodeJS.ProcessEnv = process.
   if (env.VERCEL) throw new Error('Set MYGITNOTES_SOURCE, MYGITNOTES_REPOSITORY and MYGITNOTES_BRANCH. Existing GITHUB_NOTES_REPOSITORY and related settings remain supported.');
   return { type: 'local', path: env.REPO_ROOT ? path.resolve(env.REPO_ROOT) : defaultLocalPath(base) };
 }
+/**
+ * The deployment's product repository: where Core updates act, on its `core` branch. `MYGITNOTES_PRODUCT_REPOSITORY`
+ * (`owner/name`) or `product_repository` in the server configuration names it, on the deployment's GitHub site
+ * (`MYGITNOTES_GITHUB_URL`, github.com when unset); null when neither does, and Core updates are then not offered.
+ */
+export function productRepository(base: string, env: NodeJS.ProcessEnv = process.env): (RemoteSourceConfig & { type: 'github'; }) | null {
+  let repository: unknown = env.MYGITNOTES_PRODUCT_REPOSITORY || undefined;
+  let where = 'MYGITNOTES_PRODUCT_REPOSITORY';
+  if (repository === undefined) {
+    const file = serverConfigFile(base, env);
+    repository = fs.existsSync(file) ? (YAML.parse(fs.readFileSync(file, 'utf8')) as { product_repository?: unknown; } | null)?.product_repository : undefined;
+    where = `${file}: product_repository`;
+  }
+  if (repository === undefined || repository === null) return null;
+  const url = env.MYGITNOTES_GITHUB_URL || env.GITHUB_NOTES_GITHUB_URL || undefined;
+  try {
+    return parseSourceConfig({ source: { type: 'github', repository, branch: 'core', ...(url ? { url } : {}) } }, base) as RemoteSourceConfig & { type: 'github'; };
+  } catch {
+    throw new Error(`${where} must name a GitHub repository as owner/name.`);
+  }
+}
+
 export function sourceIdentity(source: SourceConfig): string {
   if (source.type === 'local') return `local:${source.path}`;
   if (source.type === 'github') return source.url ? `github:${source.url}/${source.repository}@${source.branch}` : `github:${source.repository}@${source.branch}`;

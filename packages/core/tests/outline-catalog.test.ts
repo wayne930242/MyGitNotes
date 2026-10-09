@@ -9,7 +9,7 @@ import { lookupNotes, noteAgenda, noteFacets, noteGraph, parseNoteQuery, queryNo
 import { readNoteFile, scanNotebookEntries, scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
 import { githubFixture } from './fixtures/github.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 
 vi.setConfig({ testTimeout: 30000 });
 
@@ -100,7 +100,7 @@ describe('native outline kind', () => {
 
   it('uses the native GitLab catalog and one guarded commit for each outline save', async () => {
     const f = gitlabFixture();
-    const reader = () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
+    const reader = () => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
     const target = 'notes/ex/new.outline.md';
     await reader().commitNotes([{ path: target, content: body, metadata: { title: 'GitLab', tags: ['research'] }, createOnly: true }], f.head, 'Add outline');
     expect(f.writes).toBe(1);

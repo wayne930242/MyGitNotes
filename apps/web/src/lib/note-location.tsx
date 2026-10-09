@@ -7,7 +7,7 @@ export type ReadOnlyReason = 'unavailable' | 'core' | 'branch' | 'no-push';
 /** Where a note lives, as the note Info tab shows it. */
 export interface NoteLocation {
   notebook: string;
-  /** The platform repository, or the worktree path of a local home repository. */
+  /** The platform repository, or the worktree path of a local repository. */
   repository: string;
   branch: string;
   path: string;

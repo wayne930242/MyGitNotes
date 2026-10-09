@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { agentEditMessage, openRemoteHome } from '@mygitnotes/core';
+import { agentEditMessage, openRemoteRepository } from '@mygitnotes/core';
 import { callRemoteTool } from '../src/remote-tools.js';
 import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 
-const reader = (f: ReturnType<typeof gitlabFixture>) => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
+const reader = (f: ReturnType<typeof gitlabFixture>) => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
 
 it('reports the path and web page of every note it creates or updates', async () => {
   const f = gitlabFixture();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { githubFixture } from './fixtures/github.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { BOOKMARKS_DOCUMENT, BOOKMARKS_FILE } from '../src/bookmarks.js';
 import { readWorkspaceDocument, serializeWorkspaceDocument } from '../src/workspace-documents.js';
 const page = { version: 1, notebooks: [{ notebookId: 'ex', groups: [], bookmarks: [{ id: 'a', label: 'Alpha', groupId: null, target: { kind: 'note', path: 'a.md' } }] }] };
@@ -14,7 +14,7 @@ for (const provider of ['github', 'gitlab'] as const) {
         return { reader: f.reader, head: f.head, text: f.text, writes: () => f.calls.filter(call => call.method === 'POST' || call.method === 'PATCH').length };
       }
       const f = gitlabFixture(undefined, { [BOOKMARKS_FILE]: raw });
-      return { reader: () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader, head: () => f.head, text: (file: string) => f.files.get(file), writes: () => f.writes };
+      return { reader: () => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader, head: () => f.head, text: (file: string) => f.files.get(file), writes: () => f.writes };
     };
     it('preserves read compatibility and rejects document saves and normal Changes', async () => {
       const f = fixture(), head = f.head(), writes = f.writes();
@@ -37,7 +37,7 @@ for (const provider of ['github', 'gitlab'] as const) {
 it('GitLab read-only credentials cannot revive legacy authoring', async () => {
   const f = gitlabFixture();
   f.readOnly();
-  const reader = openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
+  const reader = openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
   await expect(reader.saveWorkspaceDocument(BOOKMARKS_DOCUMENT, yaml, f.head)).rejects.toMatchObject({ status: 410 });
   expect(f.writes).toBe(0);
 });

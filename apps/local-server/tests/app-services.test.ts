@@ -3,12 +3,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { Router } from 'express';
-import { repositoryRef, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { createApp } from '../src/app.js';
 import { createRecordStore, DirectoryRecordBackend, type RecordStore, SealedRecordStore } from '../src/record-store/index.js';
 import { storedSessions } from '../src/browser-sessions.js';
 import type { WorkspaceChoices } from '../src/repository-choice.js';
+import { workspaceSettings } from './workspace-settings.js';
 
 let server: Server | undefined;
 let dir: string;
@@ -51,8 +52,7 @@ it('keeps sessions in the injected record store', async () => {
   const store = new SealedRecordStore(new DirectoryRecordBackend(path.join(dir, 'injected')));
   const session = 's'.repeat(43);
   await store.set(session, { kind: 'session', realm: 'github:https://github.com:', login: 'octo', userId: 1, token: 'fixture' });
-  const home = repositoryRef({ type: 'github', repository: 'o/r', branch: 'main' });
-  const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home, localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() }) };
+  const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => workspaceSettings([{ type: 'github', repository: 'o/r', branch: 'main' }]) };
   const base = await listen(createApp(dir, { configSource, recordStore: store, remoteCache: undefined }));
   const probe = await fetch(`${base}/api/auth/session`, { headers: { cookie: `gh_notes_session=${session}` } }).then(response => response.json());
   expect(probe).toMatchObject({ authenticated: true, login: 'octo' });
@@ -67,8 +67,8 @@ it('offers no agent grants from a store that does not outlive the process', asyn
   expect((await fetch(`${base}/api/auth/agent-token`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })).status).toBe(404);
 });
 
-/** A hosted deployment whose home repository is never read: the requests below never get past routing. */
-const hostedHome: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home: repositoryRef({ type: 'github', repository: 'o/r', branch: 'main' }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() }) };
+/** A hosted deployment whose repository is never read: the requests below never get past routing. */
+const hostedHome: WorkspaceConfigSource = { mode: 'remote', settings: async () => workspaceSettings([{ type: 'github', repository: 'o/r', branch: 'main' }]) };
 
 it('mounts an injected agent on a hosted deployment, and answers 403 where an edition supplies none', async () => {
   const router = Router();
@@ -111,8 +111,7 @@ it("keeps visitors' repository choices in the injected service", async () => {
 it('reports sign-in configured on Vercel when an edition injects a store that keeps records', async () => {
   for (const [key, value] of Object.entries({ VERCEL: '1', REDIS_URL: '', UPSTASH_REDIS_REST_URL: '', KV_REST_API_URL: '', MYGITNOTES_STORAGE: '', GITHUB_CLIENT_ID: 'client', GITHUB_CLIENT_SECRET: 'secret' })) vi.stubEnv(key, value);
   const store = new SealedRecordStore(new DirectoryRecordBackend(path.join(dir, 'postgres-stand-in')));
-  const home = repositoryRef({ type: 'github', repository: 'o/r', branch: 'main' });
-  const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home, localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() }) };
+  const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => workspaceSettings([{ type: 'github', repository: 'o/r', branch: 'main' }]) };
   const base = await listen(createApp(dir, { configSource, recordStore: store, sessions: storedSessions(store), remoteCache: undefined }));
   expect(await fetch(`${base}/api/auth/session`).then(response => response.json())).toMatchObject({ storage: 'stored', configured: true });
 });

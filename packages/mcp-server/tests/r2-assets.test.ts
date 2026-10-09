@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer } from 'node:http';
-import { openRemoteHome, r2SettingsFromEnv, RemoteSource, scanNotebookNotes, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
+import { openRemoteRepository, r2SettingsFromEnv, RemoteSource, scanNotebookNotes, WORKSPACE_CONFIG_FILENAME } from '@mygitnotes/core';
 import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 import { runGit, stageAndCommit } from '@mygitnotes/git';
 import { handleAddAsset, handleDeleteAsset, handleListAssets, type ToolAssets } from '../src/tools/index.js';
@@ -167,7 +167,7 @@ describe('managing R2 assets over MCP', () => {
   it('blocks hosted deletion for an outline-only reference through the actual remote scanner', async () => {
     await handleAddAsset({ repoRoot: repo }, upload);
     const fixture = gitlabFixture(undefined, { 'notes/.github-notes.yaml': MANIFEST, 'notes/example/plain.md': '# No asset\n', 'notes/example/plan.outline.md': '- Inspect ![photo](<r2:example/images/photo.png>)\n' });
-    const reader = openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'test-token', fixture.request).reader;
+    const reader = openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'test-token', fixture.request).reader;
     expect((await reader.notes()).map(note => note.path)).toEqual(['notes/example/plain.md']);
     await expect(callRemoteTool(reader, 'delete_asset', { path: 'r2:example/images/photo.png' }, true)).rejects.toThrow(/still referenced by notes\/example\/plan\.outline\.md/);
     expect(bucket.objects.has('example/images/photo.png')).toBe(true);

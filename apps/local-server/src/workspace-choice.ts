@@ -1,4 +1,4 @@
-import { deploymentConfigSource, GITHUB_COM, githubSite, parseSourceConfig, repositoryRef, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { deploymentConfigSource, deriveAlias, GITHUB_COM, githubSite, parseSourceConfig, repositoryName, repositoryRef, SourceError, type WorkspaceConfigSource, type WorkspaceSite } from '@mygitnotes/core';
 import { type Request, type Response, Router } from 'express';
 import { authToken, type SessionServices } from './auth.js';
 import { choosesRepository, cookieWorkspaceChoices, deploymentGitHubUrl, type WorkspaceChoice, type WorkspaceChoices } from './repository-choice.js';
@@ -6,20 +6,22 @@ import { choosesRepository, cookieWorkspaceChoices, deploymentGitHubUrl, type Wo
 export { choosesRepository, cookieWorkspaceChoices, readWorkspaceChoice, type WorkspaceChoice, type WorkspaceChoices } from './repository-choice.js';
 
 /**
- * The deployment's configuration source; when it chooses no repository, each request serves the repository
- * in the visitor's choice cookie, and one without a choice asks them to pick (`choose-repository`).
+ * The deployment's configuration source; when it chooses no repository, each request's workspace has one member, the
+ * repository its visitor chose, and none before they choose. The workspace's site is the deployment's GitHub site.
  */
 export function chosenRepositorySource(base: string, env: NodeJS.ProcessEnv = process.env, choices: WorkspaceChoices = cookieWorkspaceChoices()): WorkspaceConfigSource {
   const deployment = deploymentConfigSource(base, env);
   if (!choosesRepository(env)) return deployment;
   // Visitors' repositories are on the deployment's GitHub site: github.com unless MYGITNOTES_GITHUB_URL names one.
   const url = deploymentGitHubUrl(env);
+  const site: WorkspaceSite = { type: 'github', ...(url ? { url } : {}) };
   return {
     mode: 'remote',
     async settings(request) {
       const choice = await choices.read(request);
-      if (!choice) throw new WorkspaceSetupError('Choose a GitHub repository to open.', 'choose-repository');
-      return { home: repositoryRef({ type: 'github', ...(url ? { url } : {}), ...choice }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() };
+      const ref = choice && repositoryRef({ type: 'github', ...(url ? { url } : {}), ...choice });
+      const members = ref ? [{ ref, alias: deriveAlias(repositoryName(ref.source), new Set()), default: true, hidden: false }] : [];
+      return { site, members, manifest: (_member, inRepository) => inRepository() };
     },
   };
 }

@@ -3,7 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { agentSkillLocation, agentWorkspaceFile, agentWorkspaces, listAgentWorkspaceFiles, type NotebookConfig, renameAgentSkillEntryContent, renamedAgentSkillPath, resolveAgentFile, rewriteAgentSkillReferences } from '@mygitnotes/core';
 import { changeFile, getCurrentBranch, listChanges } from '@mygitnotes/git';
-import { asLocal, eachRepository, repositoryOrHome } from './request-workspace.js';
+import { asLocal, eachRepository, repositoryOrDefault } from './request-workspace.js';
 
 /** A workspace file the page may open; anything else, including other tools' files, is refused. */
 function workspacePath(root: string, file: unknown, notebooks: NotebookConfig[]): string {
@@ -17,9 +17,9 @@ function fail(res: Response, error: unknown, status = 500) {
 
 export function createLocalAgentResourcesRouter(): Router {
   const router = Router();
-  /** The worktree a request names in `repository`, or the home worktree, with the notebooks it holds: each repository keeps its own agent workspaces. */
+  /** The worktree a request names in `repository`, or the default worktree, with the notebooks it holds: each repository keeps its own agent workspaces. */
   const worktree = async (res: Response, id: unknown) => {
-    const { handle, config } = await repositoryOrHome(res, id);
+    const { handle, config } = await repositoryOrDefault(res, id);
     return { root: asLocal(handle).root, notebooks: config.notebooks };
   };
 

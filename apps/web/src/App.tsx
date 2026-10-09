@@ -121,14 +121,13 @@ export const AppContent: React.FC = () => {
   const navigate = useNavigate();
   const editorRoute = useMemo(() => parseWorkspaceRoute(location.pathname, location.search), [location.pathname, location.search]);
 
-  const { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, actionError, setActionError, repoRoot, repositoryChoice, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
+  const { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, sourceId, remote, repositories, defaultRepository, defaultRepositoryBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, actionError, setActionError, repoRoot, repositoryChoice, coreUpdate, config, gitStatus, setGitStatus, assets, setAssets, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus: focusPage, documents, pendingDocuments, refreshWorkspace, stageWorkingNote } = useWorkspaceSync({ routeNotebook: editorRoute.notebook || undefined, onStageNote: note => setEditingNote(current => current && sameNote(current, note) && !sameValue(current, note) ? note : current) });
   const agentEnabled = useAgentEnabled(remote);
   const refreshDocuments = async () => {
     await Promise.all(documents.map(document => document.refresh()));
   };
   // The selected notebook's repository decides what the browse, create and file views may write.
   const canWrite = canWriteNotebook(selectedNotebookId);
-  // Workspace documents and the manifest live in the home repository.
   /** Where a note lives, for the note Info tab: the repository and branch of its notebook, and why it is read-only. */
   const locateNote = (note: NoteRef): NoteLocation | undefined => {
     const repository = repositoryFor(note.notebookId);
@@ -155,8 +154,8 @@ export const AppContent: React.FC = () => {
     : undefined;
   /** Why the selected notebook's repository cannot serve it; its notebook views show this instead. */
   const notebookUnavailable = repositoryFor(selectedNotebookId)?.unavailable;
-  /** The home manifest, which a repository without one can create from its derived layout. */
-  const manifestWritable = Boolean(homeRepository?.write);
+  /** Whether the default repository, when it keeps no manifest, can create one from its derived layout. */
+  const manifestWritable = Boolean(defaultRepository?.write);
   // A workspace-wide tag change commits to every repository that serves a notebook.
   const canManageTags = repositories.some(repository => repository.notebooks.length) && repositories.every(repository => repository.write || !repository.notebooks.length);
   const editorRegistry = useNoteEditorRegistry();
@@ -198,7 +197,7 @@ export const AppContent: React.FC = () => {
 
   const { openFromBrowse, openLink, zoomFocusNote, addToFocus } = useFocusNoteNavigation({ noteFocus, selectedNotebookId, setFocusNarrowView, handleOpenNote, setAddingToFocus });
 
-  const { handleSaveNote } = useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, homeDraftScope: homeRepository ? draftScope(homeRepository) : '' });
+  const { handleSaveNote } = useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, defaultDraftScope: defaultRepository ? draftScope(defaultRepository) : '' });
 
   const { handleRestoreNoteFile, handleUpdateNoteStatus, handleOpenFolderIndex } = useNoteRestoration({ remote, readDraft, updateDraft, setEditingNote, navigate, returnTo, invalidateNotes, setGitStatus, setActionError, handleSaveNote, readNoteForChange, selectedNotebookId, canWriteNotebook, t, config, queryClient, queryScope, stageWorkingNote, revisionFor, location });
 
@@ -399,7 +398,7 @@ export const AppContent: React.FC = () => {
           <NoteEditingProvider register={editorRegistry.register} editorProps={editorProps} flushEditors={editorRegistry.flushEditors} refreshNotes={refreshNotes} closeZoom={closeZoom} addToFocus={addToFocus} moveNote={noteMove.moveNote} renameNote={noteMove.renameNote}>
             <div className='app-shell h-dvh w-full overflow-hidden flex flex-col font-sans transition-colors duration-200' data-workspace-tab={activeTab} data-screen-focus={Boolean(route.study)} style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
               {/* Core Branch User Guidance Banner (Theme-aware, harmonized with active palette) */}
-              {!remote && homeBranch === 'core' && (
+              {!remote && defaultRepositoryBranch === 'core' && (
                 <div className='shrink-0 flex-none px-4 py-2 text-xs flex items-center justify-between font-medium border-b transition-colors' style={{ backgroundColor: 'var(--color-sidebar)', borderColor: 'var(--color-border)', color: 'var(--color-text)' }}>
                   <div className='flex items-center gap-2.5'>
                     <AlertTriangle className='w-4 h-4 text-warning shrink-0' />
@@ -414,7 +413,7 @@ export const AppContent: React.FC = () => {
                   <Button onClick={() => setLegacyImportOpen(true)}>{t('legacyOutline.recovery')}</Button>
                 </div>
               )}
-              {homeRepository?.manifest === 'derived' && homeRepository.config && <DerivedManifestNotice repository={homeRepository.id} config={homeRepository.config} configRevision={homeRepository.configRevision} canWrite={manifestWritable} onCreated={() => refreshWorkspace(true)} />}
+              {defaultRepository?.manifest === 'derived' && defaultRepository.config && <DerivedManifestNotice repository={defaultRepository.id} config={defaultRepository.config} configRevision={defaultRepository.configRevision} canWrite={manifestWritable} onCreated={() => refreshWorkspace(true)} />}
               {/* Top Header */}
               <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={currentRepository?.title || 'MyGitNotes'} notebookGroups={notebookGroups} accountControls={renderAccountControls ? renderAccountControls({ local: !remote }) : <AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
               <KeyboardShortcuts
@@ -559,7 +558,7 @@ export const AppContent: React.FC = () => {
                     )}
                     {activeTab === 'agent' && (
                       <main className='workspace-route agent-main'>
-                        <AgentSystemView ref={agentSystemRef} notebooks={config?.notebooks || []} folders={folders} repositories={repositories} homeRepository={sourceId} onBusyChange={setResourceNavigationBusy} remote={remote} onGitStatus={setGitStatus} />
+                        <AgentSystemView ref={agentSystemRef} notebooks={config?.notebooks || []} folders={folders} repositories={repositories} defaultRepository={sourceId} onBusyChange={setResourceNavigationBusy} remote={remote} onGitStatus={setGitStatus} />
                       </main>
                     )}
                     {!notebookUnavailable && activeTab === 'assets' && (
@@ -598,12 +597,12 @@ export const AppContent: React.FC = () => {
                     {activeTab === 'settings' && (
                       <main className='workspace-route settings-main has-sidebar-drawer'>
                         <SettingsModal
-                          manifest={{ repositories, homeRepository: sourceId, initialRepository: repositoryFor(selectedNotebookId)?.id ?? sourceId, onManifestRevision: setManifestRevision }}
+                          manifest={{ repositories, defaultRepository: sourceId, initialRepository: repositoryFor(selectedNotebookId)?.id ?? sourceId, onManifestRevision: setManifestRevision }}
                           local={!remote}
-                          coreUpdates={!repositoryChoice}
+                          coreUpdates={coreUpdate}
                           accountSettings={
                             <>
-                              {repositoryChoice && homeRepository?.repository && <RepositorySwitch repository={homeRepository.repository} branch={homeBranch} />}
+                              {repositoryChoice && defaultRepository?.repository && <RepositorySwitch repository={defaultRepository.repository} branch={defaultRepositoryBranch} />}
                               <AgentAccessSettings local={!remote} />
                             </>
                           }
@@ -771,7 +770,7 @@ export const AppContent: React.FC = () => {
   );
   // A local workspace starts its Pi agent in the background, so the agent tab opens onto a warm session.
   return (
-    <PiAgentProvider webTools={remote ? webAgentTools : undefined} enabled={agentEnabled} homeRepository={sourceId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} repositories={repositories}>
+    <PiAgentProvider webTools={remote ? webAgentTools : undefined} enabled={agentEnabled} defaultRepository={sourceId} notebooks={config?.notebooks ?? NO_NOTEBOOKS} repositories={repositories}>
       <OutlineActionsProvider value={outlineActions.value}>{content}</OutlineActionsProvider>
     </PiAgentProvider>
   );

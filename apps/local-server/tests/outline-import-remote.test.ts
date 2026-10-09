@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type Server } from 'node:http';
 import { BOOKMARKS_FILE, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+import { workspaceSettings } from './workspace-settings.js';
 import { githubFixture } from '../../../packages/core/tests/fixtures/github.js';
 import { gitlabFixture } from '../../../packages/core/tests/fixtures/gitlab.js';
 
@@ -22,8 +23,9 @@ for (const provider of ['github', 'gitlab'] as const) {
       const github = githubFixture({ [BOOKMARKS_FILE]: raw });
       const gitlab = gitlabFixture(undefined, { [BOOKMARKS_FILE]: raw });
       const fixture = provider === 'github' ? github : gitlab;
-      const home = repositoryRef(provider === 'github' ? { type: 'github', repository: 'owner/repo', branch: 'main' } : { type: 'gitlab', repository: 'group/subgroup/project', branch: 'main', url: 'https://gitlab.example.test/gitlab' });
-      const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home, localPath: () => undefined, manifest: inHome => inHome() }) };
+      const source = provider === 'github' ? { type: 'github' as const, repository: 'owner/repo', branch: 'main' } : { type: 'gitlab' as const, repository: 'group/subgroup/project', branch: 'main', url: 'https://gitlab.example.test/gitlab' };
+      const home = repositoryRef(source);
+      const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => workspaceSettings([source]) };
       let readOnly = false, failWrite = false;
       const network = globalThis.fetch;
       vi.stubGlobal(

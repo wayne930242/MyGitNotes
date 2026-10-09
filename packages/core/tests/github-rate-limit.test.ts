@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { gzipSync } from 'node:zlib';
 import tar from 'tar-stream';
 import type { GitHubSource } from '../src/github-source.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n';
 const blobSha = (value: string) => createHash('sha1').update(`blob ${Buffer.byteLength(value)}\0${value}`).digest('hex');
@@ -52,7 +52,7 @@ async function fixture(count = 100) {
   return {
     calls,
     request,
-    reader: (token?: string) => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, token, request).reader,
+    reader: (token?: string) => openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, token, request).reader,
     revoke: () => {
       permitted = false;
     },
@@ -97,9 +97,9 @@ describe('GitHub request budgets', () => {
   });
   it('shares a retry-after cooldown across readers and repositories without retrying writes', async () => {
     const request = vi.fn(async () => new Response('{"message":"secondary rate limit"}', { status: 429, headers: { 'retry-after': '120' } }));
-    const reader = () => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request).reader;
+    const reader = () => openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request).reader;
     await expect(reader().notes()).rejects.toMatchObject({ status: 429, retryAfter: 120 });
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/other', branch: 'main' }, 'token', request).reader.notes()).rejects.toMatchObject({ status: 429 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/other', branch: 'main' }, 'token', request).reader.notes()).rejects.toMatchObject({ status: 429 });
     expect(request).toHaveBeenCalledTimes(1);
   });
   it('creates one text tree for 100 notes and still rejects a stale cached revision before writes', async () => {
@@ -145,9 +145,9 @@ describe('GitHub request budgets', () => {
   it('falls back to individual blob reads when a GraphQL batch fails and stops on GraphQL rate limits', async () => {
     const f = await fixture(10);
     const failing = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql') ? new Response('{}', { status: 502 }) : f.request(input, init)) as typeof fetch;
-    expect(await openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'fallback', failing).reader.notes()).toHaveLength(10);
+    expect(await openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'fallback', failing).reader.notes()).toHaveLength(10);
     const limited = vi.fn(async (input: any, init?: RequestInit) => String(input).endsWith('/graphql') ? new Response(JSON.stringify({ data: null, errors: [{ type: 'RATE_LIMITED' }] })) : f.request(input, init)) as typeof fetch;
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'limited', limited).reader.notes()).rejects.toMatchObject({ status: 429 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'limited', limited).reader.notes()).rejects.toMatchObject({ status: 429 });
   });
   it('lists .mdx notes like the local source', async () => {
     const f = await fixture(1);
@@ -164,13 +164,13 @@ describe('GitHub request budgets', () => {
       return f.request(input, init);
     }) as typeof fetch;
     const files: string[] = [];
-    const notes = await openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'mdx', request).reader.notes();
+    const notes = await openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'mdx', request).reader.notes();
     expect(notes.map(note => note.path).sort()).toEqual(['notes/ex/n0.md', 'notes/ex/post.mdx']);
   });
   it('does not follow a foreign archive redirect or continue with individual requests', async () => {
     const f = await fixture();
     const request = vi.fn(async (input: any, init?: RequestInit) => String(input).includes('/tarball/') ? new Response(null, { status: 302, headers: { location: 'https://example.com/steal' } }) : f.request(input, init));
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request).reader.notes()).rejects.toMatchObject({ status: 502 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request).reader.notes()).rejects.toMatchObject({ status: 502 });
     expect(request.mock.calls.some(([url]) => String(url).startsWith('https://example.com/'))).toBe(false);
   });
   it('uses the primary reset deadline, resumes afterwards, and keeps other credentials independent', async () => {
@@ -178,19 +178,19 @@ describe('GitHub request budgets', () => {
     vi.spyOn(Date, 'now').mockImplementation(() => now);
     const reset = Math.ceil(now / 1000) + 300;
     const request = vi.fn(async () => new Response('{}', { status: 403, headers: { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(reset) } }));
-    const first = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', request).reader;
+    const first = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', request).reader;
     await expect(first.notes()).rejects.toMatchObject({ status: 429 });
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/other', branch: 'main' }, 'one', request).reader.notes()).rejects.toMatchObject({ status: 429 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/other', branch: 'main' }, 'one', request).reader.notes()).rejects.toMatchObject({ status: 429 });
     expect(request).toHaveBeenCalledTimes(1);
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'two', request).reader.notes()).rejects.toMatchObject({ status: 429 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'two', request).reader.notes()).rejects.toMatchObject({ status: 429 });
     expect(request).toHaveBeenCalledTimes(2);
     now = (reset + 1) * 1000;
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', request).reader.notes()).rejects.toMatchObject({ status: 429 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', request).reader.notes()).rejects.toMatchObject({ status: 429 });
     expect(request).toHaveBeenCalledTimes(3);
   });
   it('keeps ordinary permission errors separate from quota errors and rechecks revoked cached access immediately', async () => {
     const denied = vi.fn(async () => new Response('{"message":"Resource not accessible"}', { status: 403 }));
-    const source = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', denied).reader as GitHubSource;
+    const source = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'one', denied).reader as GitHubSource;
     await expect(source.api('')).rejects.toMatchObject({ status: 403, retryAfter: undefined });
     await expect(source.api('')).rejects.toMatchObject({ status: 403 });
     expect(denied).toHaveBeenCalledTimes(2);

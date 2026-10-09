@@ -3,14 +3,14 @@ import type { RepositoryId } from '@mygitnotes/core/repository';
 
 /**
  * The key a bare local id stands for, answered from the loaded workspace's notebooks (each key with its repository) as
- * the server answers it: the one repository that has a notebook with that local id, else the home repository's
+ * the server answers it: the one repository that has a notebook with that local id, else the default repository's
  * notebook with it, else null.
  */
-export function resolveBareId(notebooks: Readonly<Record<NotebookKey, RepositoryId>>, home: RepositoryId, localId: string): NotebookKey | null {
+export function resolveBareId(notebooks: Readonly<Record<NotebookKey, RepositoryId>>, defaultRepository: RepositoryId, localId: string): NotebookKey | null {
   if (!isBareNotebookId(localId)) return null;
   const matches = Object.keys(notebooks).filter(key => parseNotebookKey(key)?.localId === localId);
   if (matches.length === 1) return matches[0];
-  return matches.find(key => notebooks[key] === home) ?? null;
+  return matches.find(key => notebooks[key] === defaultRepository) ?? null;
 }
 
 /** Turns notebook ids of one repository's stored content (local ids) into keys and back. */

@@ -23,7 +23,7 @@ function stubServer(failFor?: string) {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-      if (url === '/api/workspace?fresh=1') return new Response(JSON.stringify({ config: null, configRevision: home.revision, local: false, home: home.id, repositories }));
+      if (url === '/api/workspace?fresh=1') return new Response(JSON.stringify({ keyedConfig: null, local: false, defaultRepository: home.id, repositories, coreUpdate: false }));
       if (url === '/api/notes/read-batch') return new Response(JSON.stringify({ notes: body.paths.map((path: string) => ({ ...base, path })) }));
       if (url === '/api/notes/commit') {
         commits.push(body);

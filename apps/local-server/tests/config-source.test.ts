@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { repositoryRef, type WorkspaceConfigSource, type WorkspaceRequest } from '@mygitnotes/core';
+import { type WorkspaceConfigSource, type WorkspaceRequest } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+import { workspaceSettings } from './workspace-settings.js';
 
 /** A local worktree holding one manifest and one note, committed on main. */
 function worktree(title: string): string {
@@ -30,7 +31,7 @@ function tenantConfigSource(roots: Record<string, string>): WorkspaceConfigSourc
       const tenant = request.headers['x-tenant'];
       const root = typeof tenant === 'string' ? roots[tenant] : undefined;
       if (!root) throw new Error('Unknown tenant.');
-      return { home: repositoryRef({ type: 'local', path: root }), localPath: () => undefined, manifest: inHomeRepository => inHomeRepository() };
+      return workspaceSettings([{ type: 'local', path: root }]);
     },
   };
 }
@@ -58,8 +59,8 @@ describe('a replaceable configuration source', () => {
     base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
     const workspace = (tenant: string) => fetch(`${base}/api/workspace`, { headers: { 'x-tenant': tenant } }).then(response => response.json());
     const note = (tenant: string) => fetch(`${base}/api/notes/read?path=notes/ex/note.md`, { headers: { 'x-tenant': tenant } }).then(response => response.json());
-    expect((await workspace('alpha')).config.workspace.title).toBe('Alpha');
-    expect((await workspace('beta')).config.workspace.title).toBe('Beta');
+    expect((await workspace('alpha')).keyedConfig.workspace.title).toBe('Alpha');
+    expect((await workspace('beta')).keyedConfig.workspace.title).toBe('Beta');
     expect((await note('alpha')).note.content).toContain('Alpha note');
     expect((await note('beta')).note.content).toContain('Beta note');
     const { repositories: [betaHome] } = await workspace('beta');

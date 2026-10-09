@@ -77,7 +77,7 @@ function mount(features: WebFeature[] = [], webTools?: WebToolHandler, opened = 
   const seen: { current?: PiAgentValue; } = {};
   render(
     <WebFeaturesProvider features={features}>
-      <PiAgentProvider enabled homeRepository={home} notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'], title: 'Knowledge Base' }]} webTools={webTools}>
+      <PiAgentProvider enabled defaultRepository={home} notebooks={notebooks} repositories={[{ id: home, notebooks: ['nb'], title: 'Knowledge Base' }]} webTools={webTools}>
         <Probe
           opened={opened}
           onValue={value => {

@@ -6,7 +6,7 @@ import { planFolderChange } from '../src/folder-plan.js';
 import { callNoteShell } from '../src/note-shell.js';
 import { githubFixture } from './fixtures/github.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 const notebooks = [{ id: 'ex', title: 'Example', root: 'notes/ex' }];
 const page = { version: 1, notebooks: [{ notebookId: 'ex', groups: [], bookmarks: [{ id: 'a', label: 'A', groupId: null, target: { kind: 'note', path: 'work/b.md' } }, { id: 'folder', label: 'Work', groupId: null, target: { kind: 'folder', path: 'work' } }] }] };
 const files = () => new Map([[BOOKMARKS_FILE, stringify(page)], ['notes/ex/work/b.md', '# Beta']]);
@@ -30,7 +30,7 @@ it('rejects corrupt metadata before moving and protects the document through ali
 it('GitLab MCP move commits bookmarks with notes and deletion retains the moved references', async () => {
   const initial = JSON.parse(JSON.stringify(page).replaceAll('work', 'folder'));
   const f = gitlabFixture(undefined, { [BOOKMARKS_FILE]: stringify(initial) });
-  const reader = () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
+  const reader = () => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', f.request).reader;
   await callNoteShell(reader(), 'mv', { source: 'notes/ex/folder', destination: 'notes/ex/moved', recursive: true, revision: f.head }, true);
   const moved = f.files.get(BOOKMARKS_FILE)!;
   expect(parse(moved).notebooks[0].bookmarks.map((b: { target: { path: string; }; }) => b.target.path)).toEqual(['moved/b.md', 'moved']);

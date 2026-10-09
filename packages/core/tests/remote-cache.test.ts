@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { gitBlobId, MemoryRemoteCache, type RemoteCache } from '../src/remote-cache.js';
 import { blobBatches, type GitHubEntry, listingMatchesTree } from '../src/github-source.js';
 
@@ -63,7 +63,7 @@ function github(options: { corrupt?: boolean; } = {}) {
   });
 }
 
-const reader = (request: ReturnType<typeof github>, cache?: RemoteCache) => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as unknown as typeof fetch, cache).reader;
+const reader = (request: ReturnType<typeof github>, cache?: RemoteCache) => openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as unknown as typeof fetch, cache).reader;
 const blobRequests = (request: ReturnType<typeof github>) => request.mock.calls.filter(([url]) => String(url).includes('/git/blobs/') || String(url) === 'https://api.github.com/graphql').length;
 
 describe('shared remote cache', () => {

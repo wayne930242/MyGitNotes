@@ -37,7 +37,7 @@ function SwitchWorkspace({ onDone }: { onDone: () => void; }) {
   const agent = usePiAgent();
   const { loadWorkspaces } = agent;
   const [busy, setBusy] = useState(false);
-  const [pick, setPick] = useState<PiLocation>(agent.session?.location ?? { repository: agent.homeRepository, folder: '' });
+  const [pick, setPick] = useState<PiLocation>(agent.session?.location ?? { repository: agent.defaultRepository, folder: '' });
   // The list is read when the dialog opens, so a workspace added on the Agents page shows up.
   useEffect(() => {
     void loadWorkspaces();

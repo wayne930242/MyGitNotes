@@ -4,8 +4,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
-import { BOOKMARKS_FILE, deriveAlias, notebookKey, repositoryRef, serializeWorkspaceDocument, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { BOOKMARKS_FILE, deriveAlias, notebookKey, serializeWorkspaceDocument, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+import { workspaceSettings } from './workspace-settings.js';
 
 /** A worktree on main with the given files committed. */
 function worktree(files: Record<string, string>): string {
@@ -23,7 +24,7 @@ function worktree(files: Record<string, string>): string {
   return root;
 }
 
-const manifest = `schema_version: 3
+const manifest = `schema_version: 4
 workspace:
   title: Two repositories
   default_notebook: life
@@ -31,18 +32,11 @@ notebooks:
   - id: life
     title: Life
     root: notes/life
-  - id: trpg
-    title: TRPG
-    root: notes/life
-    source: { type: github, repository: owner/trpg }
-  - id: lost
-    title: Lost
-    root: notes/lost
-    source: { type: github, repository: owner/lost }
 `;
+const trpgManifest = (title: string, defaultNotebook = 'trpg', extra = '') => `schema_version: 4\nworkspace:\n  title: ${title}\n  default_notebook: ${defaultNotebook}\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n${extra}`;
 
 let roots: string[] = [];
-/** The home worktree's alias, its directory's name; the notebook repositories are named `trpg` and `lost` after their repositories. */
+/** The default worktree's alias, its directory's name; the other members are named `trpg` and `lost` after their repositories. */
 let homeAlias = '';
 const nb = (id: string) => notebookKey(homeAlias, id);
 let server: Server;
@@ -58,32 +52,37 @@ afterEach(async () => {
   vi.unstubAllEnvs();
 });
 
-async function serve() {
+/**
+ * Three members: the default worktree, `owner/trpg` mapped to a worktree with its own manifest (none with `bare`),
+ * and `owner/lost` mapped to a directory that is not a Git worktree.
+ */
+async function serve({ bare = false } = {}) {
   const home = worktree({ '.mygitnotes.yaml': manifest, 'notes/life/note.md': '# Home note\n' });
-  const trpg = worktree({ 'notes/life/note.md': '# TRPG note\n' });
-  roots = [home, trpg];
-  homeAlias = deriveAlias(home, new Set());
-  const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/trpg@main' ? trpg : undefined, manifest: inHomeRepository => inHomeRepository() }) };
+  const trpg = worktree({ ...(bare ? {} : { '.mygitnotes.yaml': trpgManifest('Campaign') }), 'notes/life/note.md': '# TRPG note\n' });
+  const lost = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-notebook-repos-lost-'));
+  roots = [home, trpg, lost];
+  homeAlias = deriveAlias(path.basename(home), new Set());
+  const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => workspaceSettings([{ type: 'local', path: home }, [{ type: 'github', repository: 'owner/trpg', branch: 'main' }, { worktree: trpg }], [{ type: 'github', repository: 'owner/lost', branch: 'main' }, { worktree: lost }]]) };
   server = createServer(createApp(home, { configSource }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
-  return { home, trpg };
+  return { home, trpg, lost };
 }
 const get = (url: string) => fetch(`${base}${url}`).then(async response => ({ status: response.status, body: await response.json() }));
 
 describe('notebooks in their own local repositories', () => {
-  it('lists each repository, reports an unmapped one and keeps same-path notes apart', async () => {
-    await serve();
+  it('lists each repository with the notebooks of its own manifest, reports an unmapped one and keeps same-path notes apart', async () => {
+    const { lost } = await serve();
     const workspace = (await get('/api/workspace')).body;
-    expect(workspace.repositories.map((repository: { id: string; notebooks: string[]; }) => [repository.notebooks, repository.id.startsWith('local:') ? 'home' : repository.id])).toEqual([[[nb('life')], 'home'], [['trpg~trpg'], 'github:owner/trpg@main'], [['lost~lost'], 'github:owner/lost@main']]);
+    expect(workspace.repositories.map((repository: { id: string; notebooks: string[]; }) => [repository.notebooks, repository.id.startsWith('local:') ? 'home' : repository.id])).toEqual([[[nb('life')], 'home'], [['trpg~trpg'], 'github:owner/trpg@main'], [[], 'github:owner/lost@main']]);
     expect(workspace.repositories[1]).toMatchObject({ repository: 'owner/trpg', branch: 'main', write: true });
     expect(workspace.repositories[2]).toMatchObject({ write: false, unavailable: { reason: 'unmapped' } });
     expect((await get(`/api/notes/read?path=notes/life/note.md&notebookId=${nb('life')}`)).body.note.content).toContain('Home note');
     expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
     expect((await get('/api/notes/read?path=notes/life/note.md')).status).toBe(400);
-    const lost = await get('/api/notes/read?path=notes/lost/note.md&notebookId=lost~lost');
-    expect(lost.status).toBe(503);
-    expect(lost.body.error).toMatch(/^Lost: No worktree is mapped/);
+    const unreachable = await get('/api/notes/read?path=notes/lost/note.md&notebookId=lost~lost');
+    expect(unreachable.status).toBe(503);
+    expect(unreachable.body.error).toBe(`${lost} is not a Git worktree.`);
     const all = (await get('/api/notes/query?notebookId=all&limit=10')).body;
     expect(all.notes.map((note: { notebookId: string; path: string; }) => `${note.notebookId}:${note.path}`).sort()).toEqual([`${nb('life')}:notes/life/note.md`, 'trpg~trpg:notes/life/note.md']);
   });
@@ -101,7 +100,6 @@ describe('notebooks in their own local repositories', () => {
 
 describe("each repository's own manifest", () => {
   const trpgId = 'github:owner/trpg@main';
-  const trpgManifest = (title: string, defaultNotebook = 'trpg', extra = '') => `schema_version: 3\nworkspace:\n  title: ${title}\n  default_notebook: ${defaultNotebook}\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n${extra}`;
   const put = (repository: string, configYaml: string, configRevision: string) => fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository, configYaml, configRevision }) }).then(async response => ({ status: response.status, body: await response.json() }));
   const repository = async (id: string) => (await get('/api/workspace')).body.repositories.find((candidate: { id: string; }) => candidate.id === id);
   const log = (root: string) => execFileSync('git', ['log', '--format=%s'], { cwd: root, encoding: 'utf8' }).trim().split('\n');
@@ -111,20 +109,21 @@ describe("each repository's own manifest", () => {
     const [home, trpg, lost] = (await get('/api/workspace')).body.repositories;
     expect(home).toMatchObject({ title: 'Two repositories', defaultNotebook: nb('life'), preferences: { defaultShowLineNumbers: false }, config: { workspace: { title: 'Two repositories' } } });
     expect(home.configRevision).toMatch(/^sha256:/);
-    // A repository without a manifest is named after itself and would create one with the notebooks it serves.
-    expect(trpg).toMatchObject({ title: 'trpg', defaultNotebook: 'trpg~trpg', manifest: 'derived', configRevision: 'none', config: { workspace: { title: 'trpg', default_notebook: 'trpg' }, notebooks: [{ id: 'trpg', root: 'notes/life' }] } });
-    expect(trpg.config.notebooks[0]).not.toHaveProperty('source');
-    expect(lost).toMatchObject({ title: 'lost', defaultNotebook: 'lost~lost', config: null, configRevision: '', unavailable: { reason: 'unmapped' } });
+    expect(trpg).toMatchObject({ title: 'Campaign', defaultNotebook: 'trpg~trpg', config: { workspace: { title: 'Campaign', default_notebook: 'trpg' } } });
+    expect(lost).toMatchObject({ title: 'lost', defaultNotebook: null, config: null, configRevision: '', unavailable: { reason: 'unmapped' } });
   });
 
-  it('commits a manifest to the repository it names, and refuses a revision that repository no longer has', async () => {
-    const { home, trpg } = await serve();
+  it('serves no notebook from a worktree without a manifest until one is committed to it, and refuses a revision that repository no longer has', async () => {
+    const { home, trpg } = await serve({ bare: true });
+    expect(await repository(trpgId)).toMatchObject({ title: 'trpg', defaultNotebook: null, notebooks: [], config: null, configRevision: 'none' });
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).status).toBe(404);
     const created = await put(trpgId, trpgManifest('Campaign', 'trpg', 'preferences:\n  defaultShowLineNumbers: true\n'), 'none');
     expect(created.status).toBe(200);
     expect(fs.readFileSync(path.join(trpg, '.mygitnotes.yaml'), 'utf8')).toContain('title: Campaign');
     expect(log(trpg)[0]).toBe('chore(workspace): update configuration');
     expect(log(home)).toEqual(['fixture']);
-    expect(await repository(trpgId)).toMatchObject({ title: 'Campaign', configRevision: created.body.configRevision, preferences: { defaultShowLineNumbers: true } });
+    expect(await repository(trpgId)).toMatchObject({ title: 'Campaign', notebooks: ['trpg~trpg'], configRevision: created.body.configRevision, preferences: { defaultShowLineNumbers: true } });
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
     expect((await get('/api/workspace')).body.repositories[0]).toMatchObject({ title: 'Two repositories', preferences: { defaultShowLineNumbers: false } });
 
     // A save from before the file existed, or from an older text, is refused and leaves the file as it is.
@@ -138,45 +137,49 @@ describe("each repository's own manifest", () => {
   it('checks each repository against its own revision only', async () => {
     const { home, trpg } = await serve();
     const before = await repository(trpgId);
-    const homeRevision = (await get('/api/workspace')).body.repositories[0].configRevision;
-    // The home manifest changes elsewhere: its save is refused, the other repository's is not.
+    const [{ id: homeId, configRevision: homeRevision }] = (await get('/api/workspace')).body.repositories;
+    // The default repository's manifest changes elsewhere: its save is refused, the other repository's is not.
     fs.writeFileSync(path.join(home, '.mygitnotes.yaml'), manifest.replace('title: Two repositories', 'title: Edited elsewhere'));
-    expect((await put((await get('/api/workspace')).body.home, manifest, homeRevision)).status).toBe(409);
+    expect((await put(homeId, manifest, homeRevision)).status).toBe(409);
     expect(fs.readFileSync(path.join(home, '.mygitnotes.yaml'), 'utf8')).toContain('Edited elsewhere');
-    expect((await put(trpgId, trpgManifest('Campaign'), before.configRevision)).status).toBe(200);
-    expect(fs.readFileSync(path.join(trpg, '.mygitnotes.yaml'), 'utf8')).toContain('title: Campaign');
+    expect((await put(trpgId, trpgManifest('Renamed'), before.configRevision)).status).toBe(200);
+    expect(fs.readFileSync(path.join(trpg, '.mygitnotes.yaml'), 'utf8')).toContain('title: Renamed');
   });
 
-  it("opens at the repository's first notebook when its default names one it does not serve", async () => {
+  it('makes a repository whose manifest still uses source unavailable, naming the conversion', async () => {
     const { trpg } = await serve();
-    fs.writeFileSync(path.join(trpg, '.mygitnotes.yaml'), 'schema_version: 3\nworkspace:\n  title: Campaign\n  default_notebook: elsewhere\nnotebooks:\n  - id: elsewhere\n    title: Elsewhere\n    root: other\n');
-    expect(await repository(trpgId)).toMatchObject({ title: 'Campaign', defaultNotebook: 'trpg~trpg', unservedDefault: 'elsewhere' });
-    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
+    fs.writeFileSync(path.join(trpg, '.mygitnotes.yaml'), 'schema_version: 3\nworkspace:\n  title: Campaign\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n    source: { type: github, repository: owner/other }\n');
+    const converted = await repository(trpgId);
+    expect(converted).toMatchObject({ notebooks: [], unavailable: { reason: 'invalid-manifest', message: expect.stringContaining('pnpm convert-sources') } });
+    expect((await get('/api/workspace')).body.repositories[0]).not.toHaveProperty('unavailable');
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).status).toBe(503);
   });
 
-  it('keeps a repository whose manifest does not parse open, reporting the text so it can be fixed', async () => {
+  it('makes a repository whose manifest does not parse unavailable, reporting the text so it can be fixed', async () => {
     const { trpg } = await serve();
-    fs.writeFileSync(path.join(trpg, '.mygitnotes.yaml'), 'schema_version: 3\nworkspace: [broken\n');
+    fs.writeFileSync(path.join(trpg, '.mygitnotes.yaml'), 'schema_version: 4\nworkspace: [broken\n');
     const broken = await repository(trpgId);
-    expect(broken).toMatchObject({ title: 'trpg', config: null, manifestError: { text: 'schema_version: 3\nworkspace: [broken\n' } });
-    expect(broken).not.toHaveProperty('unavailable');
-    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
+    expect(broken).toMatchObject({ title: 'trpg', notebooks: [], config: null, manifestError: { text: 'schema_version: 4\nworkspace: [broken\n' }, unavailable: { reason: 'invalid-manifest' } });
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).status).toBe(503);
     expect((await put(trpgId, trpgManifest('Fixed'), broken.configRevision)).status).toBe(200);
-    expect(await repository(trpgId)).toMatchObject({ title: 'Fixed' });
-    expect(await repository(trpgId)).not.toHaveProperty('manifestError');
+    const fixed = await repository(trpgId);
+    expect(fixed).toMatchObject({ title: 'Fixed', notebooks: ['trpg~trpg'] });
+    expect(fixed).not.toHaveProperty('manifestError');
+    expect(fixed).not.toHaveProperty('unavailable');
+    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
   });
 
   it('keeps the workspace answering when a repository manifest cannot be read, reporting it on that repository only', async () => {
     const { trpg } = await serve();
+    fs.rmSync(path.join(trpg, '.mygitnotes.yaml'));
     fs.mkdirSync(path.join(trpg, '.mygitnotes.yaml'));
     const answer = await get('/api/workspace');
     expect(answer.status).toBe(200);
     const [home, unread] = answer.body.repositories;
-    expect(home).toMatchObject({ title: 'Two repositories' });
+    expect(home).toMatchObject({ title: 'Two repositories', notebooks: [nb('life')] });
     expect(home).not.toHaveProperty('manifestError');
-    expect(unread).toMatchObject({ id: trpgId, title: 'trpg', config: null, manifestError: { text: '', message: expect.stringMatching(/EISDIR/) } });
-    expect(unread).not.toHaveProperty('unavailable');
-    expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
+    expect(unread).toMatchObject({ id: trpgId, title: 'trpg', config: null, manifestError: { text: '', message: expect.stringMatching(/EISDIR/) }, unavailable: { reason: 'invalid-manifest' } });
+    expect((await get(`/api/notes/read?path=notes/life/note.md&notebookId=${nb('life')}`)).body.note.content).toContain('Home note');
   });
 
   it('refuses a save that names no repository or one it cannot reach', async () => {
@@ -188,7 +191,7 @@ describe("each repository's own manifest", () => {
 });
 
 describe('workspace documents in notebook repositories', () => {
-  it('reads and writes Focus in the repository a request names, the home repository by default', async () => {
+  it('reads and writes Focus in the repository a request names, the default repository by default', async () => {
     const { home, trpg } = await serve();
     const trpgId = 'github:owner/trpg@main';
     const empty = (await get(`/api/focus-page?repository=${encodeURIComponent(trpgId)}`)).body;

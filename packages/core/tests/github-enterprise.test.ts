@@ -3,10 +3,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { validateWorkspaceConfig } from '../src/config.js';
+import { siteIdentity, siteOf } from '../src/workspace-config-source.js';
 import { GitHubApi } from '../src/github-api.js';
 import { githubSite, normalizeGitHubUrl } from '../src/github-site.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { loadRepositoryMappings, loadSourceConfig, mapsRepository, parseSourceConfig, type RemoteSourceConfig, sourceIdentity } from '../src/source-config.js';
 import { sharesCredential } from '../src/repository.js';
 
@@ -31,11 +31,11 @@ describe('naming a GitHub site', () => {
     for (const bad of ['http://ghe.example.com', 'ghe.example.com', 'https://user:pw@ghe.example.com', 'https://ghe.example.com?x=1', 'https://ghe.example.com#x', 'https://ghe.example.com/%2e%2e', '']) expect(() => normalizeGitHubUrl(bad)).toThrow(/GitHub/);
     expect(() => parseSourceConfig({ source: { type: 'github', url: 'http://ghe.example.com', repository: 'a/b', branch: 'main' } }, '.')).toThrow(/GitHub URL/);
   });
-  it('reads source.url in the server YAML and on a notebook', () => {
-    expect(parseSourceConfig({ source: { type: 'github', url: 'https://ghe.example.com', repository: 'team/notes', branch: 'main' } }, '.')).toMatchObject({ url: 'https://ghe.example.com' });
-    const manifest = validateWorkspaceConfig({ schema_version: 2, workspace: { title: 'T', default_notebook: 'a' }, notebooks: [{ id: 'a', title: 'A', root: 'a', source: { type: 'github', url: 'https://ghe.example.com', repository: 'team/design' } }, { id: 'b', title: 'B', root: 'b', source: { type: 'github', url: 'https://github.com/', repository: 'team/open' } }] });
-    expect(manifest.notebooks[0].source).toEqual({ type: 'github', url: 'https://ghe.example.com', repository: 'team/design', branch: 'main' });
-    expect(manifest.notebooks[1].source).toStrictEqual({ type: 'github', repository: 'team/open', branch: 'main' });
+  it('reads source.url in the server YAML and names the workspace site by it', () => {
+    const source = parseSourceConfig({ source: { type: 'github', url: 'https://ghe.example.com', repository: 'team/notes', branch: 'main' } }, '.');
+    expect(source).toMatchObject({ url: 'https://ghe.example.com' });
+    expect(siteIdentity(siteOf(source))).toBe('github:https://ghe.example.com');
+    expect(siteIdentity(siteOf(parseSourceConfig({ source: { type: 'github', url: 'https://github.com/', repository: 'team/open', branch: 'main' } }, '.')))).toBe('github');
   });
   it('maps worktrees by site', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ghe-map-'));
@@ -143,22 +143,22 @@ function siteFixture(api: string, graphql: string, files: Record<string, string>
 describe('reading a repository on an Enterprise site', () => {
   it.each([['a GHES site', 'https://ghe.example.com', 'https://ghe.example.com/api/v3', 'https://ghe.example.com/api/graphql'], ['a GHES site under a path', 'https://example.com/github', 'https://example.com/github/api/v3', 'https://example.com/github/api/graphql'], ['a data-residency site', 'https://octocorp.ghe.com', 'https://api.octocorp.ghe.com', 'https://api.octocorp.ghe.com/graphql']])('sends every request to %s only', async (_name, url, api, graphql) => {
     const site = siteFixture(api, graphql);
-    const notes = await openRemoteHome(github(url), 'token', site.request).reader.notes();
+    const notes = await openRemoteRepository(github(url), 'token', site.request).reader.notes();
     expect(notes.map(note => note.path)).toEqual(['notes/ex/hello.md']);
     expect(site.calls.length).toBeGreaterThan(0);
     expect(site.calls.every(call => call.url.startsWith(api) || call.url === graphql)).toBe(true);
     expect(site.calls.every(call => new Headers(call.init.headers).get('Authorization') === 'Bearer token')).toBe(true);
   });
   it('reports the site in the repository identity', () => {
-    const { reader } = openRemoteHome(github('https://ghe.example.com'), 'token', siteFixture('https://ghe.example.com/api/v3', 'https://ghe.example.com/api/graphql').request);
+    const { reader } = openRemoteRepository(github('https://ghe.example.com'), 'token', siteFixture('https://ghe.example.com/api/v3', 'https://ghe.example.com/api/graphql').request);
     expect(reader.id).toBe('github:https://ghe.example.com/owner/repo@main');
-    expect(openRemoteHome(github(), 'token', siteFixture('https://api.github.com', 'https://api.github.com/graphql').request).reader.id).toBe('github:owner/repo@main');
+    expect(openRemoteRepository(github(), 'token', siteFixture('https://api.github.com', 'https://api.github.com/graphql').request).reader.id).toBe('github:owner/repo@main');
   });
   it('batches blob reads through the site GraphQL endpoint', async () => {
     const files: Record<string, string> = { 'notes/.github-notes.yaml': manifest };
     for (let i = 0; i < 20; i++) files[`notes/ex/n${i}.md`] = `# Note ${i}\n`;
     const site = siteFixture('https://ghe.example.com/api/v3', 'https://ghe.example.com/api/graphql', files);
-    expect(await openRemoteHome(github('https://ghe.example.com'), 'token', site.request).reader.notes()).toHaveLength(20);
+    expect(await openRemoteRepository(github('https://ghe.example.com'), 'token', site.request).reader.notes()).toHaveLength(20);
     expect(site.calls.some(call => call.url === 'https://ghe.example.com/api/graphql')).toBe(true);
   });
   it('keeps the same repository name on two sites apart in the process caches and request lanes', async () => {
@@ -194,7 +194,7 @@ describe('the shared cache', () => {
       const cache = { get: async (names: string[]) => names.map(() => null), set: async (entries: [string, string][]) => void stored.push(...entries.map(([key]) => key)) };
       const api = url ? 'https://ghe.example.com/api/v3' : 'https://api.github.com';
       const site = siteFixture(api, url ? 'https://ghe.example.com/api/graphql' : 'https://api.github.com/graphql');
-      await openRemoteHome(github(url), 'token', site.request, cache).reader.notes();
+      await openRemoteRepository(github(url), 'token', site.request, cache).reader.notes();
       return stored;
     };
     const enterprise = await keys('https://ghe.example.com'), com = await keys();

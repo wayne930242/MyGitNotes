@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ConfigValidationError, LEGACY_WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, parseWorkspaceConfig, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
+import { ConfigValidationError, LEGACY_WORKSPACE_CONFIG_FILENAME, loadWorkspaceConfig, NotebookSourceError, parseWorkspaceConfig, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from '../src/config.js';
 
 describe('Workspace Config Parser', () => {
   it('parses a valid multi-notebook configuration', () => {
@@ -202,34 +202,31 @@ notebooks:
   });
 });
 
-describe('Notebook source', () => {
+describe('Notebook source, removed in schema 4', () => {
   const manifest = (version: number, notebooks: string) => `schema_version: ${version}\nworkspace:\n  title: T\n  default_notebook: a\nnotebooks:\n${notebooks}`;
   const home = '  - id: a\n    title: A\n    root: notes\n';
 
-  it('parses a notebook repository and defaults its branch to main', () => {
-    const config = parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: notes\n    source:\n      type: github\n      repository: owner/trpg\n`));
-    expect(config.notebooks[1].source).toEqual({ type: 'github', repository: 'owner/trpg', branch: 'main' });
-    expect(config.notebooks[0].source).toBeUndefined();
+  it('refuses a notebook that still names its repository by source, naming the notebook and the conversion command', () => {
+    for (const version of [2, 3, 4]) {
+      const parse = () => parseWorkspaceConfig(manifest(version, `${home}  - id: b\n    title: B\n    root: notes\n    source:\n      type: github\n      repository: owner/trpg\n`));
+      expect(parse).toThrow(NotebookSourceError);
+      expect(parse).toThrow('Notebook b uses source, which schema 4 removed. Run pnpm convert-sources in this repository.');
+    }
+    const refusal = (() => {
+      try {
+        parseWorkspaceConfig(manifest(4, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: owner/trpg }\n`));
+      } catch (error) {
+        return error;
+      }
+    })();
+    expect(refusal).toMatchObject({ notebookId: 'b' });
   });
-  it('lets roots overlap only across repositories', () => {
-    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n  - id: c\n    title: C\n    root: notes\n    source: { type: github, repository: owner/trpg }\n`))).toThrow(/overlap/);
+  it('lets no two roots of one manifest overlap', () => {
+    expect(() => parseWorkspaceConfig(manifest(4, `${home}  - id: b\n    title: B\n    root: notes/b\n`))).toThrow(/overlap/);
   });
-  it('needs schema_version 2, a platform repository and a GitLab site', () => {
-    expect(() => parseWorkspaceConfig(manifest(1, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: owner/trpg }\n`))).toThrow(/schema_version 2/);
-    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: local, path: ../b }\n`))).toThrow(/github or gitlab/);
-    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: gitlab, repository: group/project }\n`))).toThrow(/GitLab site/);
-    expect(() => parseWorkspaceConfig(manifest(2, `${home}  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: 'not a repo' }\n`))).toThrow(ConfigValidationError);
-  });
-  it('refuses a schema_version newer than this Core', () => {
-    expect(() => parseWorkspaceConfig(manifest(4, home))).toThrow(/newer Core/);
-  });
-  it('keeps a notebook repository root unprefixed when the manifest lives under notes/', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-source-'));
-    fs.mkdirSync(path.join(root, 'notes/a'), { recursive: true });
-    fs.mkdirSync(path.join(root, 'notes/b'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'notes', WORKSPACE_CONFIG_FILENAME), manifest(2, '  - id: a\n    title: A\n    root: a\n  - id: b\n    title: B\n    root: b\n    source: { type: github, repository: owner/trpg }\n'));
-    expect(loadWorkspaceConfig(root)!.notebooks.map(notebook => notebook.root)).toEqual(['notes/a', 'b']);
-    fs.rmSync(root, { recursive: true, force: true });
+  it('reads schema 4 and refuses a schema_version newer than this Core', () => {
+    expect(parseWorkspaceConfig(manifest(4, home)).schema_version).toBe(4);
+    expect(() => parseWorkspaceConfig(manifest(5, home))).toThrow(/newer Core/);
   });
 });
 

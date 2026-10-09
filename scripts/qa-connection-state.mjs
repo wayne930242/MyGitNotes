@@ -46,7 +46,7 @@ try {
     const workspace = await localPage.evaluate(() => fetch('/api/workspace').then(response => response.json()));
     assert.equal(workspace.local, true);
     assert.equal(workspace.repoRoot, process.env.EXPECTED_LOCAL_REPO);
-    assert.equal(workspace.repositories.find(repository => repository.id === workspace.home).write, true);
+    assert.equal(workspace.repositories.find(repository => repository.id === workspace.defaultRepository).write, true);
     const noteCount = await localPage.evaluate(() => fetch('/api/notes').then(response => response.json()).then(body => body.notes.length));
     assert.ok(noteCount > 0, 'Expected local notes');
     await localPage.waitForSelector('header');

@@ -1,7 +1,7 @@
 import { LEGACY_WORKSPACE_CONFIG_FILENAME, parseWorkspaceConfig, serializeWorkspaceConfig, SUPPORTED_SCHEMA_VERSION, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import type { RemoteEntry, RemoteSnapshot, RemoteSource } from './remote-source.js';
 import type { WorkspaceConfig } from './types.js';
-import type { ManifestRead, RepositoryManifestFile } from './repository-manifest.js';
+import { invalidManifest, type ManifestRead } from './repository-manifest.js';
 import type { ManifestStore } from './workspace-config-source.js';
 
 /** Where a repository may keep its workspace manifest, in lookup order. */
@@ -45,7 +45,7 @@ export function deriveWorkspaceConfig(entries: readonly RemoteEntry[], title: st
 }
 
 /** The manifest kept as a file in a remote repository, read once per snapshot. */
-export class RemoteManifest implements ManifestStore, RepositoryManifestFile {
+export class RemoteManifest implements ManifestStore {
   private record?: { sha: string; value: Promise<ManifestRecord | InvalidManifestRecord>; };
   constructor(private readonly reader: RemoteSource) {}
 
@@ -77,7 +77,7 @@ export class RemoteManifest implements ManifestStore, RepositoryManifestFile {
     const prefixed = new Set<string>();
     if (file.startsWith('notes/')) {
       config.notebooks = config.notebooks.map(nb => {
-        if (nb.source || nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
+        if (nb.root.startsWith('notes/') || nb.root === 'notes' || !entries.some(e => e.path === `notes/${nb.root}` && e.type === 'tree')) return nb;
         prefixed.add(nb.id);
         return { ...nb, root: `notes/${nb.root}` };
       });
@@ -91,11 +91,11 @@ export class RemoteManifest implements ManifestStore, RepositoryManifestFile {
     return { config: record.config, revision: sha, ...(record.derived ? { derived: true } : {}) };
   }
 
-  /** The file as this repository keeps it, without deriving a manifest for a repository that has none. */
+  /** The file as this repository keeps it, or the manifest derived from its folders when it keeps none. */
   async read(): Promise<ManifestRead> {
     const { sha, record } = await this.current();
-    if ('invalid' in record) return { state: 'invalid', text: record.invalid.text, error: record.invalid.error instanceof Error ? record.invalid.error.message : String(record.invalid.error), revision: sha };
-    return record.derived ? { state: 'missing', revision: sha } : { state: 'file', config: record.config, revision: sha };
+    if ('invalid' in record) return invalidManifest(record.invalid.text, record.invalid.error, sha);
+    return { state: record.derived ? 'derived' : 'file', config: record.config, revision: sha };
   }
 
   /** Writes the manifest back to its own file, restoring every root this store prefixed with `notes/`; an unreadable file is replaced as written. */
@@ -104,6 +104,6 @@ export class RemoteManifest implements ManifestStore, RepositoryManifestFile {
     const validated = parseWorkspaceConfig(yaml);
     if (!('invalid' in record) && record.prefixed.size) validated.notebooks = validated.notebooks.map(nb => record.prefixed.has(nb.id) && nb.root.startsWith('notes/') ? { ...nb, root: nb.root.slice('notes/'.length) } : nb);
     await this.reader.commitManifest(record.file, serializeWorkspaceConfig(validated), revision);
-    return this.load();
+    return { revision: (await this.load()).revision };
   }
 }

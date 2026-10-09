@@ -17,7 +17,7 @@ vi.mock('../components/WorkspaceManifestEditor.js', () => ({ WorkspaceManifestEd
 
 const billing: WebFeature = { id: 'billing', routes: [{ path: '/billing', element: createElement('h1', null, 'Billing page') }], settingsSections: [{ id: 'plan', title: 'Plan', icon: CreditCard, element: createElement('p', null, 'Pro plan') }], accountControls: ({ local }) => createElement('span', null, `tenant menu ${local ? 'local' : 'hosted'}`) };
 
-const settings = (features: WebFeature[]) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(SettingsModal, { manifest: { repositories: [], homeRepository: '', initialRepository: '', onManifestRevision: () => {} }, onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} })));
+const settings = (features: WebFeature[]) => renderToStaticMarkup(createElement(WebFeaturesProvider, { features }, createElement(SettingsModal, { manifest: { repositories: [], defaultRepository: '', initialRepository: '', onManifestRevision: () => {} }, onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} })));
 
 let root: Root | undefined;
 afterEach(() => {

@@ -10,7 +10,7 @@ import { scanNotebookNotes, writeNoteFile } from '../src/note-service.js';
 import { resolveSafePath } from '../src/path-guard.js';
 import { loadWorkspaceConfig } from '../src/config.js';
 import { resolveNoteStatuses } from '../src/note-status.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 
 const manifest = 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
 const fixture: Record<string, string> = { 'notes/.github-notes.yaml': manifest, 'notes/example/hello.md': '# Hello\n', 'notes/example/projects/_dir.yml': 'title: Projects\norder: -1\n', 'notes/example/projects/deep/_dir.yml': 'title: Deep work\n', 'notes/example/projects/deep/hello.md': '---\ncustom: preserved\ntags: [work]\n---\n# Nested\n', 'notes/example/z-last/_dir.yml': 'title: Last\norder: 2\n', 'notes/example/assets/image.png': 'image', 'notes/example/docs/agent/internal.md': '# Internal' };
@@ -99,7 +99,7 @@ describe('folder and provider parity', () => {
   });
   it('gives the same note bodies and folder metadata through local and GitHub providers', async () => {
     const request = githubMock();
-    const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader;
+    const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader;
     const notes = await remote.notes();
     expect(notes.map(n => [n.path, n.content]).sort()).toEqual(scanNotebookNotes(root, nb).map(n => [n.path, n.content]).sort());
     expect(await remote.folders()).toEqual(scanNotebookFolders(root, nb));
@@ -114,7 +114,7 @@ describe('folder and provider parity', () => {
     try {
       fixture['notes/.github-notes.yaml'] = original + '    statuses: [capture, review, published]\n';
       fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), fixture['notes/.github-notes.yaml']);
-      const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
+      const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
       const localConfig = loadWorkspaceConfig(root)!;
       const remoteConfig = await remote.config();
       expect(remoteConfig.notebooks).toEqual(localConfig.notebooks);
@@ -130,7 +130,7 @@ describe('folder and provider parity', () => {
     fs.rmSync(path.join(root, 'notes/.github-notes.yaml'));
     fs.writeFileSync(path.join(root, 'notes/.mygitnotes.yaml'), original);
     try {
-      const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
+      const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
       expect((await remote.config()).notebooks[0].id).toBe('example');
       expect(loadWorkspaceConfig(root)?.notebooks[0].id).toBe('example');
     } finally {
@@ -144,7 +144,7 @@ describe('folder and provider parity', () => {
     fixture['notes/.mygitnotes.yaml'] = manifest.replace('title: Test', 'title: Preferred');
     fs.writeFileSync(path.join(root, 'notes/.mygitnotes.yaml'), fixture['notes/.mygitnotes.yaml']);
     try {
-      const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
+      const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
       expect((await remote.config()).workspace.title).toBe('Preferred');
     } finally {
       delete fixture['notes/.mygitnotes.yaml'];
@@ -159,7 +159,7 @@ describe('folder and provider parity', () => {
       fs.writeFileSync(path.join(root, 'notes/.github-notes.yaml'), fixture['notes/.github-notes.yaml']);
       fs.mkdirSync(path.join(root, 'notes/example/.templates'), { recursive: true });
       fs.writeFileSync(path.join(root, 'notes/example/.templates/reading.md'), fixture['notes/example/.templates/reading.md']);
-      const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
+      const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
       const rendered = await remote.renderTemplate('example', 'reading', 'Grounding');
       expect(rendered.metadata.title).toBe('Grounding');
       expect(rendered.metadata.status).toBe('unread');
@@ -173,24 +173,24 @@ describe('folder and provider parity', () => {
     }
   });
   it('denies unauthenticated private reads and anonymous writes', async () => {
-    const privateReader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock(true) as typeof fetch).reader;
+    const privateReader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock(true) as typeof fetch).reader;
     await expect(privateReader.notes()).rejects.toThrow(/Sign in/);
-    const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
+    const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, githubMock() as typeof fetch).reader;
     await expect(remote.save('notes/example/hello.md', '# Changed', undefined, 'commit1')).rejects.toMatchObject({ status: 403 });
   });
   it('rejects stale revisions and duplicate creates before any GitHub write', async () => {
     const request = githubMock(false, true);
-    const remote = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'secret', request as typeof fetch).reader;
+    const remote = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'secret', request as typeof fetch).reader;
     await expect(remote.save('notes/example/hello.md', '# Changed', undefined, 'old')).rejects.toMatchObject({ status: 409 });
     await expect(remote.save('notes/example/hello.md', '# Changed', undefined, 'commit1', true)).rejects.toMatchObject({ status: 409 });
     expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   });
   it('reports upstream rate limits and incomplete nonrecursive trees', async () => {
-    const denied = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, vi.fn(async () => new Response('{}', { status: 429 })) as typeof fetch).reader;
+    const denied = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, vi.fn(async () => new Response('{}', { status: 429 })) as typeof fetch).reader;
     await expect(denied.notes()).rejects.toThrow(/rate limit/);
     const base = githubMock();
     const request = vi.fn(async (input: any, init: any) => String(input).includes('/git/trees/') ? new Response(JSON.stringify({ tree: [], truncated: true })) : base(input, init));
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader.notes()).rejects.toThrow(/too large/);
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader.notes()).rejects.toThrow(/too large/);
   });
   it('writes nested notes while preserving unknown metadata', () => {
     const note = writeNoteFile(root, 'notes/example/projects/deep/new.md', '# New', { custom: { a: 1 } }, 'example');
@@ -218,7 +218,7 @@ describe('GitHub commit concurrency', () => {
       }
       return base(input, init);
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as typeof fetch).reader;
     await expect(reader.save('notes/example/hello.md', '# Changed', undefined, 'commit1')).rejects.toMatchObject({ status: 409 });
     expect(request.mock.calls.some(([url]) => url.endsWith('/git/refs/heads/main'))).toBe(true);
   });
@@ -235,7 +235,7 @@ describe('GitHub commit concurrency', () => {
       }
       return base(input, init);
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, undefined, request as typeof fetch).reader;
     expect((await reader.notes()).map(n => n.title).sort()).toEqual(['Hello', 'Nested']);
   });
 });
@@ -266,7 +266,7 @@ describe('successful remote save', () => {
       if (written && input.endsWith('/git/blobs/notes/example/hello.md')) return new Response(JSON.stringify({ encoding: 'base64', content: Buffer.from(content).toString('base64') }));
       return base(input, init);
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'token', request as typeof fetch).reader;
     const result = await reader.save('notes/example/hello.md', '# Updated', { custom: 'kept' }, 'commit1');
     expect(result.commit.commitHash).toBe('commit2');
     expect(result.note.revision).toBe('commit2');
@@ -293,7 +293,7 @@ describe('GitHub study workspace writes', () => {
       }
       return base(input, init);
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
     expect(await reader.saveStudyWorkspace(yaml, 'commit1')).toMatchObject({ revision: 'study-commit', commit: { commitHash: 'study-commit' } });
     expect(request.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
   });
@@ -311,18 +311,18 @@ describe('GitHub study workspace writes', () => {
       }
       return base(input, init);
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
     expect(await reader.saveStudyTransition(yaml, { path: 'notes/example/hello.md', content }, 'commit1')).toMatchObject({ revision: 'study-commit' });
     expect(request.mock.calls.filter(([, init]) => init?.method === 'PATCH')).toHaveLength(1);
     await expect(reader.saveStudyTransition(yaml, { path: 'apps/escape.md', content }, 'commit1')).rejects.toMatchObject({ status: 403 });
   });
   it('rejects stale revisions, Core writes, invalid schemas and paths outside the study sidecar', async () => {
     const request = githubMock(false, true);
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
     await expect(reader.saveStudyWorkspace(yaml, 'stale')).rejects.toMatchObject({ status: 409 });
     await expect(reader.saveStudyWorkspace('version: invalid', 'commit1')).rejects.toThrow('Invalid study YAML');
     await expect(reader.commitChanges([{ path: 'notes/example/hello.md', content: yaml }], 'commit1', 'save', 'study')).rejects.toMatchObject({ status: 403 });
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'core' }, 'test-token', request as typeof fetch).reader.saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'core' }, 'test-token', request as typeof fetch).reader.saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
     expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   });
   it('rejects a sidecar symlink before writing', async () => {
@@ -331,7 +331,7 @@ describe('GitHub study workspace writes', () => {
       if (input.endsWith('/git/trees/tree1?recursive=1')) return new Response(JSON.stringify({ tree: [...tree(), { path: STUDY_FILE, type: 'blob', mode: '120000', sha: 'symlink' }], truncated: false }));
       return base(input, init);
     });
-    await expect(openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader.saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
+    await expect(openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader.saveStudyWorkspace(yaml, 'commit1')).rejects.toMatchObject({ status: 403 });
     expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
   });
   it('invalidates cached snapshot on subsequent fresh snapshot requests', async () => {
@@ -343,7 +343,7 @@ describe('GitHub study workspace writes', () => {
       if (url === '/git/trees/tree1?recursive=1') return new Response(JSON.stringify({ tree: tree(), truncated: false }), { status: 200 });
       return new Response('{}', { status: 404 });
     });
-    const reader = openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
+    const reader = openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request as typeof fetch).reader;
     const first = await reader.getSnapshot(true);
     expect(first.sha).toBe('commit1');
     currentCommit = 'commit2';

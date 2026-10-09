@@ -5,8 +5,9 @@ const mock = vi.hoisted(() => ({ authToken: vi.fn() }));
 vi.mock('../src/auth.js', async original => ({ ...await original<typeof import('../src/auth.js')>(), authToken: mock.authToken }));
 import { CredentialRejected } from '../src/auth.js';
 import { requestWorkspace } from '../src/request-workspace.js';
+import { workspaceSettings } from './workspace-settings.js';
 
-const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => ({ home: { id: 'home', source: { type: 'github', owner: 'owner', repo: 'notes', branch: 'main' } } as any, localPath: () => undefined, manifest: store => store() }) };
+const configSource: WorkspaceConfigSource = { mode: 'remote', settings: async () => workspaceSettings([{ type: 'github', repository: 'owner/notes', branch: 'main' }]) };
 async function respond() {
   const res: any = { locals: {}, headersSent: false };
   res.status = vi.fn(() => res);

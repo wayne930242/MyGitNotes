@@ -35,7 +35,7 @@ export interface DocumentRepository {
   alias: string;
 }
 
-/** Where one repository's draft of a document is stored; for the home repository this is the key drafts used before documents moved per repository. */
+/** Where one repository's draft of a document is stored; for the repository a workspace had before documents moved per repository, this is the key its drafts already used. */
 export const documentDraftKey = (client: Pick<WorkspaceDocumentClient<unknown>, 'draftKey'>, repository: string) => `github-notes:${client.draftKey}:${repository}`;
 
 /**

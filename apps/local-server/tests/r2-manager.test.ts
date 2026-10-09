@@ -501,12 +501,12 @@ describe('R2 references across notebook repositories', () => {
     const run = (...args: string[]) => execFileSync('git', args, { cwd: second, stdio: 'pipe' });
     fs.mkdirSync(path.join(second, 'notes/ex'), { recursive: true });
     fs.writeFileSync(path.join(second, 'notes/ex/rules.md'), '![same path](r2:ex/old/map.webp)\n');
+    fs.writeFileSync(path.join(second, '.mygitnotes.yaml'), 'schema_version: 4\nworkspace:\n  title: TRPG\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/ex\n');
     run('init', '-b', secondBranch);
     run('config', 'user.name', 'Test');
     run('config', 'user.email', 'test@example.com');
     run('add', '.');
     run('commit', '-m', 'fixture');
-    fs.writeFileSync(path.join(root, '.github-notes.yaml'), MANIFEST.replace('schema_version: 1', 'schema_version: 3') + '  - id: trpg\n    title: TRPG\n    root: notes/ex\n    source: { type: github, repository: owner/trpg }\n');
     fs.writeFileSync(path.join(root, 'mygitnotes.server.yaml'), `repositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n`);
   }
   afterEach(() => {

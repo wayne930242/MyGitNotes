@@ -8,7 +8,7 @@ import { compilationRow, emptyStudyWorkspace, keyedItem, parseCompilation, Sourc
 import { applyStageAction, createStudyNote, defaultStudyProgression, findStudyNote, isNotebookContent, parseNoteContent, readNoteFile, reconcileStudyNote, replaceNoteStatus, resolveSafePath, StudyLaneActionSchema, studyLaneStatuses, undoStudyAction } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { keyedDocument, notebookRepository, repositoryOrHome, storedDocument } from './request-workspace.js';
+import { keyedDocument, notebookRepository, repositoryOrDefault, storedDocument } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 const withinNotebook = (file: string, root: string) => file.startsWith(`${root}/`);
@@ -29,7 +29,7 @@ export function createStudyRouter(): Router {
   const router = Router();
   router.get('/', async (req, res) => {
     try {
-      const { id, alias, handle } = await repositoryOrHome(res, req.query.repository);
+      const { id, alias, handle } = await repositoryOrDefault(res, req.query.repository);
       const keyed = (raw: string | null) => keyedDocument(STUDY_DOCUMENT, alias, decode(raw));
       if (handle.kind === 'local') {
         const raw = await readLocal(handle.root);
@@ -111,7 +111,7 @@ export function createStudyRouter(): Router {
       const value = StudyWorkspaceSchema.safeParse(req.body?.study);
       const revision = req.body?.revision;
       if (!value.success || typeof revision !== 'string' || !revision || Object.keys(req.body).some(key => !['study', 'revision', 'repository'].includes(key))) throw new SourceError('Invalid study workspace configuration.', 400);
-      const { id, alias, handle } = await repositoryOrHome(res, req.body.repository);
+      const { id, alias, handle } = await repositoryOrDefault(res, req.body.repository);
       const yaml = stringify(storedDocument(STUDY_DOCUMENT, alias, value.data), { lineWidth: 0 });
       if (Buffer.byteLength(yaml) > STUDY_MAX_BYTES) throw new SourceError('Study data is too large.', 413);
       if (handle.kind === 'local') {

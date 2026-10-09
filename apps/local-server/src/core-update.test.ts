@@ -15,7 +15,8 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
 });
-async function start(type: 'github' | 'gitlab') {
+async function start(type: 'github' | 'gitlab', product = '') {
+  vi.stubEnv('MYGITNOTES_PRODUCT_REPOSITORY', product);
   vi.stubEnv('MYGITNOTES_SOURCE', type);
   vi.stubEnv('MYGITNOTES_REPOSITORY', 'example/notes');
   vi.stubEnv('MYGITNOTES_BRANCH', 'main');
@@ -45,8 +46,8 @@ describe('remote Core HTTP routes', () => {
     expect(response.status).toBe(302);
     expect(new URL(response.headers.get('location')!).searchParams.get('scope')).toBe(scope);
   });
-  it('mounts status and update for a GitHub session and returns named write-permission denial', async () => {
-    const base = await start('github');
+  it('mounts status and update for the product repository and returns named write-permission denial', async () => {
+    const base = await start('gitlab', 'example/notes');
     const old = 'a'.repeat(40), head = 'b'.repeat(40);
     vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
@@ -67,15 +68,23 @@ describe('remote Core HTTP routes', () => {
     expect(update.status).toBe(403);
     expect(await update.json()).toMatchObject({ code: 'PERMISSION_REQUIRED' });
   });
-  it('explicitly reports unsupported GitLab without calling the provider', async () => {
-    const base = await start('gitlab');
+  it('refuses a product repository where each visitor chooses a repository, who never update the deployment', () => {
+    vi.stubEnv('MYGITNOTES_PRODUCT_REPOSITORY', 'example/core');
+    vi.stubEnv('MYGITNOTES_SOURCE', 'github');
+    vi.stubEnv('MYGITNOTES_REPOSITORY', '');
+    vi.stubEnv('VERCEL', '');
+    temp = fs.mkdtempSync(path.join(os.tmpdir(), 'core-route-'));
+    expect(() => createApp(temp!)).toThrow(/each visitor chooses a repository/);
+  });
+  it('answers 404 without a product repository, before any provider request', async () => {
+    const base = await start('github');
     vi.stubGlobal('fetch', () => {
       throw new Error('Unexpected provider call');
     });
-    const status = await realFetch(base + '/api/core/status');
-    expect((await status.json()).status).toMatchObject({ state: 'unsupported', canUpdate: false });
-    const update = await realFetch(base + '/api/core/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    expect(update.status).toBe(422);
-    expect(await update.json()).toMatchObject({ code: 'UNSUPPORTED_PROVIDER' });
+    for (const [method, route] of [['GET', '/api/core/status'], ['POST', '/api/core/update'], ['POST', '/api/core/install'], ['GET', '/api/core/runs/1']]) {
+      const response = await realFetch(base + route, { method, headers: { 'Content-Type': 'application/json' }, ...(method === 'POST' ? { body: '{}' } : {}) });
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ error: 'This deployment names no product repository, so it offers no Core update.' });
+    }
   });
 });

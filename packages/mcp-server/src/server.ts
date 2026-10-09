@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { createRemoteSource, createWorkspaceRepositories, deploymentConfigSource, localManifest, RemoteManifest, type RemoteSource, RepositoryUnavailableError, sharesCredential, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings } from '@mygitnotes/core';
+import { createRemoteSource, createWorkspaceRepositories, deploymentConfigSource, localManifest, RemoteManifest, type RemoteSource, RepositoryUnavailableError, sameSite, visibleMembers, WORKSPACE_CONFIG_FILENAME, type WorkspaceConfigSource, type WorkspaceRepositories, type WorkspaceSettings } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { keyedResult, listedNotebooks, notebookArgument } from './notebook-keys.js';
 import { isMutationTool, remoteTools } from './remote-tools.js';
@@ -13,16 +13,14 @@ import { handleAddAsset, handleCheckCoreUpdate, handleDeleteAsset, handleDeleteN
 /** A stdio session has no request of its own; adapters that select a workspace per request see no headers. */
 const STDIO_REQUEST = { headers: {} };
 
-/** The home repository read without a credential, with the manifest where the settings keep it. */
+/** The workspace's repositories read without a credential, each with its own manifest. */
 function openRemoteWorkspace(settings: WorkspaceSettings): WorkspaceRepositories<{ reader: RemoteSource; }> {
-  const source = settings.home.source;
-  if (source.type === 'local') throw new Error('A remote home repository is required.');
+  const { site } = settings;
   return createWorkspaceRepositories({
-    home: settings.home,
-    openHome: scope => ({ reader: createRemoteSource(source, undefined, fetch, undefined, scope) }),
-    manifest: handle => settings.manifest(() => new RemoteManifest(handle.reader)),
-    async openRepository(ref, scope) {
-      if (ref.source.type === 'local' || !sharesCredential(source, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the home repository's platform and site.` };
+    members: visibleMembers(settings),
+    manifest: (member, handle) => settings.manifest(member, () => new RemoteManifest(handle.reader)),
+    async openRepository({ ref }, scope) {
+      if (ref.source.type === 'local' || !sameSite(site, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the workspace's platform and site.` };
       const reader = createRemoteSource(ref.source, undefined, fetch, undefined, scope);
       try {
         await reader.getSnapshot();
@@ -40,8 +38,8 @@ export function createMCPServer(productRoot: string, configSource: WorkspaceConf
   const server = new Server({ name: 'mygitnotes-mcp', version: '0.1.0' }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const { home } = await configSource.settings(STDIO_REQUEST);
-    if (home.source.type !== 'local') {
+    const { site } = await configSource.settings(STDIO_REQUEST);
+    if (site.type !== 'local') {
       return { tools: remoteTools.filter((t) => !isMutationTool(t.name)) };
     }
     return { tools: localTools };
@@ -53,21 +51,19 @@ export function createMCPServer(productRoot: string, configSource: WorkspaceConf
     try {
       let result: unknown;
       const settings = await configSource.settings(STDIO_REQUEST);
-      if (settings.home.source.type !== 'local') {
+      if (settings.site.type !== 'local') {
         result = await callWorkspaceRemoteTool(openRemoteWorkspace(settings), name, args, false);
       } else {
-        const root = settings.home.source.path;
         const workspace = createWorkspaceRepositories<{ kind: 'local'; id: string; root: string; }>({
-          home: settings.home,
-          openHome: () => ({ kind: 'local', id: settings.home.id, root }),
-          manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)),
-          isHome: ref => settings.localPath(ref) === root,
-          async openRepository(ref) {
-            const mapped = settings.localPath(ref);
-            if (!mapped || !fs.existsSync(path.join(mapped, '.git'))) return { reason: 'unmapped', message: `No Git worktree is mapped for ${ref.id}.` };
-            return { kind: 'local', id: ref.id, root: mapped };
+          members: visibleMembers(settings),
+          manifest: (member, handle) => settings.manifest(member, () => localManifest(handle.root, stageAndCommit, WORKSPACE_CONFIG_FILENAME)),
+          async openRepository({ ref, localPath }) {
+            if (!localPath || !fs.existsSync(path.join(localPath, '.git'))) return { reason: 'unmapped', message: `No Git worktree is mapped for ${ref.id}.` };
+            return { kind: 'local', id: ref.id, root: localPath };
           },
         });
+        const root = workspace.default?.localPath;
+        if (!root) throw new Error('This workspace has no default repository yet.');
         const ctx: ToolContext = { repoRoot: root, workspace, productRoot };
         result = await dispatchLocalTool(ctx, name, args);
       }
@@ -130,7 +126,7 @@ async function dispatchLocalTool(ctx: ToolContext, name: string, input: Record<s
     const selectedPath = typeof args.path === 'string' ? args.path : undefined;
     const rootAgentResource = name === 'read_agent_resource' && selectedPath && (!selectedPath.startsWith('notes/') || selectedPath === 'notes/AGENTS.md');
     const file = rootAgentResource ? undefined : selectedPath || (name === 'git_commit' ? undefined : Array.isArray(args.files) ? args.files[0] : undefined);
-    const entry = notebookId ? await workspace.forNotebook(notebookId) : file ? await workspace.forPath(String(file)) : await workspace.byId(workspace.home.ref.id);
+    const entry = notebookId ? await workspace.forNotebook(notebookId) : file ? await workspace.forPath(String(file)) : await workspace.defaultRepository();
     const selected = notebookId ? entry.notebooks.find(nb => nb.key === notebookId) : undefined;
     if (selected && selectedPath && !selectedPath.startsWith('r2:') && !selectedPath.startsWith(`${selected.root}/`)) throw new Error('Path does not belong to the selected notebook.');
     if (name === 'git_commit') {

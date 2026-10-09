@@ -4,7 +4,7 @@ import { chosenRepositorySource } from './workspace-choice.js';
 import { writeDevPorts } from './dev-ports.js';
 import { createPiAgent } from './pi-agent.js';
 import { prewarmLocalScans } from './request-workspace.js';
-import { assertWorkspaceCompatible, loadEnvDefaults } from '@mygitnotes/core';
+import { assertWorkspaceCompatible, defaultMember, loadEnvDefaults } from '@mygitnotes/core';
 
 loadEnvDefaults(`${applicationRoot()}/.env`);
 const desiredPort = Number(process.env.PORT || 4321);
@@ -20,8 +20,9 @@ if (isLocal) {
 const configSource = chosenRepositorySource(repoRoot);
 if (isLocal) {
   // Fail fast: a missing workspace or a schema this Core cannot serve stops the dev server.
-  const { home } = await configSource.settings({ headers: {} });
-  if (home.source.type === 'local') assertWorkspaceCompatible(home.source.path);
+  const settings = await configSource.settings({ headers: {} });
+  const worktree = defaultMember(settings)?.localPath;
+  if (worktree) assertWorkspaceCompatible(worktree);
 }
 // The agent panel bridges to a Pi process on this machine, so only a local workspace offers it.
 const piAgent = configSource.mode === 'local' ? createPiAgent() : undefined;

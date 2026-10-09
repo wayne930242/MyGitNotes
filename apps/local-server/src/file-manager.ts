@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { assetHash, assetInfo, assetRoot, editableFile, type FileCommand, FileCommandSchema, filePresentation, type FileSnapshot, isCompilationPath, isNotebookContent, managedNotebook, type NotebookConfig, parseFolderConfig, planFileChange, type RemoteChange, type RemoteSnapshot, type RemoteSource, SourceError, stampIsRacy, versionFileChanges, withinPath, WORKSPACE_DOCUMENTS, type WorkspaceConfig } from '@mygitnotes/core';
-import { eachRepository, homeRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
+import { defaultRepository, eachRepository, notebookRepository, noteRepository, type RepositoryHandle } from './request-workspace.js';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { regularPath, writeFileAtomicSync } from './workspace-files.js';
 import { moveLocalVersionFiles } from './version-files.js';
@@ -229,11 +229,11 @@ export function createFileManagerRouter(): Router {
   });
   router.get('/api/assets', async (req, res) => {
     try {
-      // Without a notebook the listing covers the home repository's first notebook.
-      const home = req.query.notebookId ? undefined : await homeRepository(res);
-      const homeNotebook = home?.config.notebooks[0];
-      if (home && !homeNotebook) throw new SourceError('Choose a notebook.', 400);
-      const { state, nb } = home ? { state: await catalogOf(home.handle, home.config), nb: homeNotebook! } : await catalog(res, req.query.notebookId);
+      // Without a notebook the listing covers the default repository's first notebook.
+      const fallback = req.query.notebookId ? undefined : await defaultRepository(res);
+      const firstNotebook = fallback?.config.notebooks[0];
+      if (fallback && !firstNotebook) throw new SourceError('Choose a notebook.', 400);
+      const { state, nb } = fallback ? { state: await catalogOf(fallback.handle, fallback.config), nb: firstNotebook! } : await catalog(res, req.query.notebookId);
       const root = assetRoot(nb), assets = [];
       for (const [file, info] of state.index.files) {
         if (managedNotebook(file, state.index.notebooks)?.id !== nb.id || file.slice(nb.root.length + 1).split('/').some(part => part.startsWith('.'))) continue;

@@ -1,9 +1,9 @@
-import { GITHUB_COM, githubSite, type SourceConfig, SourceError, sourceIdentity, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { GITHUB_COM, githubSite, siteIdentity, SourceError, type WorkspaceConfigSource, type WorkspacePerson, type WorkspaceSite } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import type { BrowserSessions } from './browser-sessions.js';
-import { choosesRepository, cookieWorkspaceChoices, deploymentGitHubUrl, type WorkspaceChoices } from './repository-choice.js';
+import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoices } from './repository-choice.js';
 import { digest, random, recordLifetime as lifetime, type RecordStore, sealedElsewhere, type StoredRecord } from './record-store/index.js';
 
 export { seal, unseal } from './record-store/index.js';
@@ -20,10 +20,8 @@ export class CredentialRejected extends SourceError {
   }
 }
 type Provider = { type: 'github' | 'gitlab'; site: string; realm: string; clientId?: string; clientSecret?: string; authorize: string; token: string; user: string; /** github.com keeps the unscoped owner, credential id and realm-less records it always had; every other site is scoped by its realm. */ unscoped: boolean; };
-/** The platform a sign-in goes to: the home repository's, or GitHub before a visitor has chosen a repository (on the deployment's GitHub site, github.com unless it names one). */
-type ProviderSite = { type: 'github'; url?: string; } | { type: 'local'; } | { type: 'gitlab'; url: string; };
-/** The sign-in provider follows the home repository's platform and site. */
-function providerFor(source: ProviderSite): Provider {
+/** The sign-in provider follows the workspace's platform and site. */
+function providerFor(source: WorkspaceSite): Provider {
   const type = source.type === 'gitlab' ? 'gitlab' : 'github';
   const url = source.type === 'local' ? undefined : source.url;
   const site = url ?? GITHUB_COM;
@@ -67,8 +65,8 @@ async function tokenRequest(provider: Provider, body: Record<string, unknown>) {
   return data;
 }
 /** The provider token behind a stored credential, refreshed under the credential lock when it is about to expire. */
-export async function credentialToken(store: RecordStore, id: string, home: SourceConfig): Promise<string> {
-  const provider = providerFor(home);
+export async function credentialToken(store: RecordStore, id: string, site: WorkspaceSite): Promise<string> {
+  const provider = providerFor(site);
   // GitHub OAuth apps with short-lived tokens return a refresh token; long-lived GitHub tokens carry neither.
   const refreshable = (record: any) => (provider.type === 'gitlab' || Boolean(record?.refreshToken)) && record?.upstreamExpiresAt <= Date.now() + 60000;
   const reject = (reason: string, message: string) => {
@@ -98,11 +96,11 @@ export async function credentialToken(store: RecordStore, id: string, home: Sour
  * The provider token of the browser session that made the request, if one is signed in. A cookie session whose
  * token expires within `refreshWithinMs` is refreshed and written back, so the browser keeps the rotated refresh token.
  */
-export async function authToken(req: Request, res: Response, { store, sessions }: SessionServices, home: ProviderSite, refreshWithinMs = 0): Promise<string | undefined> {
-  const provider = providerFor(home);
+export async function authToken(req: Request, res: Response, { store, sessions }: SessionServices, site: WorkspaceSite, refreshWithinMs = 0): Promise<string | undefined> {
+  const provider = providerFor(site);
   const session = await getSession(req, sessions, provider);
   if (!session) return undefined;
-  if (session.credential) return credentialToken(store, session.credential, home as SourceConfig);
+  if (session.credential) return credentialToken(store, session.credential, site);
   if (sessions.kind === 'cookie' && session.refreshToken && session.upstreamExpiresAt && session.upstreamExpiresAt <= Date.now() + refreshWithinMs) {
     let data;
     try {
@@ -130,19 +128,22 @@ export function createAuth(services: AuthServices): Router {
   router.use(grantsRouter(services));
   return router;
 }
-const homeSourceOf = (configSource: WorkspaceConfigSource) => async (req: Request) => (await configSource.settings(req)).home.source;
-/** The platform to sign in with: the home repository's, or GitHub while a visitor has not chosen a repository yet. */
-const providerSiteOf = (configSource: WorkspaceConfigSource) => async (req: Request): Promise<ProviderSite> => {
-  try {
-    return (await configSource.settings(req)).home.source;
-  } catch (error) {
-    if (error instanceof WorkspaceSetupError && error.reason === 'choose-repository') {
-      const url = deploymentGitHubUrl();
-      return { type: 'github', ...(url ? { url } : {}) };
-    }
-    throw error;
-  }
-};
+/** The platform to sign in with: the workspace's site, which is known before any repository is added or reached. */
+const providerSiteOf = (configSource: WorkspaceConfigSource) => async (req: Request): Promise<WorkspaceSite> => (await configSource.settings(req)).site;
+
+/**
+ * The person an agent grant was made for: recorded on a grant made since grants bind to a person and site, and for an
+ * earlier grant read from its owner and the realm of its credential (github.com grants kept a realm-less owner).
+ */
+export async function grantPerson(store: RecordStore, grant: StoredRecord): Promise<WorkspacePerson | undefined> {
+  const recorded = grant.person as Partial<WorkspacePerson> | undefined;
+  if (typeof recorded?.realm === 'string' && (typeof recorded.userId === 'number' || typeof recorded.userId === 'string')) return { realm: recorded.realm, userId: recorded.userId };
+  const credential = await store.readRecord(String(grant.credential || grant.session || ''));
+  if (!credential || credential === sealedElsewhere) return undefined;
+  if (typeof grant.ownerId === 'number') return { realm: typeof credential.realm === 'string' ? credential.realm : providerFor({ type: 'github' }).realm, userId: grant.ownerId };
+  const userId = typeof grant.ownerId === 'string' ? grant.ownerId.slice(grant.ownerId.lastIndexOf(':') + 1) : '';
+  return typeof credential.realm === 'string' && userId ? { realm: credential.realm, userId: /^\d+$/.test(userId) ? Number(userId) : userId } : undefined;
+}
 /** Refresh a cookie session's token this close to its expiry when the app asks for the session, ahead of its parallel reads. */
 const sessionProbeRefreshMs = 10 * 60_000;
 /** Provider sign-in, the session probe and logout. */
@@ -227,17 +228,18 @@ export function signInRouter(services: AuthServices): Router {
 }
 /** Persistent agent (MCP) grants: create, list and revoke. A store that does not outlive the process offers none. */
 export function grantsRouter({ store, sessions, configSource }: AuthServices): Router {
-  const router = Router(), homeSource = homeSourceOf(configSource);
+  const router = Router(), providerSite = providerSiteOf(configSource);
   router.use(['/agent-token', '/agent-tokens'], (_req, res, next) => store.durable ? next() : res.status(404).json({ error: 'This deployment does not keep agent grants.' }));
   router.post('/agent-token', async (req, res) => {
     try {
-      const provider = providerFor(await homeSource(req)), session = await getSession(req, sessions, provider);
+      const site = await providerSite(req), provider = providerFor(site), session = await getSession(req, sessions, provider);
       if (!session) return res.status(401).json({ error: 'Sign in before creating an agent grant.' });
-      const source = await homeSource(req);
-      if (source.type === 'local' || !process.env.APP_URL) return res.status(400).json({ error: 'A remote source and APP_URL are required.' });
+      if (site.type === 'local' || !process.env.APP_URL) return res.status(400).json({ error: 'A remote source and APP_URL are required.' });
       const token = random(), credential = await saveCredential(store, session, provider), ownerId = ownerOf(session, provider);
       const name = typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 80) : '';
-      await store.set(token, { kind: 'agent', ownerId, credential, name: name || 'MCP client', createdAt: Date.now(), source: sourceIdentity(source), audience: `${process.env.APP_URL}/mcp`, write: req.body.write === true }, null);
+      // The grant reaches the person's visible repositories on this site at each call, not the ones they have now.
+      const person: WorkspacePerson = { realm: provider.realm, userId: session.userId };
+      await store.set(token, { kind: 'agent', ownerId, credential, name: name || 'MCP client', createdAt: Date.now(), site: siteIdentity(site), person, audience: `${process.env.APP_URL}/mcp`, write: req.body.write === true }, null);
       try {
         await store.indexGrant(token, ownerId);
       } catch (error) {
@@ -251,7 +253,7 @@ export function grantsRouter({ store, sessions, configSource }: AuthServices): R
   });
   router.get('/agent-tokens', async (req, res) => {
     try {
-      const provider = providerFor(await homeSource(req)), session = await getSession(req, sessions, provider);
+      const provider = providerFor(await providerSite(req)), session = await getSession(req, sessions, provider);
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       res.json({ grants: await store.listGrants(ownerOf(session, provider)) });
     } catch {
@@ -260,7 +262,7 @@ export function grantsRouter({ store, sessions, configSource }: AuthServices): R
   });
   router.delete('/agent-tokens/:id', async (req, res) => {
     try {
-      const provider = providerFor(await homeSource(req)), session = await getSession(req, sessions, provider);
+      const provider = providerFor(await providerSite(req)), session = await getSession(req, sessions, provider);
       if (!session) return res.status(401).json({ error: 'Sign in to manage agent access.' });
       if (!await store.revokeGrant(String(req.params.id), ownerOf(session, provider))) return res.status(404).json({ error: 'Agent grant not found.' });
       res.json({ success: true });

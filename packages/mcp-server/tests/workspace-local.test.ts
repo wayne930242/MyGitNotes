@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
-import { repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
+import { deriveAlias, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createMCPServer } from '../src/server.js';
 
 const roots: string[] = [];
@@ -27,11 +27,18 @@ function worktree(files: Record<string, string>) {
 afterEach(() => {
   for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
 });
+/** A repository's own manifest serving the one notebook `id` at `root`. */
+const manifest = (id: string, root: string) => `schema_version: 4\nworkspace:\n  title: ${id}\n  default_notebook: ${id}\nnotebooks:\n  - id: ${id}\n    title: ${id.toUpperCase()}\n    root: ${root}\n`;
+/** A local workspace of the worktree `home`, the default member, and of a worktree mapped to the platform repository `repository`. */
+function localSource(home: string, repository: string, other: string): WorkspaceConfigSource {
+  const members = [{ ref: repositoryRef({ type: 'local', path: home }), alias: deriveAlias(path.basename(home), new Set()), default: true, hidden: false, localPath: home }, { ref: repositoryRef({ type: 'github', repository, branch: 'main' }), alias: deriveAlias(repository, new Set()), default: false, hidden: false, localPath: other }];
+  return { mode: 'local', settings: async () => ({ site: { type: 'local' }, members, manifest: (_member, inRepository) => inRepository() }) };
+}
 
 it('stdio resolves identical note paths, merges listings, reports both statuses, and commits only the selected notebook', async () => {
-  const home = worktree({ '.mygitnotes.yaml': 'schema_version: 3\nworkspace:\n  title: Test\n  default_notebook: home\nnotebooks:\n  - id: home\n    title: Home\n    root: notes/shared\n  - id: other\n    title: Other\n    root: notes/shared\n    source: { type: github, repository: owner/other }\n', 'notes/shared/note.md': '# Home\n', 'AGENTS.md': '# Home rules\n' });
-  const other = worktree({ 'notes/shared/note.md': '# Other\n' });
-  const source: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/other@main' ? other : undefined, manifest: inHome => inHome() }) };
+  const home = worktree({ '.mygitnotes.yaml': manifest('home', 'notes/shared'), 'notes/shared/note.md': '# Home\n', 'AGENTS.md': '# Home rules\n' });
+  const other = worktree({ '.mygitnotes.yaml': manifest('other', 'notes/shared'), 'notes/shared/note.md': '# Other\n' });
+  const source = localSource(home, 'owner/other', other);
   const server = createMCPServer(home, source);
   const client = new Client({ name: 'fixture', version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -65,9 +72,9 @@ it('stdio resolves identical note paths, merges listings, reports both statuses,
 });
 
 it('names notebooks by key, accepts a bare id by the rule old URLs follow, and never falls back from an unknown key', async () => {
-  const home = worktree({ '.mygitnotes.yaml': 'schema_version: 3\nworkspace:\n  title: Test\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n  - id: trpg\n    title: TRPG\n    root: notes/life\n    source: { type: github, repository: owner/campaign }\n', 'notes/life/note.md': '# Home\n' });
-  const campaign = worktree({ 'notes/life/note.md': '# Campaign\n' });
-  const source: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home: repositoryRef({ type: 'local', path: home }), localPath: ref => ref.id === 'github:owner/campaign@main' ? campaign : undefined, manifest: inHome => inHome() }) };
+  const home = worktree({ '.mygitnotes.yaml': manifest('life', 'notes/life'), 'notes/life/note.md': '# Home\n' });
+  const campaign = worktree({ '.mygitnotes.yaml': manifest('trpg', 'notes/life'), 'notes/life/note.md': '# Campaign\n' });
+  const source = localSource(home, 'owner/campaign', campaign);
   const server = createMCPServer(home, source);
   const client = new Client({ name: 'fixture', version: '1.0.0' });
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -77,7 +84,7 @@ it('names notebooks by key, accepts a bare id by the rule old URLs follow, and n
     const result = await client.callTool({ name, arguments: args });
     return { ...result, data: JSON.parse((result.content as { text: string; }[])[0].text) };
   };
-  // The home worktree's alias is its directory's name; the other repository's alias is its name.
+  // The default worktree's alias is its directory's name; the other repository's alias is its name.
   const life = `${path.basename(home).toLowerCase()}~life`;
   try {
     const notebooks = (await call('list_notebooks', {})).data.notebooks;

@@ -31,8 +31,8 @@ export function sharesCredential(home: SourceConfig, other: SourceConfig): boole
   return home.type === other.type && home.url === other.url;
 }
 
-/** Why a notebook repository cannot serve this request. */
-export type UnavailableReason = 'unmapped' | 'no-access' | 'missing-branch' | 'unsupported-platform';
+/** Why a repository cannot serve this request; `invalid-manifest` covers a manifest that does not load, an unsupported schema and a notebook still using `source`. */
+export type UnavailableReason = 'unmapped' | 'no-access' | 'missing-branch' | 'unsupported-platform' | 'invalid-manifest';
 
 /** The provider refused the repository (`no-access`) or its branch (`missing-branch`); keeps the provider's status and message. */
 export class RepositoryUnavailableError extends SourceError {
@@ -79,7 +79,7 @@ export interface RepositoryStatus {
   unavailable?: UnavailableRepository['unavailable'];
   /** The repository's display name: its manifest's `workspace.title`, or the repository's name when it keeps no manifest. */
   title: string;
-  /** Where opening this repository lands; null only before the home repository has its first manifest. */
+  /** Where opening this repository lands; null while its manifest supplies no notebook. */
   defaultNotebook: NotebookKey | null;
   /** The preferences of this repository's notebooks; a device's own choices still win in the browser. */
   preferences: ResolvedPreferences;
@@ -89,22 +89,24 @@ export interface RepositoryStatus {
   configRevision: string;
   /** `derived`: the repository keeps no manifest yet, and `config` is what saving it creates. */
   manifest?: 'derived';
-  /** Why this repository's own manifest cannot be read, with its text so Settings can fix it. */
+  /** Why this repository's own manifest cannot be loaded, with its text so Settings can fix it; the repository is then unavailable. */
   manifestError?: { message: string; text: string; };
-  /** The manifest's `default_notebook` when it names no notebook this repository serves; `defaultNotebook` is its first one instead. */
-  unservedDefault?: string;
 }
 /** The answer of `GET /api/workspace`. */
 export interface WorkspaceStatus {
-  /** The manifest as the home repository stores it, with local notebook ids; absent before a worktree has its first manifest. */
-  config: WorkspaceConfig | null;
-  /** `config` as the workspace names it: each notebook's `id` and `workspace.default_notebook` are notebook keys. */
+  /**
+   * Every notebook of the workspace as one manifest, named by key: the default repository's title, default notebook
+   * and preferences, with each notebook's `id` its key; null while no repository supplies a notebook.
+   */
   keyedConfig: WorkspaceConfig | null;
   local: boolean;
-  home: RepositoryId;
+  /** The default repository; null in a workspace without one. */
+  defaultRepository: RepositoryId | null;
   repositories: RepositoryStatus[];
-  /** The home worktree, in a local workspace. */
+  /** The default worktree, in a local workspace. */
   repoRoot?: string;
   /** The deployment lets each visitor choose their repository, so the app offers to switch it. */
   repositoryChoice?: boolean;
+  /** Whether Settings offers Core updates: for the local Core checkout, or for a remote deployment's product repository. */
+  coreUpdate: boolean;
 }

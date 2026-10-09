@@ -4,7 +4,7 @@ import { agentFileAllowed, classifyResource, historyFile, managedNotebook, resol
 import { changeFile, commitSelectedFiles, commitStagedFiles, fileDiff, generateCommitMessage, getDiff, getGitStatus, getRecentCommits, listChanges, stageAndCommit, SyncError, syncWorkspace } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
 import { newVersion } from './note-history.js';
-import { eachRepository, type LocalHandle, repositoryOrHome } from './request-workspace.js';
+import { eachRepository, type LocalHandle, repositoryOrDefault } from './request-workspace.js';
 
 export function createLocalGitRouter(): Router {
   const router = Router();
@@ -25,9 +25,9 @@ export function createLocalGitRouter(): Router {
       return false;
     }
   };
-  /** The worktree a request names in `repository`, or the home worktree, with the manifest scope it serves. */
+  /** The worktree a request names in `repository`, or the default worktree, with its manifest. */
   const worktree = async (res: Response, id: unknown): Promise<{ id: string; root: string; config: WorkspaceConfig; }> => {
-    const { id: resolved, handle, config } = await repositoryOrHome(res, id);
+    const { id: resolved, handle, config } = await repositoryOrDefault(res, id);
     if (handle.kind !== 'local') throw new Error('This operation requires a local workspace.');
     return { id: resolved, root: handle.root, config };
   };

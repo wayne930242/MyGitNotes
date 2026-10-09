@@ -3,11 +3,11 @@ import express, { Router } from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { type RemoteCache, type RemoteSource, SourceError, type WorkspaceConfigSource, WorkspaceSetupError } from '@mygitnotes/core';
+import { type RemoteCache, type RemoteSource, siteIdentity, SourceError, type WorkspaceConfigSource, type WorkspaceRequest, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
 import { callWorkspaceRemoteTool, isMutationTool, remoteTools, type ToolAssets } from '@mygitnotes/mcp-server';
 import { type AssetStorage, resolveAssetScope } from './asset-storage.js';
-import { CredentialRejected, credentialToken } from './auth.js';
-import type { RecordStore } from './record-store/index.js';
+import { CredentialRejected, credentialToken, grantPerson } from './auth.js';
+import type { RecordStore, StoredRecord } from './record-store/index.js';
 import { openWorkspace, type RemoteHandle, type RequestWorkspace } from './request-workspace.js';
 
 /** The JSON-RPC body of an ordinary call; a hosted asset upload carries its file inside the body and may be larger. */
@@ -38,38 +38,59 @@ function toolAssets(storage: AssetStorage, req: express.Request, res: express.Re
   return (handle): ToolAssets => ({ scope: () => resolveAssetScope(storage, req, res, handle as RemoteHandle), reserve: storage.reserve && ((scope, key, bytes) => storage.reserve!(scope, key, bytes)), record: storage.record && ((scope, key, delta) => storage.record!(scope, key, delta)) });
 }
 
+/** The request as the configuration source sees it for a grant: the grant's person and no browser cookie, so a cookie never chooses the person. */
+function grantRequest(req: express.Request, person: WorkspaceRequest['person']): WorkspaceRequest {
+  const { cookie: _cookie, ...headers } = req.headers;
+  return { headers, ...(person ? { person } : {}) };
+}
+
+/**
+ * The members a grant reaches. A grant bound to a person and site reaches every visible member on that site. A grant
+ * made before grants bound to a person reaches only the repository it was made for, while that repository is a
+ * visible member, and nothing otherwise; it stays accepted until its owner revokes it.
+ */
+function grantSettings(settings: WorkspaceSettings, grant: StoredRecord): WorkspaceSettings {
+  if (typeof grant.source !== 'string') return settings;
+  return { ...settings, members: settings.members.filter(member => member.ref.id === grant.source && !member.hidden).map(member => ({ ...member, default: true })) };
+}
+
 export function createRemoteMCP(store: RecordStore, configSource: WorkspaceConfigSource, assetStorage: AssetStorage, cache?: RemoteCache): Router {
   const router = Router();
   router.post(['/', '/:token'], async (req, res) => {
     try {
-      // A deployment without a usable source answers like one configured for local files.
-      const settings = await configSource.settings(req).catch((error: unknown) => {
-        if (error instanceof WorkspaceSetupError) return undefined;
-        throw error;
-      });
-      if (!settings || settings.home.source.type === 'local') return res.status(503).json({ error: 'Configure a GitHub or GitLab source for remote MCP.' });
-      const home = settings.home;
+      if (configSource.mode === 'local') return res.status(503).json({ error: 'Configure a GitHub or GitLab source for remote MCP.' });
       const urlToken = typeof req.params.token === 'string' && /^[A-Za-z0-9_-]{43}$/.test(req.params.token) ? req.params.token : undefined;
       const bearer = urlToken || req.headers.authorization?.match(/^Bearer ([A-Za-z0-9_-]{43})$/)?.[1];
       const grant = bearer ? await store.get(bearer) : null;
       // Rejections of an existing grant outlive the runtime logs so its owner can read the reason on the grant list.
       const remember = (reason: string) => store.recordRejection(bearer!, reason).catch(error => console.warn(`[mcp] rejection record failed: ${(error as Error).message}`));
-      if (grant?.kind !== 'agent' || grant.source !== home.id || grant.audience !== `${process.env.APP_URL}/mcp`) {
-        const reason = !bearer ? 'no-token' : !grant ? 'grant-missing' : grant.kind !== 'agent' ? 'grant-kind' : grant.source !== home.id ? 'grant-source' : 'grant-audience';
+      const unauthorized = async (reason: string) => {
         console.warn(`[mcp] unauthorized: ${reason}`);
         if (grant?.kind === 'agent') await remember(reason);
         res.setHeader('WWW-Authenticate', 'Bearer realm="MyGitNotes MCP"');
         return res.status(401).json({ error: 'Create a MyGitNotes agent token after signing in.' });
-      }
+      };
+      // The grant is verified before the workspace is resolved, and the workspace is the person's the grant names.
+      if (grant?.kind !== 'agent' || grant.audience !== `${process.env.APP_URL}/mcp`) return unauthorized(!bearer ? 'no-token' : !grant ? 'grant-missing' : grant.kind !== 'agent' ? 'grant-kind' : 'grant-audience');
+      const person = await grantPerson(store, grant);
+      // A deployment without a usable source answers like one configured for local files.
+      const settings = await configSource.settings(grantRequest(req, person)).catch((error: unknown) => {
+        if (error instanceof WorkspaceSetupError) return undefined;
+        throw error;
+      });
+      if (!settings || settings.site.type === 'local') return res.status(503).json({ error: 'Configure a GitHub or GitLab source for remote MCP.' });
+      if (typeof grant.source !== 'string' && grant.site !== siteIdentity(settings.site)) return unauthorized('grant-site');
       let token: string;
       try {
-        token = await credentialToken(store, grant.credential || grant.session, home.source);
+        token = await credentialToken(store, grant.credential || grant.session, settings.site);
       } catch (error) {
         if (!(error instanceof SourceError)) console.warn(`[mcp] credential lookup failed: ${(error as Error).message}`);
         await remember(error instanceof CredentialRejected ? error.reason : 'credential-unavailable');
         return res.status(error instanceof SourceError ? error.status : 503).json({ error: error instanceof SourceError ? error.message : 'Agent authorization service unavailable. Retry later.' });
       }
-      const workspace = openWorkspace(settings, token, cache);
+      // Asset storage finds the caller on the request too: it is the grant's person, not a browser session.
+      if (person) (req as express.Request & WorkspaceRequest).person = person;
+      const workspace = openWorkspace(grantSettings(settings, grant), token, cache);
       const assets = toolAssets(assetStorage, req, res);
       try {
         await readBody(req, res, workspace, assets);

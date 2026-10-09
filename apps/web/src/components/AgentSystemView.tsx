@@ -59,18 +59,18 @@ interface AgentSystemViewProps {
   /** The selected notebook's folders, for picking the folder of a new workspace. */
   folders: FolderItem[];
   repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'branch' | 'write' | 'notebooks' | 'title'>[];
-  /** The home repository, whose Git status the app shows. */
-  homeRepository: string;
+  /** The default repository, whose Git status the app shows. */
+  defaultRepository: string;
   onBusyChange: (busy: boolean) => void;
 }
 
 /** The Agents page: pick an agent workspace, then edit its core instructions and its skills with their reference files and scripts. */
-export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemViewProps>(({ remote = false, notebooks, folders, repositories, homeRepository, onBusyChange, onGitStatus }, ref) => {
+export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemViewProps>(({ remote = false, notebooks, folders, repositories, defaultRepository, onBusyChange, onGitStatus }, ref) => {
   const { t, language } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const sections = useAgentWorkspaceSections();
   const [workspaces, setWorkspaces] = useState<AgentWorkspace[]>([]);
-  const [selected, setSelected] = useState<WorkspaceRef>(() => savedWorkspace() ?? { repository: homeRepository, folder: '' });
+  const [selected, setSelected] = useState<WorkspaceRef>(() => savedWorkspace() ?? { repository: defaultRepository, folder: '' });
   const [files, setFiles] = useState<AgentFile[]>([]);
   const [selectedPath, setSelectedPath] = useState<string>('');
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -135,14 +135,14 @@ export const AgentSystemView = React.forwardRef<AgentSystemHandle, AgentSystemVi
     const changes = (await fetchFileChanges()).filter(file => file.repository === repository);
     setRestorableFiles(Object.fromEntries(changes.filter(file => file.available && file.tracked).map(file => [file.path, file.revision])));
     setFileStatus(status);
-    if (repository === homeRepository) onGitStatus?.(status);
+    if (repository === defaultRepository) onGitStatus?.(status);
   };
   const restoreTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   /** Lists every workspace and the files of the chosen one's repository; a chosen workspace that is gone falls back to the home root. */
   const loadWorkspace = async (wanted: WorkspaceRef, path?: string) => {
     const all = await fetchAgentWorkspaces();
-    const target = all.find(candidate => sameWorkspace(candidate, wanted)) ?? { repository: homeRepository, folder: '' };
+    const target = all.find(candidate => sameWorkspace(candidate, wanted)) ?? { repository: defaultRepository, folder: '' };
     const listing = await fetchAgentResources(target.repository);
     revision.current = listing.revision;
     setWorkspaces(all);

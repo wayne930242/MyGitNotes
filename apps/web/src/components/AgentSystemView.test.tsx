@@ -38,7 +38,7 @@ function view({ sections = [], writable = true }: { sections?: RenderAgentWorksp
   return render(
     <WebFeaturesProvider features={[{ id: 'edition', agentWorkspaceSections: sections }]}>
       <I18nProvider>
-        <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories.map(repository => ({ ...repository, write: writable }))} homeRepository={home} onBusyChange={() => {}} />
+        <AgentSystemView notebooks={notebooks} folders={[]} repositories={repositories.map(repository => ({ ...repository, write: writable }))} defaultRepository={home} onBusyChange={() => {}} />
       </I18nProvider>
     </WebFeaturesProvider>,
   );

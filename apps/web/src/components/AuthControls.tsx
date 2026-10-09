@@ -29,7 +29,8 @@ async function requestGrant(url: string, fallback: TranslationKey, init?: Reques
 }
 
 type Session = { authenticated?: boolean; login?: string; configured?: boolean; provider?: 'github' | 'gitlab'; loginUrl?: string; storage?: 'stored' | 'cookie'; repositoryChoice?: boolean; };
-type Grant = { id: string; name: string; write: boolean; source: string; createdAt: number; expiresAt: null; };
+/** `source`: a grant made before grants reached every visible repository, which reaches that one repository only. */
+type Grant = { id: string; name: string; write: boolean; source?: string; site?: string; createdAt: number; expiresAt: null; };
 function useSession() {
   const [session, setSession] = useState<Session>({});
   useEffect(() => {
@@ -237,7 +238,7 @@ export function AgentAccessSettings({ local = false }: { local?: boolean; }) {
                 <div className='min-w-0'>
                   <p className='text-sm font-medium truncate'>{grant.name}</p>
                   <p className='text-xs text-muted'>{grant.write ? t('auth.readAndWrite') : t('auth.readOnly')}{' · '}{t('auth.untilRevoked')}{' · '}{new Date(grant.createdAt).toLocaleDateString(language)}</p>
-                  <p className='text-xs font-mono text-muted truncate'>{grant.source.replace(/^(github|gitlab):/, '')}</p>
+                  <p className='text-xs text-muted truncate'>{grant.source ? t('auth.grantOneRepository', { repository: grant.source.replace(/^(github|gitlab):/, '') }) : t('auth.grantVisibleRepositories')}</p>
                 </div>
                 {confirmRevoke === grant.id
                   ? (

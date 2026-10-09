@@ -105,7 +105,7 @@ export function useWorkingNoteCommit({ documents, sourceId, t, stageWorkingNote,
   /** With `version`, the one selected note's version file joins its commit. */
   const commitWorkingNotes = async (files: Pick<FileChange, 'path' | 'repository'>[], message: string, version?: NewVersionRequest) => {
     const workspace = await fetchWorkspace(true);
-    if (workspace.home !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
+    if ((workspace.defaultRepository ?? '') !== sourceId) throw new Error('Sign in with write access to this workspace before committing.');
     const repositories = workspace.repositories.filter(repository => !repository.unavailable);
     const groups = new Map<string, CommitGroup>();
     for (const file of files) {

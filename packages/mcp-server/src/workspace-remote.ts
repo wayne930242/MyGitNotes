@@ -51,8 +51,8 @@ export async function callWorkspaceRemoteTool(workspace: WorkspaceRepositories<R
   const repositories = await workspace.all();
   const available = repositories.filter((entry): entry is typeof entry & { handle: RemoteHandle; } => 'handle' in entry);
   const unavailable = repositories.filter(entry => 'unavailable' in entry).map(entry => ({ repository: entry.ref.id, message: entry.unavailable.message }));
-  if (name === 'get_workspace_config') return { config: await workspace.keyedConfig(), notebooks: await listedNotebooks(workspace), revision: await revisions([available[0]]) };
-  if (name === 'list_notebooks') return { notebooks: await listedNotebooks(workspace), revision: await revisions([available[0]]) };
+  if (name === 'get_workspace_config') return { config: await workspace.keyedConfig(), notebooks: await listedNotebooks(workspace), revision: await revisions(available.slice(0, 1)) };
+  if (name === 'list_notebooks') return { notebooks: await listedNotebooks(workspace), revision: await revisions(available.slice(0, 1)) };
   const notebookKey = await notebookArgument(workspace, input.notebookId);
   const args: Args = notebookKey ? { ...input, notebookId: notebookKey } : input;
   const web = (entry: (typeof available)[number]) => appUrl ? { appUrl, alias: entry.alias } : undefined;
@@ -192,12 +192,13 @@ async function resolvePath(workspace: WorkspaceRepositories<RemoteHandle>, name:
     return entries[0];
   }
   if (typeof args.path === 'string' && args.path !== '.' && !args.path.startsWith('r2:')) {
-    if (args.path.startsWith('.agents/skills/') && (await workspace.all()).length === 1) return workspace.byId(workspace.home.ref.id);
+    const repositories = await workspace.all();
+    if (args.path.startsWith('.agents/skills/') && repositories.length === 1) return workspace.byId(repositories[0].ref.id);
     return notebookPath(workspace, args.path);
   }
   if (pathTools.has(name) && !args.path?.toString().startsWith('r2:')) throw new Error('Name a notebook or a path inside a configured notebook.');
   if (name === 'replace_notes' && !args.notebookId && !args.dryRun) throw new Error('replace_notes requires notebookId so one mutation writes one repository.');
   if (name === 'invoke_skill' && !args.path && (await workspace.all()).length !== 1) throw new Error('Name a notebook or note path when invoking a skill in a multi-repository workspace.');
   if (typeof args.path === 'string' && args.path.startsWith('r2:')) return r2Repository(workspace, args.path.slice(3), assetsFor);
-  return workspace.byId(workspace.home.ref.id);
+  return workspace.defaultRepository();
 }

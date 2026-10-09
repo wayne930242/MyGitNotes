@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect, it } from 'vitest';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
 
 const sha = (text: string) => createHash('sha1').update(text).digest('hex');
@@ -32,7 +32,7 @@ function historyFixture() {
     if (endpoint.startsWith(`/repository/blobs/${sha(oldText)}`)) return json({ encoding: 'base64', content: Buffer.from(oldText).toString('base64'), size: oldText.length });
     return f.request(input, init);
   }) as typeof fetch;
-  return { f, calls, reader: () => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', request).reader };
+  return { f, calls, reader: () => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'token', request).reader };
 }
 
 it('reads a note’s GitLab history from the snapshot head, page by page, and the note as an older commit held it', async () => {

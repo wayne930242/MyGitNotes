@@ -45,11 +45,11 @@ describe('a repository without a manifest', () => {
     const { source, store, published } = repositoryWithout([tree('journal'), blob('journal/today.md')]);
     const loaded = await store.load();
     expect(loaded).toMatchObject({ derived: true, revision: 'a'.repeat(40) });
-    // Read as its own file, the repository simply has none; deriving notebooks is the home repository's business.
-    expect(await store.read()).toEqual({ state: 'missing', revision: 'a'.repeat(40) });
+    // Read as its own manifest, the repository keeps none, and its notebooks are the derived ones.
+    expect(await store.read()).toEqual({ state: 'derived', config: loaded.config, revision: 'a'.repeat(40) });
     expect(loaded.config.workspace.title).toBe('field-notes');
     expect((await source.note('journal/today.md')).notebookId).toBe('journal');
-    await store.save(`schema_version: 3\nworkspace:\n  title: Field notes\n  default_notebook: journal\nnotebooks:\n  - id: journal\n    title: Journal\n    root: journal\n`, 'a'.repeat(40));
+    await store.save(`schema_version: 4\nworkspace:\n  title: Field notes\n  default_notebook: journal\nnotebooks:\n  - id: journal\n    title: Journal\n    root: journal\n`, 'a'.repeat(40));
     expect(published).toHaveLength(1);
     expect(published[0].map(change => change.path)).toEqual(['.mygitnotes.yaml']);
     expect(parseYaml(published[0][0].content!).workspace.title).toBe('Field notes');

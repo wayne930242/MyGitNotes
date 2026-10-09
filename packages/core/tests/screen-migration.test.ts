@@ -25,6 +25,8 @@ const write = (root: string, file: string, text: string) => {
 const read = (root: string, file: string) => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = (version: number, extra = '') => `schema_version: ${version}\nworkspace:\n  title: W\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/a\n  - id: b\n    title: B\n    root: notes/b\n${extra}`;
 const notebooks = [{ id: 'a', root: 'notes/a' }, { id: 'b', root: 'notes/b' }];
+/** A repository's own manifest with the one notebook `id`, at notes/<id>. */
+const ownManifest = (version: number, id: string) => `schema_version: ${version}\nworkspace:\n  title: W\n  default_notebook: ${id}\nnotebooks:\n  - id: ${id}\n    title: ${id.toUpperCase()}\n    root: notes/${id}\n`;
 
 const screenV2 = { version: 2, rows: [{ id: 'reading', notebookId: 'a', kind: 'custom', name: 'Reading list', view: 'medium', items: [{ id: 'n1', kind: 'note', notebookId: 'a', path: 'notes/a/one.md' }, { id: 'y1', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 12 }], progression: { stages: [{ status: 'new', intervalDays: 1 }], easy: 'two' }, study: { filter: 'due', dueFirst: true } }, { id: 'tagged', notebookId: 'a', kind: 'dynamic', name: 'Reading list', view: 'thumbnail', source: { kind: 'tag', tag: 'clue', notebookId: 'a' }, sort: { field: 'title', order: 'asc' } }, { id: 'graph', notebookId: 'b', kind: 'custom', name: 'Map', view: 'graph', items: [{ id: 'g1', kind: 'note', notebookId: 'b', path: 'notes/b/z.md' }], graph: { nodes: [{ path: 'notes/b/z.md', x: 10, y: 20 }] } }] };
 const focusWithLanes = { version: 1, focuses: [{ id: 'weekly', notebookId: 'a', name: 'Weekly', division: 'columns-2', panes: [{ tabs: [{ kind: 'note', path: 'notes/a/one.md' }, { kind: 'lane', id: 'reading' }] }, { tabs: [{ kind: 'lane', id: 'gone' }, { kind: 'lane', id: 'tagged' }] }] }] };
@@ -64,7 +66,7 @@ describe('migrateWorkspace with a Screen file', () => {
     const result = migrateWorkspace(root);
     expect(result.migrated).toBe(true);
     expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(false);
-    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 3$/m);
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 4$/m);
     const repository = result.repositories[0];
     expect(repository.root).toBe(root);
     expect(repository.touched).toContain('.github-notes-screen.yaml');
@@ -91,17 +93,27 @@ describe('migrateWorkspace with a Screen file', () => {
     expect(fs.existsSync(path.join(root, '.github-notes-screen.yaml'))).toBe(true);
     expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
   });
-  it('migrates the worktree of a notebook repository beside the home repository', () => {
-    const root = temp(), other = temp();
-    write(root, '.mygitnotes.yaml', manifest(2).replace('  - id: b\n    title: B\n    root: notes/b\n', '  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n'));
+  it('migrates each member worktree from its own manifest, and skips one that keeps none', () => {
+    const root = temp(), other = temp(), bare = temp();
+    write(root, '.mygitnotes.yaml', ownManifest(2, 'a'));
+    write(other, '.mygitnotes.yaml', ownManifest(2, 'b'));
     write(root, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[0]] }));
     write(other, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[2]] }));
-    const config = { id: 'b', title: 'B', root: 'notes/b' };
-    const result = migrateWorkspace(root, { worktrees: [{ root: other, notebooks: [config] }] });
+    const result = migrateWorkspace(root, { worktrees: [other, bare] });
     expect(result.repositories.map(repository => repository.root).sort()).toEqual([root, other].sort());
     expect(fs.existsSync(path.join(other, 'notes/b/map.compilation.yml'))).toBe(true);
     expect(fs.existsSync(path.join(other, '.github-notes-screen.yaml'))).toBe(false);
     expect(fs.existsSync(path.join(root, 'notes/a/reading-list.compilation.yml'))).toBe(true);
+    expect(read(other, '.mygitnotes.yaml')).toMatch(/^schema_version: 4$/m);
+    expect(fs.readdirSync(bare)).toEqual([]);
+  });
+  it('refuses a manifest that still uses source and names the conversion command, writing nothing', () => {
+    const root = temp(), other = temp();
+    write(root, '.mygitnotes.yaml', ownManifest(3, 'a'));
+    write(other, '.mygitnotes.yaml', manifest(3).replace('  - id: b\n    title: B\n    root: notes/b\n', '  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n'));
+    expect(() => migrateWorkspace(root, { worktrees: [other] })).toThrow(/notebook\(s\) b use source, which schema 4 removed\. Run `pnpm convert-sources` in .* first\./);
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 3$/m);
+    expect(read(other, '.mygitnotes.yaml')).toMatch(/^schema_version: 3$/m);
   });
 });
 
@@ -187,14 +199,15 @@ describe('migrateWorkspace edge paths', () => {
   });
   it('reports the repositories already written when a later one cannot be', () => {
     const root = temp(), other = temp();
-    write(root, '.mygitnotes.yaml', manifest(2).replace('  - id: b\n    title: B\n    root: notes/b\n', '  - id: b\n    title: B\n    root: notes/b\n    source: { type: github, repository: owner/trpg }\n'));
+    write(root, '.mygitnotes.yaml', ownManifest(2, 'a'));
+    write(other, '.mygitnotes.yaml', ownManifest(2, 'b'));
     write(root, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[0]] }));
     write(other, '.github-notes-screen.yaml', YAML.stringify({ version: 2, rows: [screenV2.rows[2]] }));
     // `notes` is a file here, so notes/b cannot be created.
     write(other, 'notes', 'not a directory');
     let caught: unknown;
     try {
-      migrateWorkspace(root, { worktrees: [{ root: other, notebooks: [{ id: 'b', title: 'B', root: 'notes/b' }] }] });
+      migrateWorkspace(root, { worktrees: [other] });
     } catch (error) {
       caught = error;
     }
@@ -202,6 +215,8 @@ describe('migrateWorkspace edge paths', () => {
     const { applied } = caught as PartialMigrationError;
     expect(applied.map(repository => repository.root)).toEqual([root]);
     expect(applied[0].touched).toContain('notes/a/reading-list.compilation.yml');
-    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
+    // The written repository moved on whole; the one that failed kept its manifest, so a re-run tries it again.
+    expect(read(root, '.mygitnotes.yaml')).toMatch(/^schema_version: 4$/m);
+    expect(read(other, '.mygitnotes.yaml')).toMatch(/^schema_version: 2$/m);
   });
 });

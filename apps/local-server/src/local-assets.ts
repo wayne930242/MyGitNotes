@@ -2,7 +2,7 @@ import { Request, Response, Router } from 'express';
 import path from 'node:path';
 import fs from 'node:fs';
 import { assetHash, assetInfo, assetPath, assetRoot, decodeAsset, isAssetPath, notebookKey, resolveSafePath, scanAssets, SourceError } from '@mygitnotes/core';
-import { asLocal, homeRepository, notebookRepository, noteRepository } from './request-workspace.js';
+import { asLocal, defaultRepository, notebookRepository, noteRepository } from './request-workspace.js';
 import { stageAndCommit } from '@mygitnotes/git';
 
 export function createLocalAssetsRouter(): Router {
@@ -10,10 +10,10 @@ export function createLocalAssetsRouter(): Router {
 
   router.get('/', async (req: Request, res: Response) => {
     try {
-      // Without a notebook the listing covers the home repository's first notebook.
-      const home = req.query.notebookId ? undefined : await homeRepository(res);
-      if (home && !home.config.notebooks.length) return res.json({ assets: [] });
-      const { handle, alias, notebook } = home ? { ...home, notebook: home.config.notebooks[0] } : await notebookRepository(res, req.query.notebookId);
+      // Without a notebook the listing covers the default repository's first notebook.
+      const fallback = req.query.notebookId ? undefined : await defaultRepository(res);
+      if (fallback && !fallback.config.notebooks.length) return res.json({ assets: [] });
+      const { handle, alias, notebook } = fallback ? { ...fallback, notebook: fallback.config.notebooks[0] } : await notebookRepository(res, req.query.notebookId);
 
       res.json({ notebookId: notebookKey(alias, notebook.id), assets: scanAssets(asLocal(handle).root, notebook) });
     } catch (err: unknown) {

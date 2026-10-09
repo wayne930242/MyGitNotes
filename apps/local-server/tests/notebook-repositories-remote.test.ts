@@ -5,34 +5,11 @@ import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { createApp } from '../src/app.js';
 import { createRecordStore } from '../src/record-store/index.js';
+import { workspaceSettings } from './workspace-settings.js';
 
-const manifest = `schema_version: 3
-workspace:
-  title: Hosted
-  default_notebook: life
-notebooks:
-  - id: life
-    title: Life
-    root: notes/life
-  - id: trpg
-    title: TRPG
-    root: notes/life
-    source: { type: github, repository: owner/trpg }
-  - id: secret
-    title: Secret
-    root: notes/secret
-    source: { type: github, repository: owner/secret }
-  - id: drafts
-    title: Drafts
-    root: notes/drafts
-    source: { type: github, repository: owner/nobranch }
-  - id: lab
-    title: Lab
-    root: notes/lab
-    source: { type: gitlab, url: 'https://gitlab.com', repository: group/lab }
-`;
+const manifest = (title: string, id: string) => `schema_version: 4\nworkspace:\n  title: ${title}\n  default_notebook: ${id}\nnotebooks:\n  - id: ${id}\n    title: ${title}\n    root: notes/life\n`;
 /** Files and head commit of each repository the fake GitHub serves. */
-const repositories: Record<string, { head: string; files: Record<string, string>; }> = { 'owner/home': { head: 'a'.repeat(40), files: { '.mygitnotes.yaml': manifest, 'notes/life/note.md': '# Home note\n' } }, 'owner/trpg': { head: 'b'.repeat(40), files: { 'notes/life/note.md': '# TRPG note\n' } }, 'owner/nobranch': { head: '', files: {} } };
+const repositories: Record<string, { head: string; files: Record<string, string>; }> = { 'owner/home': { head: 'a'.repeat(40), files: { '.mygitnotes.yaml': manifest('Hosted', 'life'), 'notes/life/note.md': '# Home note\n' } }, 'owner/trpg': { head: 'b'.repeat(40), files: { '.mygitnotes.yaml': manifest('TRPG', 'trpg'), 'notes/life/note.md': '# TRPG note\n' } }, 'owner/nobranch': { head: '', files: {} } };
 let root: string, server: Server, base: string;
 let writes: { repository: string; endpoint: string; }[];
 const session = 'c'.repeat(43);
@@ -60,7 +37,9 @@ beforeEach(async () => {
     if (endpoint.startsWith('/git/refs/')) return json({ object: { sha: 'd'.repeat(40) } });
     return json({});
   });
-  server = createServer(createApp(root));
+  // Five members on github.com: two readable, one refused, one without its branch and one on GitLab.
+  const members = workspaceSettings([{ type: 'github', repository: 'owner/home', branch: 'main' }, { type: 'github', repository: 'owner/trpg', branch: 'main' }, { type: 'github', repository: 'owner/secret', branch: 'main' }, { type: 'github', repository: 'owner/nobranch', branch: 'main' }, { type: 'gitlab', url: 'https://gitlab.com', repository: 'group/lab', branch: 'main' }]);
+  server = createServer(createApp(root, { configSource: { mode: 'remote', settings: async () => members } }));
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
 });
@@ -76,14 +55,14 @@ const get = (url: string) => fetch(`${base}${url}`, { headers }).then(async resp
 
 it('opens notebook repositories with the signed-in credential and names why others are unavailable', async () => {
   const { body } = await get('/api/workspace');
-  // Each repository's alias derives from its name; its notebooks are named by key.
-  const byNotebook = Object.fromEntries(body.repositories.map((repository: { notebooks: string[]; }) => [repository.notebooks[0].split('~')[1], repository]));
-  expect(body.repositories.map((repository: { alias: string; notebooks: string[]; }) => [repository.alias, repository.notebooks])).toEqual([['home', ['home~life']], ['trpg', ['trpg~trpg']], ['secret', ['secret~secret']], ['nobranch', ['nobranch~drafts']], ['lab', ['lab~lab']]]);
-  expect(byNotebook.life).toMatchObject({ id: 'github:owner/home@main', revision: 'a'.repeat(40), write: true });
-  expect(byNotebook.trpg).toMatchObject({ id: 'github:owner/trpg@main', revision: 'b'.repeat(40), write: true });
-  expect(byNotebook.secret).toMatchObject({ write: false, unavailable: { reason: 'no-access' } });
-  expect(byNotebook.drafts).toMatchObject({ write: false, unavailable: { reason: 'missing-branch' } });
-  expect(byNotebook.lab).toMatchObject({ write: false, unavailable: { reason: 'unsupported-platform' } });
+  // Each repository's alias derives from its name; its notebooks, named by key, come from its own manifest, which an unavailable one cannot supply.
+  const byAlias = Object.fromEntries(body.repositories.map((repository: { alias: string; }) => [repository.alias, repository]));
+  expect(body.repositories.map((repository: { alias: string; notebooks: string[]; }) => [repository.alias, repository.notebooks])).toEqual([['home', ['home~life']], ['trpg', ['trpg~trpg']], ['secret', []], ['nobranch', []], ['lab', []]]);
+  expect(byAlias.home).toMatchObject({ id: 'github:owner/home@main', revision: 'a'.repeat(40), write: true });
+  expect(byAlias.trpg).toMatchObject({ id: 'github:owner/trpg@main', revision: 'b'.repeat(40), write: true });
+  expect(byAlias.secret).toMatchObject({ write: false, unavailable: { reason: 'no-access' } });
+  expect(byAlias.nobranch).toMatchObject({ write: false, unavailable: { reason: 'missing-branch' } });
+  expect(byAlias.lab).toMatchObject({ write: false, unavailable: { reason: 'unsupported-platform' } });
   expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=trpg~trpg')).body.note.content).toContain('TRPG note');
   expect((await get('/api/notes/read?path=notes/life/note.md&notebookId=home~life')).body.note.content).toContain('Home note');
   expect((await get('/api/notes/read?path=notes/secret/a.md&notebookId=secret~secret')).status).toBe(503);
@@ -102,8 +81,8 @@ it("reports each repository's own manifest and commits a manifest to the reposit
   const { body } = await get('/api/workspace');
   const [home, trpg] = body.repositories;
   expect(home).toMatchObject({ title: 'Hosted', defaultNotebook: 'home~life', configRevision: 'a'.repeat(40) });
-  expect(trpg).toMatchObject({ title: 'trpg', manifest: 'derived', configRevision: 'b'.repeat(40), config: { notebooks: [{ id: 'trpg', root: 'notes/life' }] } });
-  const put = (configRevision: string) => fetch(`${base}/api/workspace/config`, { method: 'PUT', headers, body: JSON.stringify({ repository: 'github:owner/trpg@main', configRevision, configYaml: 'schema_version: 3\nworkspace:\n  title: Campaign\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n' }) });
+  expect(trpg).toMatchObject({ title: 'TRPG', defaultNotebook: 'trpg~trpg', configRevision: 'b'.repeat(40), config: { notebooks: [{ id: 'trpg', root: 'notes/life' }] } });
+  const put = (configRevision: string) => fetch(`${base}/api/workspace/config`, { method: 'PUT', headers, body: JSON.stringify({ repository: 'github:owner/trpg@main', configRevision, configYaml: 'schema_version: 4\nworkspace:\n  title: Campaign\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/life\n' }) });
   // A revision the repository no longer holds is refused before anything is written.
   expect((await put('e'.repeat(40))).status).toBe(409);
   expect(writes).toEqual([]);

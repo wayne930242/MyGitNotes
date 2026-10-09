@@ -22,11 +22,11 @@ export interface LinkScope {
  * `data-source-notebook`, since notebook roots may repeat across repositories; without one it
  * is the notebook whose root holds the source path.
  */
-export function linkScope(element: HTMLElement, notebooks: NotebookConfig[], repositories: Record<string, RepositoryId>, home: RepositoryId): LinkScope {
+export function linkScope(element: HTMLElement, notebooks: NotebookConfig[], repositories: Record<string, RepositoryId>, defaultRepository: RepositoryId): LinkScope {
   const sourceId = element.closest<HTMLElement>('[data-source-notebook]')?.dataset.sourceNotebook;
   const source = notebooks.find(nb => nb.id === sourceId) ?? notebookOfPath(element.dataset.sourcePath || '', notebooks);
   const repository = source && repositories[source.id];
-  return { source, notebooks: source ? notebooks.filter(nb => (repositories[nb.id] ?? '') === (repository ?? '')) : [], resolve: localId => resolveBareId(repositories, home, localId) };
+  return { source, notebooks: source ? notebooks.filter(nb => (repositories[nb.id] ?? '') === (repository ?? '')) : [], resolve: localId => resolveBareId(repositories, defaultRepository, localId) };
 }
 
 /** Path aliases come from the source notebook when known. */

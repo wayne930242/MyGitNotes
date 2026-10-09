@@ -1,9 +1,9 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { getCurrentBranch, runGit, stageAndCommit } from '../packages/git/src/index.js';
-import { CORE_UPSTREAM_REPOSITORY, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
+import { CORE_UPSTREAM_REPOSITORY, loadWorkspaceConfig, resolveSafePath, resolveWorkspaceConfigPath, SUPPORTED_SCHEMA_VERSION, WORKSPACE_CONFIG_FILENAME } from '../packages/core/src/index.js';
 
-const EMPTY_WORKSPACE_CONFIG = `schema_version: 3
+const EMPTY_WORKSPACE_CONFIG = `schema_version: ${SUPPORTED_SCHEMA_VERSION}
 workspace:
   title: My Notes
   default_notebook: personal

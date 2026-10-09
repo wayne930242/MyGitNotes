@@ -15,8 +15,8 @@ describe('local /api/tags/apply', () => {
   let base: string;
   const git = (...args: string[]) => execFileSync('git', args, { cwd: root, stdio: 'pipe' });
   const post = async (body: object) => {
-    const { home } = await fetch(`${base}/api/workspace`).then(response => response.json());
-    return fetch(`${base}/api/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: home, ...body }) });
+    const { defaultRepository } = await fetch(`${base}/api/workspace`).then(response => response.json());
+    return fetch(`${base}/api/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: defaultRepository, ...body }) });
   };
 
   beforeEach(async () => {
@@ -185,8 +185,8 @@ describe.each(['github', 'gitlab'])('remote /api/tags/apply (%s)', provider => {
     await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
     const base = `http://127.0.0.1:${(server.address() as any).port}`;
     const post = async (body: object) => {
-      const { home } = await fetch(`${base}/api/workspace`).then(response => response.json());
-      return fetch(`${base}/api/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: home, ...body }) });
+      const { defaultRepository } = await fetch(`${base}/api/workspace`).then(response => response.json());
+      return fetch(`${base}/api/tags/apply`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: defaultRepository, ...body }) });
     };
     try {
       const res = await post({ entries: [{ path: 'notes/blog/a.md', notebookId: 'blog', tags: ['doing', 'x'] }, { path: 'notes/thesis/c.md', notebookId: 'thesis', tags: ['doing'] }], revision, message: 'rename todo to doing' });

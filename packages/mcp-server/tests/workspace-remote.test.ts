@@ -9,7 +9,8 @@ const a = repositoryRef(home).id;
 const b = repositoryRef(other).id;
 
 function fixture(two = true, otherRoot = 'notes/shared') {
-  const config = { schema_version: 3, workspace: { title: 'Test', default_notebook: 'home' }, notebooks: [{ id: 'home', title: 'Home', root: 'notes/shared' }, ...(two ? [{ id: 'other', title: 'Other', root: otherRoot, source: other }] : [])] } as WorkspaceConfig;
+  const manifests: Record<string, WorkspaceConfig> = { [a]: { schema_version: 4, workspace: { title: 'Test', default_notebook: 'home' }, notebooks: [{ id: 'home', title: 'Home', root: 'notes/shared' }] }, [b]: { schema_version: 4, workspace: { title: 'Other', default_notebook: 'other' }, notebooks: [{ id: 'other', title: 'Other', root: otherRoot }] } };
+  const members = [{ ref: repositoryRef(home), alias: 'home', default: true, hidden: false }, ...(two ? [{ ref: repositoryRef(other), alias: 'other', default: false, hidden: false }] : [])];
   const heads: Record<string, string> = { [a]: sha('a'), [b]: sha('b') };
   const writes: string[] = [];
   const note = (id: string) => ({ id: id, path: 'notes/shared/note.md', notebookId: id === a ? 'home' : 'other', title: id, metadata: {}, content: id, tags: [], revision: heads[id], size: 10 });
@@ -29,7 +30,7 @@ function fixture(two = true, otherRoot = 'notes/shared') {
         return { success: true, revision: heads[id], changedPaths: ['notes/shared/note.md'], commit: { commitHash: heads[id], message: 'test' } };
       },
     }) as unknown as RemoteSource;
-  const workspace = createWorkspaceRepositories({ home: repositoryRef(home), openHome: scope => ({ reader: reader(a, scope) }), manifest: () => ({ load: async () => ({ config, revision: heads[a] }), save: async () => ({ config, revision: heads[a] }) }), openRepository: async (ref: { id: string; }, scope: () => Promise<WorkspaceConfig>) => ({ reader: reader(ref.id, scope) }) });
+  const workspace = createWorkspaceRepositories({ members, openRepository: async ({ ref }, scope) => ({ reader: reader(ref.id, scope) }), manifest: ({ ref }) => ({ read: async () => ({ state: 'file' as const, config: manifests[ref.id], revision: heads[ref.id] }), save: async () => ({ revision: heads[ref.id] }) }) });
   return { workspace, heads, writes };
 }
 

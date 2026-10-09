@@ -44,7 +44,7 @@ interface SidebarProps {
   changeCount: number;
   /** Local sources only: shows the pull button and refreshes the workspace after a pull. */
   onPulled?: () => Promise<void>;
-  /** The home worktree's absolute path, named in the pull failure prompt. */
+  /** The default worktree's absolute path, named in the pull failure prompt. */
   repoRoot?: string;
   canManageTags?: boolean;
   onPreviewTagUsage?: (tag: string) => Promise<number>;

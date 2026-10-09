@@ -20,11 +20,11 @@ interface Params {
   invalidateNotes: () => void;
   setEditingNote: React.Dispatch<React.SetStateAction<NoteListItem | null>>;
   setGitStatus: WorkspaceState['setGitStatus'];
-  /** The home repository's draft scope, where the retired graph editing store kept its drafts. */
-  homeDraftScope: string;
+  /** The default repository's draft scope, where the retired graph editing store kept its drafts. */
+  defaultDraftScope: string;
 }
 
-export function useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, homeDraftScope }: Params) {
+export function useNoteSaving({ canWriteNotebook, remote, readDraft, readCommittedNote, t, stageWorkingNote, invalidateNotes, setEditingNote, setGitStatus, defaultDraftScope }: Params) {
   /** Saves a note of `notebookId`, whose repository decides whether it may be written. */
   const handleSaveNote = async (params: { path: string; content: string; metadata?: Record<string, unknown>; notebookId: string; revision?: string; baseNote?: NoteItem; }) => {
     if (!canWriteNotebook(params.notebookId)) throw new Error('This workspace is read-only.');
@@ -50,8 +50,8 @@ export function useNoteSaving({ canWriteNotebook, remote, readDraft, readCommitt
 
   // Drafts the retired graph editing store left behind join the editor's own draft recovery.
   useEffect(() => {
-    if (homeDraftScope) adoptGraphDrafts(homeDraftScope);
-  }, [homeDraftScope]);
+    if (defaultDraftScope) adoptGraphDrafts(defaultDraftScope);
+  }, [defaultDraftScope]);
 
   return { handleSaveNote };
 }

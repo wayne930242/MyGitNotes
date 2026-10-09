@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { type Response, Router } from 'express';
 import { githubSite, SourceError } from '@mygitnotes/core';
-import { requestToken, workspaceOf } from './request-workspace.js';
+import { requestSite, requestToken } from './request-workspace.js';
 
 /** A Gist request refused because the sign-in grant lacks the `gist` scope; signing in again grants it. */
 export class GistAuthorizationError extends SourceError {
@@ -92,15 +92,15 @@ export async function syncGists(token: string, notes: PublishedNote[], url?: str
   return results;
 }
 
-/** The signed-in GitHub token of a request whose home repository is on GitHub, or undefined for any other request. */
+/** The signed-in GitHub token of a request whose workspace is on GitHub, or undefined for any other request. */
 export function gistToken(res: Response): string | undefined {
-  return workspaceOf(res).home.ref.source.type === 'github' ? requestToken(res) : undefined;
+  return requestSite(res).type === 'github' ? requestToken(res) : undefined;
 }
 
-/** The GitHub Enterprise site the request's home repository is on; undefined for github.com. */
+/** The GitHub Enterprise site the request's workspace is on; undefined for github.com. */
 export function gistSite(res: Response): string | undefined {
-  const { source } = workspaceOf(res).home.ref;
-  return source.type === 'github' ? source.url : undefined;
+  const site = requestSite(res);
+  return site.type === 'github' ? site.url : undefined;
 }
 
 /**
@@ -119,7 +119,7 @@ export function gistPageAllowed(location: URL, url?: string): boolean {
 export function createGistRouter(): Router {
   const router = Router();
   const token = (res: Response) => {
-    if (workspaceOf(res).home.ref.source.type !== 'github') throw new SourceError('Gists require a GitHub workspace.');
+    if (requestSite(res).type !== 'github') throw new SourceError('Gists require a GitHub workspace.');
     const value = requestToken(res);
     if (!value) throw new SourceError('Sign in with GitHub to publish Gists.', 401);
     return value;

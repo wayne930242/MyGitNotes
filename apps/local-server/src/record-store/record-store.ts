@@ -9,7 +9,10 @@ export interface GrantSummary {
   id: string;
   name: string;
   write: boolean;
-  source: string;
+  /** A grant made before grants bound to a person and site: the one repository it reaches while that repository is a visible member. */
+  source?: string;
+  /** A grant bound to a person and site: the site whose visible repositories it reaches. */
+  site?: string;
   createdAt: number;
   expiresAt: null;
   lastRejection: StoredRecord | null;
@@ -137,7 +140,7 @@ export class SealedRecordStore implements RecordStore {
     for (const id of await backend.grantCandidates(ownerId)) {
       const grant = await this.read(id);
       if (grant === sealedElsewhere) continue;
-      if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, source: grant.source, createdAt: grant.createdAt, expiresAt: null, lastRejection: await this.getByDigest(digest(`rejection:${id}`)) || null });
+      if (grant?.kind === 'agent' && grant.ownerId === ownerId) results.push({ id, name: grant.name, write: grant.write, ...(typeof grant.source === 'string' ? { source: grant.source } : {}), ...(typeof grant.site === 'string' ? { site: grant.site } : {}), createdAt: grant.createdAt, expiresAt: null, lastRejection: await this.getByDigest(digest(`rejection:${id}`)) || null });
       else if (!grant) await backend.forgetGrant(ownerId, id);
     }
     return results.sort((a, b) => b.createdAt - a.createdAt);

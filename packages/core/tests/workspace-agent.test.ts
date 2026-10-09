@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { workspaceAgentKind } from '../src/workspace-agent.js';
 
 const files: Record<string, string> = { '.github-notes.yaml': 'schema_version: 1\nworkspace:\n  title: Test\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n', 'AGENTS.md': '# Workspace\n', '.agents/skills/custom/SKILL.md': '# Skill\n' };
@@ -17,7 +17,7 @@ function remote(token: string | undefined = 'fixture', push = true, branch = 'ma
     else throw Error(`Unexpected endpoint ${endpoint}`);
     return new Response(JSON.stringify(value), { status: 200 });
   });
-  return { source: openRemoteHome({ type: 'github', repository: 'agent/test', branch: branch }, token, request as typeof fetch).reader, request };
+  return { source: openRemoteRepository({ type: 'github', repository: 'agent/test', branch: branch }, token, request as typeof fetch).reader, request };
 }
 
 describe('workspace Agent documents', () => {

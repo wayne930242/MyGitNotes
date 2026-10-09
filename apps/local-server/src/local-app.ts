@@ -12,7 +12,7 @@ import { createLocalAssetsRouter } from './local-assets.js';
 import { createLocalGitRouter } from './local-git.js';
 import { createLocalCoreUpdateRouter } from './local-core-update.js';
 import { createLocalRawAssetsRouter } from './local-raw-assets.js';
-import { asLocal, localHome, localRepository, noteRepository, repositoryOrHome } from './request-workspace.js';
+import { asLocal, localRepository, noteRepository, repositoryOrDefault } from './request-workspace.js';
 
 function validateWorkspacePath(repoRoot: string, reqPath: string, candidate: unknown, config: WorkspaceConfig): void {
   if (typeof candidate !== 'string') throw new Error('Paths must be strings.');
@@ -34,11 +34,11 @@ const workspaceRequest = (requestPath: string) => ['/api/', '/raw-assets/', '/r2
 
 /**
  * The worktree a path belongs to: the repository the request names, the named notebook's repository,
- * the repository of the notebook containing it, or the home repository for workspace-level files.
+ * the repository of the notebook containing it, or the default repository for workspace-level files.
  */
 async function worktreeOf(res: express.Response, candidate: string, notebookId: unknown, repository: unknown): Promise<{ root: string; config: WorkspaceConfig; }> {
   if (repository !== undefined && repository !== '') {
-    const { handle, config } = await repositoryOrHome(res, repository);
+    const { handle, config } = await repositoryOrDefault(res, repository);
     return { root: asLocal(handle).root, config };
   }
   const resolved = await noteRepository(res, candidate, notebookId).catch((error: unknown) => {
@@ -76,7 +76,7 @@ export function createLocalApp(appRoot: string): express.Express {
         roots.add(root);
       }
       if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
-        if (!roots.size) roots.add(localHome(res).root);
+        if (!roots.size) roots.add((await localRepository(res)).root);
         for (const root of roots) {
           if (await getCurrentBranch(root) !== 'main') return res.status(403).json({ error: 'Switch to the main workspace branch to edit notes.' });
         }

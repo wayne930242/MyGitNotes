@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { deriveAlias, isBareNotebookId, keyedItem, localIdIn, notebookKey, parseNotebookKey, repositoryName } from '../src/notebook-key.js';
 import { repositoryRef } from '../src/repository.js';
 import type { WorkspaceConfig } from '../src/types.js';
+import type { WorkspaceMember } from '../src/workspace-config-source.js';
 import { createWorkspaceRepositories } from '../src/workspace-repositories.js';
 
 describe('notebook keys', () => {
@@ -47,23 +48,26 @@ describe('alias derivation', () => {
 });
 
 describe('workspace notebooks by key', () => {
-  const home = repositoryRef({ type: 'github', repository: 'owner/kb', branch: 'main' });
-  const trpg = { type: 'github' as const, repository: 'owner/campaign', branch: 'main' };
-  const config: WorkspaceConfig = { schema_version: 3, workspace: { title: 'Test', default_notebook: 'blog' }, notebooks: [{ id: 'blog', title: 'Blog', root: 'blog' }, { id: 'all', title: 'All', root: 'all' }, { id: 'trpg', title: 'TRPG', root: 'notes', source: trpg }] };
-  const repositories = () => createWorkspaceRepositories<unknown>({ home, openHome: scope => ({ scope }), manifest: () => ({ load: async () => ({ config, revision: 'a'.repeat(40) }), save: vi.fn() }), openRepository: async (_ref, scope) => ({ scope }) });
+  const kb = repositoryRef({ type: 'github', repository: 'owner/kb', branch: 'main' });
+  const campaign = repositoryRef({ type: 'github', repository: 'owner/campaign', branch: 'main' });
+  const manifests: Record<string, WorkspaceConfig> = { [kb.id]: { schema_version: 4, workspace: { title: 'Test', default_notebook: 'blog' }, notebooks: [{ id: 'blog', title: 'Blog', root: 'blog' }, { id: 'all', title: 'All', root: 'all' }, { id: 'shared', title: 'Shared', root: 'shared' }] }, [campaign.id]: { schema_version: 4, workspace: { title: 'Campaign', default_notebook: 'trpg' }, notebooks: [{ id: 'trpg', title: 'TRPG', root: 'notes' }, { id: 'shared', title: 'Shared', root: 'shared' }] } };
+  const members = [{ ref: kb, alias: 'kb', default: true, hidden: false }, { ref: campaign, alias: 'campaign', default: false, hidden: false }];
+  const repositories = () => createWorkspaceRepositories<WorkspaceMember>({ members, openRepository: async member => member, manifest: member => ({ read: async () => ({ state: 'file' as const, config: manifests[member.ref.id], revision: 'a'.repeat(40) }), save: vi.fn() }) });
 
-  it('derives each repository alias from its name and serves its notebooks by key', async () => {
+  it("serves each repository's own notebooks under its alias", async () => {
     const workspace = repositories();
-    expect(workspace.home.alias).toBe('kb');
-    expect((await workspace.all()).map(entry => [entry.alias, entry.notebooks.map(notebook => [notebook.id, notebook.key])])).toEqual([['kb', [['blog', 'kb~blog'], ['all', 'kb~all']]], ['campaign', [['trpg', 'campaign~trpg']]]]);
+    expect(workspace.default?.alias).toBe('kb');
+    expect((await workspace.all()).map(entry => [entry.alias, entry.notebooks.map(notebook => [notebook.id, notebook.key])])).toEqual([['kb', [['blog', 'kb~blog'], ['all', 'kb~all'], ['shared', 'kb~shared']]], ['campaign', [['trpg', 'campaign~trpg'], ['shared', 'campaign~shared']]]]);
     expect((await workspace.forNotebook('kb~all')).notebook.id).toBe('all');
     expect((await workspace.forNotebook('campaign~trpg')).ref.id).toBe('github:owner/campaign@main');
+    expect((await workspace.forNotebook('campaign~shared')).ref.id).toBe('github:owner/campaign@main');
   });
 
-  it('resolves a bare local id to the one repository that has it, and nothing else', async () => {
+  it('resolves a bare local id to the one repository that has it, else to the default repository', async () => {
     const workspace = repositories();
     expect(await workspace.resolveBareId('trpg')).toBe('campaign~trpg');
     expect(await workspace.resolveBareId('blog')).toBe('kb~blog');
+    expect(await workspace.resolveBareId('shared')).toBe('kb~shared');
     expect(await workspace.resolveBareId('missing')).toBeNull();
     expect(await workspace.resolveBareId('kb~blog')).toBeNull();
   });

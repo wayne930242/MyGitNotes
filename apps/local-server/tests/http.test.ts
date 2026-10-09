@@ -376,8 +376,8 @@ describe('real HTTP local boundaries', () => {
     git('add', '.');
     git('commit', '-m', 'remove manifest');
     const configYaml = 'schema_version: 1\nworkspace:\n  title: Fresh\n  default_notebook: example\nnotebooks:\n  - id: example\n    title: Example\n    root: notes/example\n';
-    const { config, repositories: [home] } = await (await fetch(`${base}/api/workspace`)).json();
-    expect(config).toBeNull();
+    const { keyedConfig, repositories: [home] } = await (await fetch(`${base}/api/workspace`)).json();
+    expect(keyedConfig).toBeNull();
     expect(home).toMatchObject({ configRevision: 'none', config: null, defaultNotebook: null });
     const response = await fetch(`${base}/api/workspace/config`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ repository: home.id, configYaml, configRevision: home.configRevision }) });
     expect(response.status).toBe(200);

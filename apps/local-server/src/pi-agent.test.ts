@@ -389,7 +389,7 @@ describe('agent workspaces', () => {
     fs.writeFileSync(path.join(root, 'apps/AGENTS.md'), '# Not a workspace\n');
     const config = { notebooks: [{ id: 'blog', title: 'Blog', root: 'blog/posts' }] };
     const workspace = {
-      home: { ref: { id: 'home' }, handle: { kind: 'local', id: 'home', root } },
+      defaultRepository: async () => ({ ref: { id: 'home' }, alias: 'home', handle: { kind: 'local', id: 'home', root } }),
       byId: async () => {
         throw new SourceError('Unknown repository.', 404);
       },

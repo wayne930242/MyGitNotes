@@ -59,8 +59,9 @@ describe('backfill-note-timestamps CLI', () => {
 
     expect(fs.readFileSync(path.join(root, 'notes/personal/complete.md'), 'utf8')).toBe(completeRaw);
   });
-  it('backfills a notebook in its own repository through the worktree mapped to it', async () => {
+  it('backfills the notebooks of every mapped worktree from its own manifest, and names a worktree without one', async () => {
     const second = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-backfill-second-'));
+    const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'github-notes-backfill-bare-'));
     try {
       const run = (...args: string[]) => execFileSync('git', args, { cwd: second, stdio: 'pipe' });
       run('init', '-b', 'main');
@@ -68,16 +69,18 @@ describe('backfill-note-timestamps CLI', () => {
       run('config', 'user.email', 'test@example.com');
       fs.mkdirSync(path.join(second, 'notes/personal'), { recursive: true });
       fs.writeFileSync(path.join(second, 'notes/personal/campaign.md'), '# Campaign\n');
+      fs.writeFileSync(path.join(second, '.mygitnotes.yaml'), 'schema_version: 4\nworkspace:\n  title: TRPG\n  default_notebook: trpg\nnotebooks:\n  - id: trpg\n    title: TRPG\n    root: notes/personal\n');
       run('add', '.');
       execFileSync('git', ['commit', '-m', 'add campaign'], { cwd: second, env: { ...process.env, GIT_AUTHOR_DATE: '2026-09-20T08:00:00+00:00', GIT_COMMITTER_DATE: '2026-09-20T08:00:00+00:00' } });
-      write('.github-notes.yaml', 'schema_version: 3\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n  - id: trpg\n    title: TRPG\n    root: notes/personal\n    source: { type: github, repository: owner/trpg }\n  - id: lost\n    title: Lost\n    root: notes/lost\n    source: { type: github, repository: owner/lost }\n');
-      write('mygitnotes.server.yaml', `source:\n  type: local\n  path: .\nrepositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n`);
+      write('.github-notes.yaml', 'schema_version: 4\nworkspace:\n  title: Personal\n  default_notebook: personal\nnotebooks:\n  - id: personal\n    title: Personal\n    root: notes/personal\n');
+      write('mygitnotes.server.yaml', `source:\n  type: local\n  path: .\nrepositories:\n  - type: github\n    repository: owner/trpg\n    path: ${second}\n  - type: github\n    repository: owner/lost\n    path: ${bare}\n`);
       const output = backfill();
       expect(parseNoteContent(fs.readFileSync(path.join(second, 'notes/personal/campaign.md'), 'utf8')).metadata.created).toBe('2026-09-20T08:00:00.000Z');
-      expect(output).toContain('owner/trpg:notes/personal/campaign.md');
-      expect(output).toContain('Skipped notebook lost: no worktree is mapped for owner/lost');
+      expect(output).toContain(`${second}:notes/personal/campaign.md`);
+      expect(output).toContain(`Skipped ${bare}: it has no workspace manifest.`);
     } finally {
       fs.rmSync(second, { recursive: true, force: true });
+      fs.rmSync(bare, { recursive: true, force: true });
     }
   });
 });

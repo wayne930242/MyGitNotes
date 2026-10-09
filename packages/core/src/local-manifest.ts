@@ -3,7 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { loadedWorkspaceConfigFile, parseWorkspaceConfig, parseWorkspaceConfigAt, resolveWorkspaceConfigPath, serializeWorkspaceConfig, WORKSPACE_CONFIG_FILENAME } from './config.js';
 import { SourceError } from './github-api.js';
-import type { ManifestRead, RepositoryManifestFile } from './repository-manifest.js';
+import { invalidManifest, type ManifestRead } from './repository-manifest.js';
+import type { WorkspaceConfig } from './types.js';
 import type { ManifestStore } from './workspace-config-source.js';
 
 /** Commits the given repository-relative files in a worktree. */
@@ -34,7 +35,7 @@ function readFile(root: string): { file: string; text: string; error?: undefined
  * longer matches answers 409 without writing; callers serialize saves with the worktree's other mutations.
  * `newFile` is where a save creates the manifest when the worktree has none.
  */
-export function localManifest(root: string, commit: LocalCommit, newFile = path.posix.join('notes', WORKSPACE_CONFIG_FILENAME)): ManifestStore & RepositoryManifestFile {
+export function localManifest(root: string, commit: LocalCommit, newFile = path.posix.join('notes', WORKSPACE_CONFIG_FILENAME)): ManifestStore & { load(): Promise<{ config: WorkspaceConfig; revision: string; }>; } {
   const current = () => {
     const found = readFile(root);
     return { found, revision: !found ? MISSING_MANIFEST_REVISION : found.error ? unreadRevision(found.file) : contentRevision(found.file, found.text) };
@@ -48,11 +49,11 @@ export function localManifest(root: string, commit: LocalCommit, newFile = path.
   const read = async (): Promise<ManifestRead> => {
     const { found, revision } = current();
     if (!found) return { state: 'missing', revision };
-    if (found.error) return { state: 'invalid', text: '', error: found.error.message, revision };
+    if (found.error) return invalidManifest('', found.error, revision);
     try {
       return { state: 'file', config: parseWorkspaceConfigAt(root, found.file, found.text), revision };
     } catch (error) {
-      return { state: 'invalid', text: found.text, error: (error as Error).message, revision };
+      return invalidManifest(found.text, error, revision);
     }
   };
   return {
@@ -69,7 +70,7 @@ export function localManifest(root: string, commit: LocalCommit, newFile = path.
       fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.writeFileSync(target, serializeWorkspaceConfig(validated), 'utf-8');
       await commit(root, [file], 'chore(workspace): update configuration');
-      return load();
+      return { revision: current().revision };
     },
   };
 }

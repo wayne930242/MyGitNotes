@@ -23,7 +23,7 @@ interface Params {
   repoRoot: WorkspaceState['repoRoot'];
   activeTab: WorkspaceTab;
   route: ReturnType<typeof parseWorkspaceRoute>;
-  /** Whether the Focus document may be saved; it lives in the home repository. */
+  /** Whether the Focus document may be saved; it lives in its repository. */
   canWrite: boolean;
   editorRegistry: ReturnType<typeof useNoteEditorRegistry>;
   location: ReturnType<typeof useLocation>;

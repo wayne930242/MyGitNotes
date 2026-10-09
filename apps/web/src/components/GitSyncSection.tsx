@@ -10,7 +10,7 @@ interface Conflict {
   unresolved: boolean;
 }
 
-/** Pull --rebase and push for one local worktree (the home worktree without `repository`); conflicts are aborted and offered as explicit choices. */
+/** Pull --rebase and push for one local worktree (the default worktree without `repository`); conflicts are aborted and offered as explicit choices. */
 export function GitSyncSection({ gitStatus, onSynced, repository, label }: { gitStatus: GitStatus | null; onSynced: () => void; repository?: string; label?: string; }) {
   const { t } = useTranslation();
   const [busy, setBusy] = useState(false);

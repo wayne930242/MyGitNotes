@@ -91,15 +91,15 @@ try {
   fs.rmSync(root, { recursive: true, force: true });
 }
 
-// Two repositories: Settings opened from a notebook of the notebook repository edits that repository's manifest,
-// while the header keeps the default repository's title (decision C10).
+// Two repositories, each serving the notebooks of its own manifest: Settings opened from a notebook of the other
+// repository edits that repository's manifest, while the header keeps the default repository's title (decision C10).
 {
   const home = createQaWorkspace('github-notes-manifest-home-');
-  home.write('.mygitnotes.yaml', 'schema_version: 3\nworkspace:\n  title: Home QA\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n  - id: campaign\n    title: Campaign log\n    root: notes/campaign\n    source: { type: github, repository: demo/campaign, branch: main }\n');
+  home.write('.mygitnotes.yaml', 'schema_version: 4\nworkspace:\n  title: Home QA\n  default_notebook: life\nnotebooks:\n  - id: life\n    title: Life\n    root: notes/life\n');
   home.write('notes/life/home.md', '# Home note\n');
   home.commitFixture();
   const campaign = createQaWorkspace('github-notes-manifest-campaign-');
-  campaign.write('.mygitnotes.yaml', 'schema_version: 3\nworkspace:\n  title: Campaign QA\n  default_notebook: campaign\nnotebooks:\n  - id: campaign\n    title: Campaign log\n    root: notes/campaign\n');
+  campaign.write('.mygitnotes.yaml', 'schema_version: 4\nworkspace:\n  title: Campaign QA\n  default_notebook: campaign\nnotebooks:\n  - id: campaign\n    title: Campaign log\n    root: notes/campaign\n');
   campaign.write('notes/campaign/session.md', '# Session\n');
   campaign.commitFixture();
   const serverConfig = path.join(home.root, '..', `${path.basename(home.root)}.server.yaml`);

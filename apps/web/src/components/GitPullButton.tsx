@@ -11,7 +11,7 @@ import { WorkspaceDialog } from './WorkspaceDialog.js';
 const SUCCESS_TOAST_MS = 3000;
 
 /**
- * Pulls the home worktree's main from its upstream without pushing, stashing uncommitted changes around it.
+ * Pulls the default worktree's main from its upstream without pushing, stashing uncommitted changes around it.
  * Success shows a short toast; a failure opens a dialog with a prompt the user can hand to a local coding agent.
  */
 export function GitPullButton({ onPulled, repoRoot }: { onPulled: () => Promise<void> | void; repoRoot: string; }) {

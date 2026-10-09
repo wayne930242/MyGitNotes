@@ -16,7 +16,7 @@ vi.mock('../components/ProductVersion.js', () => ({ ProductVersion: () => null }
 vi.mock('../components/WorkspaceManifestEditor.js', () => ({ WorkspaceManifestEditor: () => null }));
 const preferences = { defaultYoutubeDisplayMode: 'thumbnail', defaultShowLineNumbers: false, defaultFocusMode: false };
 const homeManifest = { workspace: { title: 'Notes', default_notebook: 'a' }, notebooks: [{ id: 'a', title: 'A', root: 'notes/a' }] };
-vi.mock('./api.js', () => ({ updateWorkspaceConfig: async (repository: string, yaml: string, revision: string) => (saved.yaml.push(yaml), saved.requests.push([repository, revision]), { success: true, configRevision: 'c2' }), fetchWorkspace: async () => ({ home: 'local:/notes', local: true, repoRoot: '/notes', config: homeManifest, keyedConfig: { workspace: { title: 'Notes', default_notebook: 'notes~a' }, notebooks: [{ id: 'notes~a', title: 'A', root: 'notes/a' }, { id: 'code~src', title: 'Source', root: 'src' }] }, repositories: [{ id: 'local:/notes', alias: 'notes', branch: 'main', notebooks: ['notes~a'], revision: '', write: true, title: 'Notes', defaultNotebook: 'notes~a', preferences: { ...preferences, defaultFocusMode: true }, config: homeManifest, configRevision: 'c1' }, { id: 'github:me/code@main', alias: 'code', branch: 'main', notebooks: ['code~src'], revision: '', write: true, title: 'Code', defaultNotebook: 'code~src', preferences: { ...preferences, defaultShowLineNumbers: true }, config: null, configRevision: 'none', manifest: 'derived' }] }), fetchFolders: () => folders.promise, fetchAssets: async () => [], fetchGitStatus: async () => null, openWorkspaceEvents: () => ({ addEventListener() {}, close() {} }) }));
+vi.mock('./api.js', () => ({ updateWorkspaceConfig: async (repository: string, yaml: string, revision: string) => (saved.yaml.push(yaml), saved.requests.push([repository, revision]), { success: true, configRevision: 'c2' }), fetchWorkspace: async () => ({ defaultRepository: 'local:/notes', local: true, coreUpdate: true, repoRoot: '/notes', keyedConfig: { workspace: { title: 'Notes', default_notebook: 'notes~a' }, notebooks: [{ id: 'notes~a', title: 'A', root: 'notes/a' }, { id: 'code~src', title: 'Source', root: 'src' }] }, repositories: [{ id: 'local:/notes', alias: 'notes', branch: 'main', notebooks: ['notes~a'], revision: '', write: true, title: 'Notes', defaultNotebook: 'notes~a', preferences: { ...preferences, defaultFocusMode: true }, config: homeManifest, configRevision: 'c1' }, { id: 'github:me/code@main', alias: 'code', branch: 'main', notebooks: ['code~src'], revision: '', write: true, title: 'Code', defaultNotebook: 'code~src', preferences: { ...preferences, defaultShowLineNumbers: true }, config: null, configRevision: 'none', manifest: 'derived' }] }), fetchFolders: () => folders.promise, fetchAssets: async () => [], fetchGitStatus: async () => null, openWorkspaceEvents: () => ({ addEventListener() {}, close() {} }) }));
 vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 404 })));
 
 const { useWorkspaceSync } = await import('./use-workspace-sync.js');
@@ -50,13 +50,13 @@ it('hands Settings and "create manifest" the manifest by local id, so both commi
   const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client: new QueryClient() }, children);
   const { result } = renderHook(() => useWorkspaceSync({}), { wrapper });
   await waitFor(() => expect(result.current.loading).toBe(false));
-  const home = result.current.homeRepository!;
+  const home = result.current.defaultRepository!;
   expect(result.current.config?.workspace.default_notebook).toBe('notes~a');
 
   saved.yaml = [];
   saved.requests = [];
   window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
-  const settings = render(createElement(SettingsModal, { manifest: { repositories: result.current.repositories, homeRepository: home.id, initialRepository: home.id, onManifestRevision: () => {} }, onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} }));
+  const settings = render(createElement(SettingsModal, { manifest: { repositories: result.current.repositories, defaultRepository: home.id, initialRepository: home.id, onManifestRevision: () => {} }, onRefreshWorkspace: async () => {}, currentTheme: { familyId: 'flexoki', mode: 'light' }, onSelectTheme: () => {} }));
   fireEvent.click(settings.getByTitle('Save & Commit'));
   await waitFor(() => expect(saved.yaml).toHaveLength(1));
   settings.unmount();

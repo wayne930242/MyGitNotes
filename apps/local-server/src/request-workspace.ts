@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type express from 'express';
-import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, type RepositoryRef, RepositoryUnavailableError, sharesCredential, SourceError, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError } from '@mygitnotes/core';
+import { type AvailableRepository, createRemoteSource, createWorkspaceRepositories, isBareNotebookId, KEY_SEPARATOR, type KeyedNotebook, localIdIn, localManifest, type NotebookConfig, type NotebookKey, notebookKey, type NoteCatalog, parseRevisions, prewarmNotebookScans, type RemoteCache, RemoteManifest, type RemoteSource, type RepositoryCatalog, type RepositoryId, RepositoryUnavailableError, sameSite, SourceError, SUPPORTED_SCHEMA_VERSION, visibleMembers, WORKSPACE_CONFIG_FILENAME, workspaceCatalog, type WorkspaceConfig, type WorkspaceConfigSource, type WorkspaceDocument, workspaceDocument, type WorkspaceRepositories, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
 import { stageAndCommit } from '@mygitnotes/git';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { regularPath } from './workspace-files.js';
@@ -24,55 +24,54 @@ export type RequestWorkspace = WorkspaceRepositories<RepositoryHandle>;
 /** A notebook as its repository's manifest declares it, without its workspace key. */
 const localNotebook = ({ key: _key, ...notebook }: KeyedNotebook): NotebookConfig => notebook;
 
-/** Opens the workspace of one request: the home repository from its settings, the manifest where the settings keep it, and each notebook repository the manifest declares. */
-export function openWorkspace(settings: WorkspaceSettings, token: string | undefined, cache?: RemoteCache): RequestWorkspace {
-  const { home } = settings;
-  if (home.source.type === 'local') {
-    const root = home.source.path;
-    const mapped = (ref: RepositoryRef) => settings.localPath(ref);
+/** How a workspace is opened beyond its settings and credential. */
+export interface OpenOptions {
+  /** Re-read each remote repository's branch head instead of using a cached one (`?fresh=1`). */
+  fresh?: boolean;
+}
+
+/**
+ * Opens the workspace of one request: each visible member of its settings, from its worktree in a local deployment
+ * or through the provider with the request's credential in a remote one, each with its own manifest.
+ */
+export function openWorkspace(settings: WorkspaceSettings, token: string | undefined, cache?: RemoteCache, { fresh = false }: OpenOptions = {}): RequestWorkspace {
+  const members = visibleMembers(settings);
+  if (settings.site.type === 'local') {
     return createWorkspaceRepositories<RepositoryHandle>({
-      home,
-      openHome: () => ({ kind: 'local', id: home.id, root }),
-      manifest: () => settings.manifest(() => localManifest(root, stageAndCommit)),
-      isHome: ref => sameDirectory(mapped(ref), root),
-      // A notebook repository creates its first manifest at its root, where every notebook root is relative to.
-      repositoryManifest: (_ref, handle) => localManifest((handle as LocalHandle).root, stageAndCommit, WORKSPACE_CONFIG_FILENAME),
-      async openRepository(ref) {
-        const worktree = mapped(ref);
-        if (!worktree) return { reason: 'unmapped', message: `No worktree is mapped for ${ref.id}. Add it under repositories in mygitnotes.server.yaml.` };
-        if (!fs.existsSync(path.join(worktree, '.git'))) return { reason: 'unmapped', message: `${worktree} is not a Git worktree.` };
-        return { kind: 'local', id: ref.id, root: worktree };
+      members,
+      // A mapped platform repository creates its first manifest at its root, where every notebook root is relative to;
+      // a local source keeps creating it under notes/, as it did as the home repository.
+      manifest: (member, handle) => settings.manifest(member, () => localManifest((handle as LocalHandle).root, stageAndCommit, member.ref.source.type === 'local' ? undefined : WORKSPACE_CONFIG_FILENAME)),
+      async openRepository(member) {
+        const worktree = member.localPath;
+        if (!worktree) return { reason: 'unmapped', message: `No worktree is mapped for ${member.ref.id}. Add it under repositories in mygitnotes.server.yaml.` };
+        // A platform repository is mapped to the worktree that checks it out; a local source is its directory, which
+        // may lie inside a worktree (the examples workspace does).
+        if (member.ref.source.type !== 'local' && !fs.existsSync(path.join(worktree, '.git'))) return { reason: 'unmapped', message: `${worktree} is not a Git worktree.` };
+        return { kind: 'local', id: member.ref.id, root: worktree };
       },
     });
   }
-  const source = home.source;
+  const { site } = settings;
   return createWorkspaceRepositories<RepositoryHandle>({
-    home,
-    openHome: scope => ({ kind: 'remote', id: home.id, reader: createRemoteSource(source, token, fetch, cache, scope), authenticated: Boolean(token) }),
-    manifest: handle => settings.manifest(() => new RemoteManifest((handle as RemoteHandle).reader)),
-    repositoryManifest: (_ref, handle) => new RemoteManifest((handle as RemoteHandle).reader),
-    async openRepository(ref, scope) {
-      if (ref.source.type === 'local' || !sharesCredential(source, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the home repository's platform and site.` };
+    members,
+    manifest: (member, handle) => settings.manifest(member, () => new RemoteManifest((handle as RemoteHandle).reader)),
+    async openRepository(member, scope) {
+      const { ref } = member;
+      if (ref.source.type === 'local' || !sameSite(site, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the workspace's platform and site.` };
       const reader = createRemoteSource(ref.source, token, fetch, cache, scope);
       try {
-        await reader.getSnapshot();
+        await reader.getSnapshot(fresh);
       } catch (error) {
-        if (error instanceof RepositoryUnavailableError) return { reason: error.reason, message: error.message };
+        // A signed-out request the default repository refuses fails as a whole, as before repository workspaces, so
+        // the page asks the visitor to sign in instead of opening an empty workspace.
+        const signInFirst = !token && member.default && error instanceof RepositoryUnavailableError && error.reason === 'no-access';
+        if (error instanceof RepositoryUnavailableError && !signInFirst) return { reason: error.reason, message: error.message };
         throw error;
       }
       return { kind: 'remote', id: ref.id, reader, authenticated: Boolean(token) };
     },
   });
-}
-
-/** Whether a mapped worktree is the directory `root`, following symbolic links. */
-function sameDirectory(candidate: string | undefined, root: string): boolean {
-  if (!candidate) return false;
-  try {
-    return fs.realpathSync(candidate) === fs.realpathSync(root);
-  } catch {
-    return false;
-  }
 }
 
 /** Resolves the request's workspace once and stores it in `res.locals.workspace`. */
@@ -82,13 +81,13 @@ export function requestWorkspace(auth: SessionServices, configSource: WorkspaceC
     try {
       settings = await configSource.settings(req);
     } catch (error) {
-      if (error instanceof WorkspaceSetupError) return res.status(503).json({ error: error.message, setupRequired: true, ...(error.reason ? { reason: error.reason } : {}) });
+      if (error instanceof WorkspaceSetupError) return res.status(503).json({ error: error.message, setupRequired: true });
       return next(error);
     }
     let token: string | undefined;
-    if (settings.home.source.type !== 'local') {
+    if (settings.site.type !== 'local') {
       try {
-        token = await authToken(req, res, auth, settings.home.source);
+        token = await authToken(req, res, auth, settings.site);
       } catch (error) {
         if (error instanceof CredentialRejected) return res.status(401).json({ error: 'Session unavailable. Sign in again.' });
         // The session store or provider did not answer; the reader's session still stands.
@@ -96,8 +95,9 @@ export function requestWorkspace(auth: SessionServices, configSource: WorkspaceC
         return res.status(503).json({ error: 'Session service temporarily unavailable. Retry shortly.' });
       }
     }
-    res.locals.workspace = openWorkspace(settings, token, cache);
+    res.locals.workspace = openWorkspace(settings, token, cache, { fresh: req.query.fresh === '1' });
     res.locals.token = token;
+    res.locals.site = settings.site;
     next();
   };
 }
@@ -107,16 +107,24 @@ export function requestToken(res: express.Response): string | undefined {
   return res.locals.token as string | undefined;
 }
 
+/** The platform and site of the request's workspace. */
+export function requestSite(res: express.Response): WorkspaceSite {
+  const site = res.locals.site as WorkspaceSite | undefined;
+  if (!site) throw new SourceError('Workspace unavailable.', 503);
+  return site;
+}
+
 export function workspaceOf(res: express.Response): RequestWorkspace {
   const workspace = res.locals.workspace as RequestWorkspace | undefined;
   if (!workspace) throw new SourceError('Workspace unavailable.', 503);
   return workspace;
 }
 
-/** The home repository's handle with the manifest scope it serves. */
-export async function homeRepository(res: express.Response): Promise<{ handle: RepositoryHandle; alias: string; config: WorkspaceConfig; }> {
+/** The default repository's handle with its manifest; 404 in a workspace without one. */
+export async function defaultRepository(res: express.Response): Promise<{ id: RepositoryId; handle: RepositoryHandle; alias: string; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
-  return { handle: workspace.home.handle, alias: workspace.home.alias, config: await workspace.scope(workspace.home.ref.id) };
+  const { ref, handle, alias } = await workspace.defaultRepository();
+  return { id: ref.id, handle, alias, config: await workspace.scope(ref.id) };
 }
 
 /**
@@ -125,7 +133,7 @@ export async function homeRepository(res: express.Response): Promise<{ handle: R
  */
 export async function prewarmLocalScans(configSource: WorkspaceConfigSource): Promise<void> {
   const settings = await configSource.settings({ headers: {} });
-  if (settings.home.source.type !== 'local') return;
+  if (settings.site.type !== 'local') return;
   const repositories = await openWorkspace(settings, undefined).all();
   for (const repository of repositories) {
     if ('handle' in repository && repository.handle.kind === 'local') await prewarmNotebookScans(repository.handle.root, repository.notebooks.map(localNotebook));
@@ -136,10 +144,10 @@ export async function prewarmLocalScans(configSource: WorkspaceConfigSource): Pr
 export async function requestCatalog(res: express.Response, revisions: unknown, open: (handle: RepositoryHandle, notebooks: NotebookConfig[]) => RepositoryCatalog): Promise<NoteCatalog> {
   const expected = parseRevisions(revisions);
   const workspace = workspaceOf(res);
-  const [{ config }, repositories] = await Promise.all([workspace.manifest(), workspace.all()]);
+  const [config, repositories] = await Promise.all([workspace.keyedConfig(), workspace.all()]);
   const available = repositories.filter((repository): repository is AvailableRepository<RepositoryHandle> => 'handle' in repository);
   return workspaceCatalog(
-    config,
+    config ?? { schema_version: SUPPORTED_SCHEMA_VERSION, workspace: { title: '', default_notebook: '' }, notebooks: [] },
     available.map(repository => {
       const notebooks = repository.notebooks.map(localNotebook);
       return { id: repository.ref.id, alias: repository.alias, notebooks, catalog: open(repository.handle, notebooks) };
@@ -148,11 +156,11 @@ export async function requestCatalog(res: express.Response, revisions: unknown, 
   );
 }
 
-/** The repository a workspace-level request names, or the home repository when it names none; with the manifest scope that repository serves. */
-export async function repositoryOrHome(res: express.Response, id: unknown): Promise<{ id: RepositoryId; alias: string; handle: RepositoryHandle; config: WorkspaceConfig; }> {
+/** The repository a workspace-level request names, or the default repository when it names none; with that repository's manifest. */
+export async function repositoryOrDefault(res: express.Response, id: unknown): Promise<{ id: RepositoryId; alias: string; handle: RepositoryHandle; config: WorkspaceConfig; }> {
   const workspace = workspaceOf(res);
   if (id !== undefined && typeof id !== 'string') throw new SourceError('repository must be a string.');
-  const { ref, alias, handle } = id ? await workspace.byId(id) : workspace.home;
+  const { ref, alias, handle } = id ? await workspace.byId(id) : await workspace.defaultRepository();
   return { id: ref.id, alias, handle, config: await workspace.scope(ref.id) };
 }
 
@@ -274,23 +282,8 @@ export function asRemote(handle: RepositoryHandle): RemoteHandle {
   return handle;
 }
 
-/** The local home worktree with the manifest scope it serves. */
+/** The local default worktree with its manifest. */
 export async function localRepository(res: express.Response): Promise<{ root: string; config: WorkspaceConfig; }> {
-  const { root } = localHome(res);
-  const workspace = workspaceOf(res);
-  return { root, config: await workspace.scope(workspace.home.ref.id) };
-}
-
-/** The home repository when the deployment is remote; routes that exist only for remote sources use this. */
-export function remoteHome(res: express.Response): RemoteHandle {
-  const { handle } = workspaceOf(res).home;
-  if (handle.kind !== 'remote') throw new SourceError('This operation requires a remote source.', 400);
-  return handle;
-}
-
-/** The home repository when the deployment is local. */
-export function localHome(res: express.Response): LocalHandle {
-  const { handle } = workspaceOf(res).home;
-  if (handle.kind !== 'local') throw new SourceError('This operation requires a local workspace.', 400);
-  return handle;
+  const { handle, config } = await defaultRepository(res);
+  return { root: asLocal(handle).root, config };
 }

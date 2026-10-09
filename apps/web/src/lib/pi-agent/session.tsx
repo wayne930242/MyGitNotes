@@ -139,8 +139,8 @@ export interface PiAgentValue {
   target: AgentTarget | null;
   notebooks: NotebookConfig[];
   repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks' | 'title'>[];
-  /** The home repository, whose root workspace Pi starts in by default. */
-  homeRepository: string;
+  /** The default repository, whose root workspace Pi starts in by default. */
+  defaultRepository: string;
   /** The agent workspaces Pi may run in, once `loadWorkspaces` has listed them. */
   workspaces: AgentWorkspace[];
   loadWorkspaces: () => Promise<void>;
@@ -254,10 +254,10 @@ export function usePiAgentAvailable(): boolean {
 /**
  * Starts the workspace's Pi process when the person first reaches for the agent (see `wake`), and keeps it across
  * panel and page changes until the user ends it or, hosted, its sandbox stops for idling. It starts
- * in the agent workspace the user last switched to, else at the root of the home repository, and resumes the
+ * in the agent workspace the user last switched to, else at the root of the default repository, and resumes the
  * conversation it last had while that is still valid there.
  */
-export function PiAgentProvider({ enabled, homeRepository, notebooks, repositories, webTools, children }: { enabled: boolean; homeRepository: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks' | 'title'>[]; /** Answers the agent's note tools, for a remote workspace whose notes this page holds as working changes. */ webTools?: WebToolHandler; children: ReactNode; }) {
+export function PiAgentProvider({ enabled, defaultRepository, notebooks, repositories, webTools, children }: { enabled: boolean; defaultRepository: string; notebooks: NotebookConfig[]; repositories: Pick<RepositoryStatus, 'id' | 'repository' | 'notebooks' | 'title'>[]; /** Answers the agent's note tools, for a remote workspace whose notes this page holds as working changes. */ webTools?: WebToolHandler; children: ReactNode; }) {
   const webToolsRef = useRef(webTools);
   useEffect(() => {
     webToolsRef.current = webTools;
@@ -448,8 +448,8 @@ export function PiAgentProvider({ enabled, homeRepository, notebooks, repositori
     setStarting(true);
     try {
       // A running session is kept whatever is asked for; the server only uses the workspace and the conversation
-      // to start one, by default the home repository's root, resuming the last conversation while it is still valid there.
-      const home = { repository: homeRepository, folder: '' };
+      // to start one, by default the default repository's root, resuming the last conversation while it is still valid there.
+      const home = { repository: defaultRepository, folder: '' };
       const saved = savedLocation();
       try {
         attach((await sessionRequest('POST', { ...saved ?? home, sessionFile: savedSessionFile() })).session);
@@ -467,7 +467,7 @@ export function PiAgentProvider({ enabled, homeRepository, notebooks, repositori
       startingNow.current = false;
       setStarting(false);
     }
-  }, [attach, homeRepository, releaseHeld]);
+  }, [attach, defaultRepository, releaseHeld]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -483,7 +483,7 @@ export function PiAgentProvider({ enabled, homeRepository, notebooks, repositori
   }, [enabled, disconnect]);
 
   // A gated-off agent is not started behind the panel's back: its reason is shown instead of a request the server would refuse.
-  const ready = enabled && piAvailable && agentGate.allowed && Boolean(homeRepository);
+  const ready = enabled && piAvailable && agentGate.allowed && Boolean(defaultRepository);
   // A session that ended on its own (Pi exited, say for want of a key) waits for the start button, so focus never loops a failing start.
   const wake = useCallback(() => {
     if (ready && !session && !startingNow.current) void start();
@@ -509,7 +509,7 @@ export function PiAgentProvider({ enabled, homeRepository, notebooks, repositori
     target,
     notebooks,
     repositories,
-    homeRepository,
+    defaultRepository,
     workspaces,
     loadWorkspaces,
     connected,
@@ -627,7 +627,7 @@ export function PiAgentProvider({ enabled, homeRepository, notebooks, repositori
       if (!res.ok) throw await responseError(res, 'The note could not be located');
       return ((await res.json()) as { file: string; }).file;
     },
-  }), [enabled, piAvailable, session, target, notebooks, repositories, homeRepository, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, wake, held, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
+  }), [enabled, piAvailable, session, target, notebooks, repositories, defaultRepository, workspaces, loadWorkspaces, connected, transcript, error, starting, ready, wake, held, modelState, commands, contextUsage, editorText, takeEditorText, loadCommands, start, command, attach]);
 
   return (
     <PiAgentTargetContext.Provider value={registerTarget}>

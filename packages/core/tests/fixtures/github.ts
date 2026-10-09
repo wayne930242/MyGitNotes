@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { expect } from 'vitest';
-import { openRemoteHome } from '../../src/remote-factory.js';
+import { openRemoteRepository } from '../../src/remote-factory.js';
 
 /**
  * An in-memory GitHub repository (one commit per write) behind a `fetch` stand-in; `extra` adds files to the starting tree.
@@ -103,5 +103,5 @@ export function githubFixture(extra: Record<string, string> = {}, options: { hex
     } else return new Response('{}', { status: 404 });
     return new Response(JSON.stringify(result));
   };
-  return { request, reader: () => openRemoteHome({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request).reader, calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()], message: (sha: string) => messages.get(sha)?.message };
+  return { request, reader: () => openRemoteRepository({ type: 'github', repository: 'owner/repo', branch: 'main' }, 'test-token', request).reader, calls, head: () => head, text: (file: string) => objects.get(files.get(file)!), files: () => [...files.keys()], message: (sha: string) => messages.get(sha)?.message };
 }

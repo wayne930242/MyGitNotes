@@ -6,9 +6,10 @@ import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { BOOKMARKS_FILE, type BookmarksPage, deriveAlias, notebookKey, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { createApp } from '../src/app.js';
+import { workspaceSettings } from './workspace-settings.js';
 
 let roots: string[], server: Server, base: string, repository: string;
-/** The key of a home notebook; the home worktree's alias is its directory's name, the other repository's is `other`. */
+/** The key of a notebook of the default worktree, whose alias is its directory's name; the other repository's is `other`. */
 const nb = (id: string) => notebookKey(deriveAlias(roots[0], new Set()), id);
 const page = (id: string) => ({ version: 1, notebooks: [{ notebookId: id, groups: [{ id: 'empty', label: 'Empty group' }], bookmarks: [{ id: 'note', label: 'Note', groupId: null, target: { kind: 'note', path: 'missing.md' } }, { id: 'folder', label: 'Folder', groupId: null, target: { kind: 'folder', path: 'old' } }] }, { notebookId: 'unknown', groups: [], bookmarks: [{ id: 'unknown', label: 'Preserve me', groupId: null, target: { kind: 'url', url: 'https://example.test/' } }] }] });
 const request = () => ({ repository, notebookId: nb('a'), selectedIds: ['note', 'folder'], path: 'notes/shared/imported.outline.md', title: 'Imported' });
@@ -24,7 +25,8 @@ const write = (root: string, file: string, content: string) => {
   fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
   fs.writeFileSync(path.join(root, file), content);
 };
-const manifest = 'schema_version: 3\nworkspace:\n  title: Import\n  default_notebook: a\nnotebooks:\n  - id: a\n    title: A\n    root: notes/shared\n  - id: b\n    title: B\n    root: notes/shared\n    source: { type: github, repository: owner/other }\n';
+/** A repository's own manifest serving the one notebook `id` at notes/shared. */
+const manifest = (id: string) => `schema_version: 4\nworkspace:\n  title: Import\n  default_notebook: ${id}\nnotebooks:\n  - id: ${id}\n    title: ${id.toUpperCase()}\n    root: notes/shared\n`;
 
 beforeEach(async () => {
   roots = ['a', 'b'].map(() => fs.mkdtempSync(path.join(os.tmpdir(), 'outline-import-')));
@@ -33,10 +35,10 @@ beforeEach(async () => {
     write(root, 'notes/shared/note.md', '# Note\n');
     write(root, BOOKMARKS_FILE, raw(index ? 'b' : 'a'));
   }
-  write(roots[0], '.mygitnotes.yaml', manifest);
-  const home = repositoryRef({ type: 'local', path: roots[0] });
-  repository = home.id;
-  const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => ({ home, localPath: ref => ref.id === 'github:owner/other@main' ? roots[1] : undefined, manifest: inHome => inHome() }) };
+  write(roots[0], '.mygitnotes.yaml', manifest('a'));
+  write(roots[1], '.mygitnotes.yaml', manifest('b'));
+  repository = repositoryRef({ type: 'local', path: roots[0] }).id;
+  const configSource: WorkspaceConfigSource = { mode: 'local', settings: async () => workspaceSettings([{ type: 'local', path: roots[0] }, [{ type: 'github', repository: 'owner/other', branch: 'main' }, { worktree: roots[1] }]]) };
   vi.stubEnv('APP_URL', '');
   vi.stubEnv('VERCEL', '');
   server = createServer(createApp(roots[0], { configSource }));
@@ -67,7 +69,7 @@ it('previews without writes, exports exact source, requires partial acknowledgem
   expect(roots.map(root => fs.readFileSync(path.join(root, BOOKMARKS_FILE)))).toEqual(before);
   expect(execFileSync('git', ['rev-list', '--all', '--count'], { cwd: roots[0], encoding: 'utf8' }).trim()).toBe('0');
 });
-it('imports the named non-home same-root repository only and rejects mismatched or missing identities', async () => {
+it('imports the named non-default same-root repository only and rejects mismatched or missing identities', async () => {
   for (const input of [{ ...request(), repository: undefined }, { ...request(), notebookId: 'other~b' }, { ...request(), selectedIds: ['unknown'] }]) expect((await post('/preview', input)).status).toBeGreaterThanOrEqual(400);
   const input = { ...request(), repository: 'github:owner/other@main', notebookId: 'other~b' };
   const record = await post('/preview', input).then(r => r.json());
@@ -78,7 +80,7 @@ it('imports the named non-home same-root repository only and rejects mismatched 
 it.each(['source', 'config', 'destination', 'permission'])('rejects stale %s with no overwrite and no original-byte loss', async change => {
   const record = await preview();
   if (change === 'source') write(roots[0], BOOKMARKS_FILE, raw('a') + '# changed\r\n');
-  if (change === 'config') write(roots[0], '.mygitnotes.yaml', manifest.replace('title: A', 'title: Changed'));
+  if (change === 'config') write(roots[0], '.mygitnotes.yaml', manifest('a').replace('title: A', 'title: Changed'));
   if (change === 'destination') write(roots[0], request().path, 'keep existing');
   if (change === 'permission') execFileSync('git', ['symbolic-ref', 'HEAD', 'refs/heads/core'], { cwd: roots[0] });
   const before = fs.readFileSync(path.join(roots[0], BOOKMARKS_FILE));

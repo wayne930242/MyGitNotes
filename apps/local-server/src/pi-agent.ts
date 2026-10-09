@@ -7,7 +7,7 @@ import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo, resumableSession, WebToolError } from './pi-session.js';
-import { asLocal, noteRepository, repositoryOrHome } from './request-workspace.js';
+import { asLocal, noteRepository, repositoryOrDefault } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
 /** Where Pi's note tools call the bridge, below the agent router. */
@@ -78,7 +78,7 @@ export { resumableSession } from './pi-session.js';
 /** Resolves the agent workspace the panel picked, the repository root or a folder holding core instructions, to the directory Pi starts in. */
 async function workspaceFolder(res: express.Response, repository: unknown, folder: unknown): Promise<AgentFolder> {
   if (typeof folder !== 'string') throw new SourceError('folder must be a repository-relative folder, empty for the root.');
-  const { id, handle, config } = await repositoryOrHome(res, repository);
+  const { id, handle, config } = await repositoryOrDefault(res, repository);
   const root = asLocal(handle).root;
   if (folder) {
     if (!agentFolder(folder, config.notebooks)) throw new SourceError('That folder cannot be an agent workspace.', 403);

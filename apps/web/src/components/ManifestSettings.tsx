@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertCircle, AlertTriangle, Check, Save } from 'lucide-react';
+import { AlertCircle, Check, Save } from 'lucide-react';
 import YAML from 'yaml';
 import type { RepositoryId } from '@mygitnotes/core/repository';
 import { ApiError, updateWorkspaceConfig } from '../lib/api.js';
@@ -11,8 +11,8 @@ import { WorkspaceManifestEditor } from './WorkspaceManifestEditor.js';
 
 export interface ManifestSettingsProps {
   repositories: WorkspaceRepository[];
-  /** The home repository, whose manifest declares every notebook of the workspace. */
-  homeRepository: RepositoryId;
+  /** The default repository, whose manifest the editor shows when the chosen repository is gone. */
+  defaultRepository: RepositoryId;
   /** The repository the editor shows until the person chooses one: the current notebook's, or the default repository's. */
   initialRepository: RepositoryId;
   /** Keeps the revision a save answered, since a refetch may still answer from the snapshot before it. */
@@ -24,11 +24,11 @@ export interface ManifestSettingsProps {
 const manifestText = (repository: WorkspaceRepository | undefined) => repository?.manifestError ? repository.manifestError.text : repository?.config ? YAML.stringify(repository.config) : '';
 
 /** Settings → Manifest: each repository's own `.mygitnotes.yaml`, edited and committed in that repository. */
-export function ManifestSettings({ repositories, homeRepository, initialRepository, onManifestRevision, onRefreshWorkspace }: ManifestSettingsProps) {
+export function ManifestSettings({ repositories, defaultRepository, initialRepository, onManifestRevision, onRefreshWorkspace }: ManifestSettingsProps) {
   const { t } = useTranslation();
   const [chosen, setChosen] = useState<RepositoryId | null>(null);
   const selected = chosen ?? initialRepository;
-  const repository = repositories.find(candidate => candidate.id === selected) ?? repositories.find(candidate => candidate.id === homeRepository);
+  const repository = repositories.find(candidate => candidate.id === selected) ?? repositories.find(candidate => candidate.id === defaultRepository);
   const [yamlContent, setYamlContent] = useState(() => manifestText(repository));
   /** The person changed the text since it was last loaded or saved. */
   const [edited, setEdited] = useState(false);
@@ -55,7 +55,9 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
   };
 
   const onCore = repository?.branch === 'core';
-  const canWrite = Boolean(repository?.write && !repository.unavailable && !onCore);
+  // A repository whose manifest does not load is unavailable only until that manifest is fixed here.
+  const editable = Boolean(repository && (!repository.unavailable || repository.unavailable.reason === 'invalid-manifest'));
+  const canWrite = Boolean(repository?.write && editable && !onCore);
   const handleSaveConfig = async () => {
     if (!repository) return;
     setIsSaving(true);
@@ -97,22 +99,15 @@ export function ManifestSettings({ repositories, homeRepository, initialReposito
         </label>
       )}
       <p className='text-xs text-muted'>{t('settings.manifestHint')}{onCore && <span className='block mt-1 text-warning text-[11px]'>{t('settings.coreBranchManifestWarning')}</span>}</p>
-      {repository?.unavailable && <p role='alert' className='text-xs text-danger'>{repository.unavailable.message}</p>}
+      {repository?.unavailable && !repository.manifestError && <p role='alert' className='text-xs text-danger'>{repository.unavailable.message}</p>}
       {repository?.manifestError && (
         <p role='alert' className='p-3 rounded-lg text-xs flex items-start gap-2 bg-danger-soft text-danger border border-danger/40'>
           <AlertCircle className='w-4 h-4 shrink-0' />
           <span>{t('settings.manifestInvalid', { error: repository.manifestError.message })}</span>
         </p>
       )}
-      {repository && repository.id !== homeRepository && !repository.unavailable && <p className='text-xs text-muted'>{t('settings.manifestNotebooksFromHome')}</p>}
-      {repository?.manifest === 'derived' && repository.id !== homeRepository && !repository.unavailable && <p className='text-xs text-muted'>{t('settings.manifestDerivedRepository')}</p>}
-      {repository?.unservedDefault && (
-        <p role='status' className='p-3 rounded-lg text-xs flex items-start gap-2 bg-surface text-warning border border-line'>
-          <AlertTriangle className='w-4 h-4 shrink-0' />
-          <span>{t('settings.manifestUnservedDefault', { notebook: repository.unservedDefault })}</span>
-        </p>
-      )}
-      {repository && !repository.unavailable && <WorkspaceManifestEditor key={repository.id} yamlContent={yamlContent} onChange={editYaml} readOnly={!canWrite} />}
+      {repository?.manifest === 'derived' && !repository.unavailable && <p className='text-xs text-muted'>{t('settings.manifestDerivedRepository')}</p>}
+      {repository && editable && <WorkspaceManifestEditor key={repository.id} yamlContent={yamlContent} onChange={editYaml} readOnly={!canWrite} />}
       {statusMessage && (
         <div className={`p-3 rounded-lg text-xs flex items-center gap-2 ${statusMessage.type === 'success' ? 'bg-success-soft text-success border border-success/40' : 'bg-danger-soft text-danger border border-danger/40'}`}>
           {statusMessage.type === 'success' ? <Check className='w-4 h-4 text-success' /> : <AlertCircle className='w-4 h-4 text-danger' />}

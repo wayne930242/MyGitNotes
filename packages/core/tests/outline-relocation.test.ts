@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { type FolderSnapshot, planFolderChange, relocateLinks } from '../src/folder-plan.js';
 import { planFileChange } from '../src/file-manager.js';
 import { callNoteShell } from '../src/note-shell.js';
-import { openRemoteHome } from '../src/remote-factory.js';
+import { openRemoteRepository } from '../src/remote-factory.js';
 import { githubFixture } from './fixtures/github.js';
 import { gitlabFixture } from './fixtures/gitlab.js';
 
@@ -78,7 +78,7 @@ function providerFixture(provider: 'github' | 'gitlab', extra: Record<string, st
   }
   const f = gitlabFixture(undefined, files);
   f.files.delete('notes/.github-notes.yaml');
-  return { reader: () => openRemoteHome({ type: 'gitlab', repository: 'group/subgroup/project', branch: 'main', url: 'https://gitlab.example.test/gitlab' }, 'test-token', f.request).reader, text: (name: string) => f.files.get(name), head: () => f.head, commits: () => f.calls.filter(c => c.url.endsWith('/repository/commits') && c.init?.method === 'POST'), paths: () => f.calls.filter(c => c.url.endsWith('/repository/commits') && c.init?.method === 'POST').flatMap(c => (JSON.parse(String(c.init?.body)) as { actions: { file_path: string; }[]; }).actions.map(a => a.file_path)) };
+  return { reader: () => openRemoteRepository({ type: 'gitlab', repository: 'group/subgroup/project', branch: 'main', url: 'https://gitlab.example.test/gitlab' }, 'test-token', f.request).reader, text: (name: string) => f.files.get(name), head: () => f.head, commits: () => f.calls.filter(c => c.url.endsWith('/repository/commits') && c.init?.method === 'POST'), paths: () => f.calls.filter(c => c.url.endsWith('/repository/commits') && c.init?.method === 'POST').flatMap(c => (JSON.parse(String(c.init?.body)) as { actions: { file_path: string; }[]; }).actions.map(a => a.file_path)) };
 }
 
 describe.each(['github', 'gitlab'] as const)('%s snapshot-pinned shell relocation', provider => {

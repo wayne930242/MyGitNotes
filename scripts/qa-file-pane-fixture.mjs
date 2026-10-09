@@ -31,7 +31,7 @@ try {
   const workspaceResponse = await fetch(`${base}/api/workspace`);
   assert.equal(workspaceResponse.status, 200);
   const workspace = await workspaceResponse.json();
-  assert.equal(workspace.config.schema_version, SUPPORTED_SCHEMA_VERSION);
+  assert.equal(workspace.keyedConfig.schema_version, SUPPORTED_SCHEMA_VERSION);
   assert.equal(workspace.local, true);
   assert(workspace.repositories.every(repository => repository.write && repository.branch === 'main'));
   const filesResponse = await fetch(`${base}/api/files?notebookId=a`);

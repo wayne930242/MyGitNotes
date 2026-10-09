@@ -1,9 +1,9 @@
 import { expect, it } from 'vitest';
-import { openRemoteHome, parseNoteContent, versionFilePath } from '@mygitnotes/core';
+import { openRemoteRepository, parseNoteContent, versionFilePath } from '@mygitnotes/core';
 import { callRemoteTool } from '../src/remote-tools.js';
 import { gitlabFixture } from '../../core/tests/fixtures/gitlab.js';
 
-const reader = (f: ReturnType<typeof gitlabFixture>) => openRemoteHome({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
+const reader = (f: ReturnType<typeof gitlabFixture>) => openRemoteRepository({ type: 'gitlab', url: 'https://gitlab.example.test/gitlab', repository: 'group/subgroup/project', branch: 'main' }, 'fixture-token', f.request).reader;
 
 it('keeps an existing note’s frontmatter when save_note leaves metadata out or names only some keys', async () => {
   const f = gitlabFixture();

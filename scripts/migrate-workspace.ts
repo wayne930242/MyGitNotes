@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { loadRepositoryMappings, mapsRepository, migrateWorkspace, type MigrationWorktree, PartialMigrationError, type WorkspaceConfig } from '../packages/core/src/index.js';
-import { resolveWorkspaceRoot } from './lib/workspace-root.js';
+import { migrateWorkspace, PartialMigrationError, SUPPORTED_SCHEMA_VERSION } from '../packages/core/src/index.js';
+import { memberWorktrees, resolveWorkspaceRoot } from './lib/workspace-root.js';
 
 const git = (root: string, args: string[]) => execFileSync('git', args, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
 /** True inside a Git worktree, a workspace in a subdirectory of one included. */
@@ -11,14 +11,15 @@ const isGitWorktree = (root: string) => {
     return false;
   }
 };
-const MESSAGE = 'chore: migrate Screen lanes to compilations';
+/** The commit subject: a manifest that only moved its schema_version says so; a Screen conversion names that. */
+const message = (touched: string[]) => touched.length === 1 && /(^|\/)\.(mygitnotes|github-notes)\.yaml$/.test(touched[0]) ? `chore: migrate the workspace manifest to schema ${SUPPORTED_SCHEMA_VERSION}` : 'chore: migrate Screen lanes to compilations';
 const quote = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 
 /** The files are written and the Screen file is gone, so a re-run cannot see them: the user has to commit these. */
 function reportUncommitted(repositories: { root: string; touched: string[]; reason?: string; }[]) {
   for (const { root, touched, reason } of repositories) {
     const files = touched.map(quote).join(' ');
-    console.error(`[migrate-workspace] ${root}: the migration was written but not committed${reason ? ` (${reason})` : ''}. Commit it yourself:\n  git -C ${quote(root)} add --all -- ${files} && git -C ${quote(root)} commit -m ${quote(MESSAGE)} --only -- ${files}`);
+    console.error(`[migrate-workspace] ${root}: the migration was written but not committed${reason ? ` (${reason})` : ''}. Commit it yourself:\n  git -C ${quote(root)} add --all -- ${files} && git -C ${quote(root)} commit -m ${quote(message(touched))} --only -- ${files}`);
   }
 }
 
@@ -30,25 +31,8 @@ function dirtyFiles(root: string, files: string[]): string[] {
 
 try {
   const root = resolveWorkspaceRoot();
-  // A notebook in its own repository migrates in the worktree mygitnotes.server.yaml maps to it.
-  const mappings = loadRepositoryMappings(process.cwd());
-  const worktrees = (config: WorkspaceConfig) => {
-    const found: MigrationWorktree[] = [];
-    for (const notebook of config.notebooks) {
-      const { source } = notebook;
-      if (!source) continue;
-      const mapped = mappings.find(mapping => mapsRepository(mapping, source))?.path;
-      if (!mapped) {
-        console.log(`[migrate-workspace] Skipped notebook ${notebook.id}: no worktree is mapped for ${source.repository} in mygitnotes.server.yaml. Run this command again once it is mapped.`);
-        continue;
-      }
-      const existing = found.find(worktree => worktree.root === mapped);
-      if (existing) existing.notebooks.push(notebook);
-      else found.push({ root: mapped, notebooks: [notebook] });
-    }
-    return found;
-  };
-  const { migrated, notesMissingTimestamps, repositories } = migrateWorkspace(root, { worktrees, dirtyFiles });
+  // Every member worktree mygitnotes.server.yaml maps migrates from its own manifest.
+  const { migrated, notesMissingTimestamps, repositories } = migrateWorkspace(root, { worktrees: memberWorktrees(root).slice(1), dirtyFiles });
   const uncommitted: { root: string; touched: string[]; reason: string; }[] = [];
   for (const repository of repositories) {
     const detail = `${repository.compilations} compilation(s)${repository.droppedFocusTabs ? `, ${repository.droppedFocusTabs} Focus tab(s) of deleted lanes dropped` : ''}`;
@@ -58,7 +42,7 @@ try {
     }
     try {
       git(repository.root, ['add', '--all', '--', ...repository.touched]);
-      git(repository.root, ['commit', '-m', MESSAGE, '--only', '--', ...repository.touched]);
+      git(repository.root, ['commit', '-m', message(repository.touched), '--only', '--', ...repository.touched]);
       console.log(`[migrate-workspace] ${repository.root}: ${detail}. Committed.`);
     } catch (error) {
       uncommitted.push({ root: repository.root, touched: repository.touched, reason: String((error as { stderr?: unknown; }).stderr || (error as Error).message).trim().split('\n')[0] });

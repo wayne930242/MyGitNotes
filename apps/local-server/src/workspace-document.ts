@@ -3,7 +3,7 @@ import path from 'node:path';
 import { BookmarkError, parseNoteContent, readWorkspaceDocument, serializeWorkspaceDocument, SourceError, type WorkspaceConfig, type WorkspaceDocument } from '@mygitnotes/core';
 import { getCurrentBranch } from '@mygitnotes/git';
 import { serializeWorkspaceMutation } from './workspace-mutation.js';
-import { keyedDocument, repositoryOrHome as documentRepository, storedDocument } from './request-workspace.js';
+import { keyedDocument, repositoryOrDefault as documentRepository, storedDocument } from './request-workspace.js';
 import { readBoundedFile, readSnapshotText, regularPath, revisionOf, writeFileAtomic } from './workspace-files.js';
 
 /** Reads and writes one workspace document of one repository as `{ page, revision, path, writable, repository }`. */

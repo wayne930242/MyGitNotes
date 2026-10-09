@@ -108,9 +108,10 @@ describe('a lightweight deployment that lets each visitor choose a repository', 
 
   it('asks to choose a repository, lists the granted ones the visitor can write, and opens the chosen one', async () => {
     const session = await signIn();
+    // Before a choice the workspace has no repository; the session tells the page to offer the choice.
     const setup = await fetch(`${base}/api/workspace`, { headers: { Cookie: session } });
-    expect(setup.status).toBe(503);
-    expect(await setup.json()).toMatchObject({ setupRequired: true, reason: 'choose-repository' });
+    expect(setup.status).toBe(200);
+    expect(await setup.json()).toMatchObject({ defaultRepository: null, repositories: [], repositoryChoice: true });
     expect((await fetch(`${base}/api/repositories/available`)).status).toBe(401);
     const listed = await fetch(`${base}/api/repositories/available`, { headers: { Cookie: session } }).then(response => response.json());
     expect(listed.repositories.map((entry: { fullName: string; }) => entry.fullName)).toEqual(['team/handbook', 'visitor/notes']);

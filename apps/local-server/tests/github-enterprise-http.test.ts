@@ -23,7 +23,7 @@ async function start(env: Record<string, string>, webRoot = site, apiRoot = `${s
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-ghe-'));
   outbound = [];
   fixture = githubFixture();
-  for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', MYGITNOTES_BRANCH: '', MYGITNOTES_GITHUB_URL: '', GITHUB_CLIENT_ID: 'ghe-client', GITHUB_CLIENT_SECRET: 'ghe-secret', GITHUB_APP_TYPE: '', GITHUB_APP_SLUG: '', MYGITNOTES_STARTER_TEMPLATE: '', SESSION_SECRET: 's'.repeat(64), VERCEL: '', REDIS_URL: '', UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', KV_REST_API_URL: '', KV_REST_API_TOKEN: '', MYGITNOTES_STORAGE: '', APP_URL: '', ...env })) vi.stubEnv(key, value);
+  for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', MYGITNOTES_BRANCH: '', MYGITNOTES_GITHUB_URL: '', GITHUB_CLIENT_ID: 'ghe-client', GITHUB_CLIENT_SECRET: 'ghe-secret', GITHUB_APP_TYPE: '', GITHUB_APP_SLUG: '', MYGITNOTES_STARTER_TEMPLATE: '', SESSION_SECRET: 's'.repeat(64), VERCEL: '', REDIS_URL: '', UPSTASH_REDIS_REST_URL: '', UPSTASH_REDIS_REST_TOKEN: '', KV_REST_API_URL: '', KV_REST_API_TOKEN: '', MYGITNOTES_STORAGE: '', MYGITNOTES_PRODUCT_REPOSITORY: '', APP_URL: '', ...env })) vi.stubEnv(key, value);
   server = createServer(createApp(root, { remoteCache: undefined }));
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
@@ -99,11 +99,11 @@ describe('a deployment whose repository is on GitHub Enterprise Server', () => {
     await start(configured);
     const cookie = await signIn();
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
-    expect(workspace).toMatchObject({ local: false, home: `github:${site}/owner/repo@main`, repositories: [{ id: `github:${site}/owner/repo@main`, type: 'github', alias: 'repo', branch: 'main', write: true, notebooks: ['repo~ex'] }] });
+    expect(workspace).toMatchObject({ local: false, defaultRepository: `github:${site}/owner/repo@main`, repositories: [{ id: `github:${site}/owner/repo@main`, type: 'github', alias: 'repo', branch: 'main', write: true, notebooks: ['repo~ex'] }] });
     const notes = await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json());
     const note = notes.notes.find((entry: { title: string; }) => entry.title === 'Alpha');
     const before = fixture.head();
-    const edit = post(cookie, { repository: workspace.home, notes: [{ ...note, content: '# Updated' }], revision: before, message: 'docs: edit note' });
+    const edit = post(cookie, { repository: workspace.defaultRepository, notes: [{ ...note, content: '# Updated' }], revision: before, message: 'docs: edit note' });
     const saved = await fetch(`${base}/api/notes/commit`, edit);
     expect(saved.status).toBe(200);
     expect(fixture.head()).not.toBe(before);
@@ -124,7 +124,7 @@ describe('a deployment whose repository is on GitHub Enterprise Server', () => {
     expect(outbound.find(call => call.method === 'POST' && call.url.endsWith('/gists'))).toMatchObject({ url: `${site}/api/v3/gists`, authorization: 'Bearer ghe-user-token' });
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json());
     const note = (await fetch(`${base}/api/notes`, { headers: { Cookie: cookie } }).then(r => r.json())).notes.find((entry: { title: string; }) => entry.title === 'Alpha');
-    const edit = post(cookie, { repository: workspace.home, notes: [{ ...note, content: '# Alpha again', metadata: { ...note.metadata, gist: 'abc123' } }], revision: fixture.head(), message: 'docs: edit note' });
+    const edit = post(cookie, { repository: workspace.defaultRepository, notes: [{ ...note, content: '# Alpha again', metadata: { ...note.metadata, gist: 'abc123' } }], revision: fixture.head(), message: 'docs: edit note' });
     const saved = await fetch(`${base}/api/notes/commit`, edit).then(r => r.json());
     expect(saved.gists).toEqual([{ path: note.path, gist: 'abc123' }]);
     expect(outbound.filter(call => call.url.includes('/gists/abc123')).map(call => [call.method, call.url])).toEqual([['GET', `${site}/api/v3/gists/abc123`], ['PATCH', `${site}/api/v3/gists/abc123`]]);
@@ -136,9 +136,19 @@ describe('a deployment whose repository is on GitHub Enterprise Server', () => {
     expect(outbound.every(call => call.url.startsWith(`${site}/`))).toBe(true);
   });
 
-  it('keeps Core updates off the site: the token never goes to github.com', async () => {
+  it('offers no Core update without a product repository, and asks no provider', async () => {
     await start(configured);
     const cookie = await signIn();
+    expect((await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json())).coreUpdate).toBe(false);
+    const before = outbound.length;
+    for (const answer of [await fetch(`${base}/api/core/status`, { headers: { Cookie: cookie } }), await fetch(`${base}/api/core/update`, post(cookie, {}))]) expect(answer.status).toBe(404);
+    expect(outbound.length).toBe(before);
+  });
+
+  it('keeps Core updates of a product repository off the site: the token never goes to github.com', async () => {
+    await start({ ...configured, MYGITNOTES_PRODUCT_REPOSITORY: 'owner/core' });
+    const cookie = await signIn();
+    expect((await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json())).coreUpdate).toBe(true);
     const before = outbound.length;
     expect(await fetch(`${base}/api/core/status`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ status: { state: 'unsupported', canUpdate: false } });
     const update = await fetch(`${base}/api/core/update`, post(cookie, {}));
@@ -180,7 +190,8 @@ describe('credentials and agent grants', () => {
     const { credential, credentialRecord, grant } = await recorded('https://github.com', 'https://api.github.com');
     expect(credential).toBe(createHash('sha256').update('github-credential:ghe-client:42').digest('base64url'));
     expect(credentialRecord.realm).toBe('github:https://github.com:ghe-client');
-    expect(grant).toMatchObject({ kind: 'agent', ownerId: 42, source: 'github:owner/repo@main' });
+    expect(grant).toMatchObject({ kind: 'agent', ownerId: 42, site: 'github' });
+    expect(grant).not.toHaveProperty('source');
   });
 
   it('scopes them to an Enterprise site, so a session or grant from one site never authorizes another', async () => {
@@ -189,7 +200,7 @@ describe('credentials and agent grants', () => {
     expect(credentialRecord.realm).toBe(realm);
     expect(credential).toBe(createHash('sha256').update(`${realm}:credential:42`).digest('base64url'));
     expect(credential).not.toBe(createHash('sha256').update('github-credential:ghe-client:42').digest('base64url'));
-    expect(grant).toMatchObject({ kind: 'agent', ownerId: `${digest(realm)}:42`, source: `github:${site}/owner/repo@main` });
+    expect(grant).toMatchObject({ kind: 'agent', ownerId: `${digest(realm)}:42`, site: `github:${site}` });
   });
 });
 
@@ -201,7 +212,8 @@ describe('a lightweight deployment on GitHub Enterprise that lets each visitor c
     await start(choosing);
     expect(await fetch(`${base}/api/auth/session`).then(r => r.json())).toMatchObject({ authenticated: false, provider: 'github', storage: 'cookie', repositoryChoice: true, workspace: null });
     const cookie = await signIn();
-    expect(await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ setupRequired: true, reason: 'choose-repository' });
+    // Before a choice the workspace has no repository.
+    expect(await fetch(`${base}/api/workspace`, { headers: { Cookie: cookie } }).then(r => r.json())).toMatchObject({ defaultRepository: null, repositories: [], repositoryChoice: true });
     const listed = await fetch(`${base}/api/repositories/available`, { headers: { Cookie: cookie } }).then(r => r.json());
     expect(listed.repositories.map((entry: { fullName: string; }) => entry.fullName)).toEqual(['team/handbook']);
     expect(listed.installUrl).toBe(`${site}/github-apps/my-notes/installations/new`);
@@ -212,7 +224,7 @@ describe('a lightweight deployment on GitHub Enterprise that lets each visitor c
     expect(await chosen.json()).toEqual({ choice: { repository: 'team/handbook', branch: 'main' } });
     const withChoice = `${cookie}; ${cookieOf(chosen, 'mygitnotes_workspace')!.split(';')[0]}`;
     const workspace = await fetch(`${base}/api/workspace`, { headers: { Cookie: withChoice } }).then(r => r.json());
-    expect(workspace).toMatchObject({ home: `github:${site}/team/handbook@main`, repositories: [{ type: 'github', branch: 'main', write: true }] });
+    expect(workspace).toMatchObject({ defaultRepository: `github:${site}/team/handbook@main`, repositories: [{ type: 'github', branch: 'main', write: true }] });
     expect(outbound.every(call => call.url.startsWith(`${site}/`))).toBe(true);
     expect(outbound.some(call => call.url.startsWith(`${site}/api/v3/repos/team/handbook/commits/`))).toBe(true);
   });

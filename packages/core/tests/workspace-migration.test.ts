@@ -26,7 +26,7 @@ describe('workspace migration', () => {
     const result = migrateWorkspace(root);
     expect(result.migrated).toBe(true);
     const text = fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8');
-    expect(text).toMatch(/^schema_version: 3$/m);
+    expect(text).toMatch(/^schema_version: 4$/m);
     expect(text).toContain('# keep comment');
     expect(result.notesMissingTimestamps).toBe(1);
   });
@@ -34,11 +34,17 @@ describe('workspace migration', () => {
   it('migrates a version 1 manifest by its version alone', () => {
     const root = workspace(`schema_version: 1\n${body}`);
     expect(migrateWorkspace(root).migrated).toBe(true);
-    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(`schema_version: 3\n${body}`);
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(`schema_version: 4\n${body}`);
+  });
+
+  it('moves a schema 3 manifest to 4 by its version alone', () => {
+    const root = workspace(`schema_version: 3\n${body}`);
+    expect(migrateWorkspace(root)).toMatchObject({ migrated: true, repositories: [{ root, touched: ['.mygitnotes.yaml'], compilations: 0 }] });
+    expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(`schema_version: 4\n${body}`);
   });
 
   it('leaves a current workspace untouched', () => {
-    const root = workspace(`schema_version: 3\n${body}`, { 'notes/a/n.md': '---\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n# N\n' });
+    const root = workspace(`schema_version: 4\n${body}`, { 'notes/a/n.md': '---\ncreated: 2026-01-01\nupdated: 2026-01-01\n---\n# N\n' });
     const before = fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8');
     expect(migrateWorkspace(root)).toMatchObject({ migrated: false, notesMissingTimestamps: 0 });
     expect(fs.readFileSync(path.join(root, '.mygitnotes.yaml'), 'utf8')).toBe(before);
@@ -50,7 +56,8 @@ describe('workspace migration', () => {
     expect(() => assertWorkspaceCompatible(workspace(`schema_version: ${SUPPORTED_SCHEMA_VERSION + 1}\n${body}`))).toThrow(WorkspaceCompatibilityError);
     expect(() => assertWorkspaceCompatible(workspace(`schema_version: ${SUPPORTED_SCHEMA_VERSION + 1}\n${body}`))).toThrow(/newer Core/);
     expect(() => assertWorkspaceCompatible(workspace(`schema_version: 2\n${body}`))).toThrow(/pnpm migrate-workspace/);
-    expect(() => assertWorkspaceCompatible(workspace(`schema_version: 3\n${body}`))).not.toThrow();
+    expect(() => assertWorkspaceCompatible(workspace(`schema_version: 3\n${body}`))).toThrow(/pnpm migrate-workspace/);
+    expect(() => assertWorkspaceCompatible(workspace(`schema_version: 4\n${body}`))).not.toThrow();
   });
 
   it('refuses a schema_version it has no migration step for', () => {

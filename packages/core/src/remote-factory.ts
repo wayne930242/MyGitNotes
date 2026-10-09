@@ -11,8 +11,8 @@ export function createRemoteSource(source: RemoteSourceConfig, token: string | u
   return source.type === 'github' ? new GitHubSource(source.repository, source.branch, token, request, cache, scope, source.url) : new GitLabSource(source.url, source.repository, source.branch, token, request, cache, scope);
 }
 
-/** Opens a repository that keeps its own workspace manifest and serves every notebook in it. */
-export function openRemoteHome(source: RemoteSourceConfig, token?: string, request: typeof fetch = fetch, cache?: RemoteCache): { reader: RemoteSource; manifest: RemoteManifest; } {
+/** Opens a repository that serves every notebook of its own workspace manifest. */
+export function openRemoteRepository(source: RemoteSourceConfig, token?: string, request: typeof fetch = fetch, cache?: RemoteCache): { reader: RemoteSource; manifest: RemoteManifest; } {
   const reader = createRemoteSource(source, token, request, cache, async () => (await manifest.load()).config);
   const manifest = new RemoteManifest(reader);
   return { reader, manifest };

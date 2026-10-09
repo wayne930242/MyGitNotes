@@ -33,7 +33,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [folders, setFolders] = useState<FolderItem[]>([]);
   // True until the first folder list arrives; until then an empty `folders` means unknown, not none.
   const [foldersLoading, setFoldersLoading] = useState(true);
-  // The workspace is identified by its home repository.
+  // The workspace is identified by its default repository.
   const [sourceId, setSourceId] = useState('');
   const [remote, setRemote] = useState(false);
   const loadedWorkspace = useRef('');
@@ -46,6 +46,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [repoRoot, setRepoRoot] = useState<string>('');
   /** The deployment lets each visitor choose their repository. */
   const [repositoryChoice, setRepositoryChoice] = useState(false);
+  /** Settings offers Core updates: for a local Core checkout, or a remote deployment's product repository. */
+  const [coreUpdate, setCoreUpdate] = useState(false);
   /** The workspace configuration as routes and the app name it: every notebook by its key. */
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
   useEffect(() => {
@@ -62,13 +64,13 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const routedNotebook = routeNotebook && !isNotebookKey(routeNotebook) ? resolveBareNotebook(routeNotebook) ?? routeNotebook : routeNotebook;
   const selectedNotebookId = routedNotebook || config?.workspace.default_notebook || config?.notebooks[0]?.id || 'example';
 
-  const homeRepository = repositories.find(repository => repository.id === sourceId);
-  const homeBranch = homeRepository?.branch ?? '';
+  const defaultRepository = repositories.find(repository => repository.id === sourceId);
+  const defaultRepositoryBranch = defaultRepository?.branch ?? '';
   const repositoryFor = (notebookId: string) => repositoryOf(repositories, notebookId);
   // Each note takes the preferences of its own repository; without a notebook, the default repository's, and with
   // none, the built-in ones. Children read them while they render — a `useState` initializer runs before any
   // effect — so setting them in an effect would hand the first mount the previous preferences.
-  setNotebookPreferences(notebookId => (notebookId ? repositoryFor(notebookId)?.preferences : undefined) ?? homeRepository?.preferences ?? DEFAULT_WORKSPACE_PREFERENCES);
+  setNotebookPreferences(notebookId => (notebookId ? repositoryFor(notebookId)?.preferences : undefined) ?? defaultRepository?.preferences ?? DEFAULT_WORKSPACE_PREFERENCES);
   const canWriteNotebook = (notebookId: string) => Boolean(repositoryFor(notebookId)?.write);
   const revisionFor = (notebookId: string) => repositoryFor(notebookId)?.revision ?? '';
   const setRepositoryRevision = (id: RepositoryId, revision: string) => setRepositories(previous => previous.map(repository => repository.id === id ? { ...repository, revision } : repository));
@@ -127,10 +129,10 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   /* eslint-disable react-hooks/exhaustive-deps -- Pending file paths are the status projection key; newly allocated document controllers with the same paths must retain the memoized status identity. */
   const gitStatus = useMemo<GitStatus | null>(() => {
     if (remote) {
-      return { branch: homeBranch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
+      return { branch: defaultRepositoryBranch, isClean: !pendingDocuments.length && Object.keys(activeWorkingNotes).length === 0, staged: [], modified: [...Object.values(activeWorkingNotes).filter((entry) => entry.base).map((entry) => entry.note.path), ...pendingDocuments.map((document) => document.file)], untracked: Object.values(activeWorkingNotes).filter((entry) => !entry.base).map((entry) => entry.note.path) };
     }
     return serverGitStatus;
-  }, [remote, homeBranch, serverGitStatus, pendingDocuments.map((document) => `${document.repository}\t${document.file}`).join('\n'), activeWorkingNotes]);
+  }, [remote, defaultRepositoryBranch, serverGitStatus, pendingDocuments.map((document) => `${document.repository}\t${document.file}`).join('\n'), activeWorkingNotes]);
   /* eslint-enable react-hooks/exhaustive-deps */
   /* eslint-enable react/use-memo */
 
@@ -162,19 +164,20 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       const ws = await fetchWorkspace(fresh === true);
       if (request !== refreshRequest.current) return;
       const folderRequest = fetchFolders();
-      const workspace = JSON.stringify([ws.home, ws.repositories.map((repository) => [repository.id, repository.branch]), ws.keyedConfig?.notebooks.map((nb) => [nb.id, nb.root])]);
+      const workspace = JSON.stringify([ws.defaultRepository, ws.repositories.map((repository) => [repository.id, repository.branch]), ws.keyedConfig?.notebooks.map((nb) => [nb.id, nb.root])]);
       // A local workspace has no revisions, so its cached answers are refetched by hand.
       if (ws.local && loadedWorkspace.current) void invalidateNoteQueries(queryClient);
       loadedWorkspace.current = workspace;
-      setSourceId(ws.home);
+      setSourceId(ws.defaultRepository ?? '');
       setRemote(!ws.local);
       setRepositories((previous) => (sameValue(previous, ws.repositories) ? previous : ws.repositories));
       setLoadError('');
       setRepoRoot(ws.repoRoot ?? '');
       setRepositoryChoice(ws.repositoryChoice === true);
+      setCoreUpdate(ws.coreUpdate === true);
       setConfig((previous) => (sameValue(previous, ws.keyedConfig) ? previous : ws.keyedConfig));
       setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftStore(repository))])));
-      setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
+      setGitStatus(ws.repositories.find((repository) => repository.id === ws.defaultRepository)?.gitStatus ?? null);
       setLoading(false);
 
       const folderList = await folderRequest;
@@ -236,5 +239,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, defaultRepository, defaultRepositoryBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, setManifestRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, repositoryChoice, coreUpdate, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

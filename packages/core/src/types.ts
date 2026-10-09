@@ -1,5 +1,3 @@
-import type { RemoteSourceConfig } from './source-config.js';
-
 export type ViewMode = 'list' | 'card' | 'kanban' | 'flat' | 'graph';
 
 export interface NoteTemplate {
@@ -26,8 +24,6 @@ export interface NotebookConfig {
   templates?: NoteTemplate[];
   metadata?: NotebookMetadataField[];
   pathAliases?: Record<string, string>;
-  /** The platform repository serving this notebook; absent for a notebook in the home repository. */
-  source?: RemoteSourceConfig;
 }
 
 export type YouTubeDisplayMode = 'thumbnail' | 'medium' | 'theater';

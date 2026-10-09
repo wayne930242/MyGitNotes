@@ -2,7 +2,7 @@ import { type NextFunction, type Request, type Response, Router } from 'express'
 import path from 'node:path';
 import { addVersion, historyFile, type HistoryRead, type NoteVersionFile, onRemoteCommit, readVersionFile, relabelVersion, removeVersion, serializeVersionFile, SourceError, utcDay, versionFilePath, type VersionLabel, VersionLabelSchema } from '@mygitnotes/core';
 import { commitDetails, commitVersionChange, fileHistory, getCurrentBranch, readFileAt, readHistoryBlob } from '@mygitnotes/git';
-import { notebookRepository, type RepositoryHandle, repositoryOrHome, workspaceOf } from './request-workspace.js';
+import { notebookRepository, type RepositoryHandle, repositoryOrDefault, workspaceOf } from './request-workspace.js';
 import { openEventStream } from './event-stream.js';
 import { readBoundedFile, readSnapshotText, regularPath } from './workspace-files.js';
 import { watchWorktrees } from './worktree-watch.js';
@@ -10,7 +10,7 @@ import { watchWorktrees } from './worktree-watch.js';
 const PER_PAGE = 50;
 const OBJECT_ID = /^[a-f0-9]{40}([a-f0-9]{24})?$/;
 
-/** The repository of a file a request names: through its notebook for a note, else the named or home repository. */
+/** The repository of a file a request names: through its notebook for a note, else the named or default repository. */
 async function fileRepository(res: Response, query: Record<string, unknown>) {
   const file = query.path;
   if (typeof file !== 'string' || !file) throw new SourceError('path is required.');
@@ -20,7 +20,7 @@ async function fileRepository(res: Response, query: Record<string, unknown>) {
     if (!file.startsWith(`${notebook.root}/`)) throw new SourceError('Path is not in the named notebook.', 403);
     resolved = { id: handle.id, handle, notebooks: config.notebooks };
   } else {
-    const { id, handle, config } = await repositoryOrHome(res, query.repository);
+    const { id, handle, config } = await repositoryOrDefault(res, query.repository);
     resolved = { id, handle, notebooks: config.notebooks };
   }
   if (!historyFile(file, resolved.notebooks)) throw new SourceError('This file has no history in the app.', 403);

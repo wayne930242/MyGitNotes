@@ -134,7 +134,7 @@ export async function fetchAgentWorkspaces(): Promise<AgentWorkspace[]> {
   return (await res.json()).workspaces;
 }
 
-/** The workspaces and workspace files of one repository (the home repository without `repository`); each repository keeps its own. */
+/** The workspaces and workspace files of one repository (the default repository without `repository`); each repository keeps its own. */
 export async function fetchAgentResources(repository?: string): Promise<{ workspaces: AgentWorkspace[]; files: AgentFile[]; revision?: string; }> {
   const res = await fetch(`${API_BASE}/agent-resources${repository ? `?repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch agent resources');
@@ -200,7 +200,7 @@ export async function deleteAsset(path: string, options?: { noCommit?: boolean; 
   return res.json();
 }
 
-/** Git status of one worktree, the home worktree without `repository`. */
+/** Git status of one worktree, the default worktree without `repository`. */
 export async function fetchGitStatus(repository?: string): Promise<{ status: GitStatus; commits: GitCommit[]; }> {
   const res = await fetch(`${API_BASE}/git/status${repository ? `?repository=${encodeURIComponent(repository)}` : ''}`);
   if (!res.ok) throw new Error('Failed to fetch git status');
@@ -275,7 +275,7 @@ export class GitSyncError extends Error {
   }
 }
 
-/** Pulls and pushes one worktree, the home worktree when `repository` is absent. */
+/** Pulls and pushes one worktree, the default worktree when `repository` is absent. */
 export async function syncGitWorkspace(strategy?: 'remote' | 'local', repository?: string, pullOnly?: boolean): Promise<{ upstream: string; pulled: number; pushed: number; backup?: string; }> {
   const res = await fetch(`${API_BASE}/git/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(strategy ? { strategy } : {}), ...(repository ? { repository } : {}), ...(pullOnly ? { pullOnly } : {}) }) });
   const data = await res.json().catch(() => ({}));
