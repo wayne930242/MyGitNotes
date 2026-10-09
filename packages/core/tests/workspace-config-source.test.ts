@@ -314,6 +314,21 @@ describe('local repository mappings', () => {
     expect(settings.members.map(entry => [entry.ref.id, entry.alias, entry.default, entry.localPath])).toEqual([[`local:${path.join(base, 'home')}`, 'home', true, path.join(base, 'home')], ['github:owner/trpg@main', 'trpg', false, path.resolve(base, '../trpg')]]);
     fs.rmSync(base, { recursive: true, force: true });
   });
+  it("names a mapped repository by the branch its worktree has checked out, a linked worktree's included", async () => {
+    const { execFileSync } = await import('node:child_process');
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-mappings-'));
+    const git = (cwd: string, ...args: string[]) => execFileSync('git', args, { cwd, stdio: 'ignore' });
+    fs.mkdirSync(path.join(base, 'home'));
+    fs.mkdirSync(path.join(base, 'trpg'));
+    git(path.join(base, 'trpg'), 'init', '-b', 'campaign');
+    git(path.join(base, 'trpg'), '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.test', 'commit', '--allow-empty', '-m', 'fixture');
+    git(path.join(base, 'trpg'), 'worktree', 'add', '-b', 'drafts', path.join(base, 'drafts'));
+    fs.writeFileSync(path.join(base, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: owner/trpg, path: ./trpg }\n  - { type: github, repository: owner/drafts, path: ./drafts }\n  - { type: github, repository: owner/gone, path: ./gone }\n');
+    const settings = await deploymentConfigSource(base, { MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: path.join(base, 'home') }).settings(request);
+    // A path that is no worktree keeps main; it opens as unmapped.
+    expect(settings.members.slice(1).map(entry => entry.ref.id)).toEqual(['github:owner/trpg@campaign', 'github:owner/drafts@drafts', 'github:owner/gone@main']);
+    fs.rmSync(base, { recursive: true, force: true });
+  });
   it('fails setup on a malformed mapping', async () => {
     const base = fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-mappings-'));
     fs.writeFileSync(path.join(base, 'mygitnotes.server.yaml'), 'repositories:\n  - type: github\n    repository: owner/trpg\n');

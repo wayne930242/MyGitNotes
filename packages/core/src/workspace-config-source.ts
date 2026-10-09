@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { SourceError } from './github-api.js';
 import { deriveAlias, repositoryName } from './notebook-key.js';
 import { type RepositoryRef, repositoryRef } from './repository.js';
@@ -102,9 +103,25 @@ function sameDirectory(a: string, b: string): boolean {
 }
 
 /**
+ * The branch a worktree has checked out, read from its `HEAD` (a linked worktree's `.git` file names its Git
+ * directory); undefined when the path is not a worktree or its `HEAD` is detached.
+ */
+function worktreeBranch(worktree: string): string | undefined {
+  try {
+    const dotGit = path.join(worktree, '.git');
+    const gitDir = fs.statSync(dotGit).isDirectory() ? dotGit : path.resolve(worktree, /^gitdir:\s*(.+)$/m.exec(fs.readFileSync(dotGit, 'utf8'))?.[1]?.trim() ?? '');
+    return /^ref: refs\/heads\/(.+)$/m.exec(fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf8'))?.[1]?.trim() || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * The deployment's members: the repository the environment or the file's top-level `source` names, which is the
  * default, then in local mode each worktree `repositories` maps, in the file's order. A mapping onto the default
- * worktree is that repository by another name. Aliases derive from repository names in that order.
+ * worktree is that repository by another name, and a mapped repository is on the branch its worktree has checked out
+ * (`main` when that cannot be read; the repository is then unavailable or detached). Aliases derive from repository
+ * names in that order.
  */
 function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): WorkspaceSettings {
   let source;
@@ -126,7 +143,7 @@ function readDeploymentSettings(base: string, env: NodeJS.ProcessEnv): Workspace
   const defaultPath = source.type === 'local' ? source.path : undefined;
   for (const mapping of mappings) {
     if (defaultPath && sameDirectory(mapping.path, defaultPath)) continue;
-    members.push(member(repositoryRef({ ...mapping.source, branch: 'main' } as SourceConfig), false, mapping.path));
+    members.push(member(repositoryRef({ ...mapping.source, branch: worktreeBranch(mapping.path) ?? 'main' } as SourceConfig), false, mapping.path));
   }
   return { site: siteOf(source), members, manifest: (_member, inRepository) => inRepository() };
 }
