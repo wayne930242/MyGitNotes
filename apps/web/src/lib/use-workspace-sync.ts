@@ -51,6 +51,8 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
   const [repositoryChoice, setRepositoryChoice] = useState(false);
   /** The workspace configuration as routes and the app name it: every notebook by its key. */
   const [config, setConfig] = useState<WorkspaceConfig | null>(null);
+  /** The manifest as the repository keeps it, every notebook by its local id: what Settings edits and "create manifest" commits. */
+  const [manifestConfig, setManifestConfig] = useState<WorkspaceConfig | null>(null);
   // Children read these defaults while they render — a `useState` initializer runs before any
   // effect — so applying them in an effect would hand the first mount the previous default.
   setDefaultYouTubeDisplayMode(config?.preferences?.defaultYoutubeDisplayMode ?? 'thumbnail');
@@ -176,6 +178,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setManifestDerived(ws.manifest === 'derived');
       setRepositoryChoice(ws.repositoryChoice === true);
       setConfig((previous) => (sameValue(previous, ws.keyedConfig) ? previous : ws.keyedConfig));
+      setManifestConfig((previous) => (sameValue(previous, ws.config) ? previous : ws.config));
       setWorkingNotes(ws.local ? {} : Object.fromEntries(ws.repositories.filter((repository) => !repository.unavailable).map((repository) => [repository.id, readWorkingNotes(draftStore(repository))])));
       setGitStatus(ws.repositories.find((repository) => repository.id === ws.home)?.gitStatus ?? null);
       setLoading(false);
@@ -191,6 +194,7 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
       setFoldersLoading(false);
       setAssets([]);
       setConfig(null);
+      setManifestConfig(null);
       setLoadError(err instanceof Error ? err.message : 'Failed to load workspace');
     } finally {
       if (request === refreshRequest.current) setLoading(false);
@@ -239,5 +243,5 @@ export function useWorkspaceSync(options: UseWorkspaceSyncOptions) {
     return note;
   };
 
-  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
+  return { selectedNotebookId, resolveBareNotebook, folders, foldersLoading, setFolders, sourceId, remote, repositories, homeRepository, homeBranch, repositoryFor, canWriteNotebook, revisionFor, setRepositoryRevision, setNotebookRevision, configRevision, setConfigRevision, loadError, loading, setLoading, actionError, setActionError, repoRoot, manifestDerived, repositoryChoice, config, setConfig, manifestConfig, serverGitStatus, gitStatus, setGitStatus, assets, setAssets, workingNotes, activeWorkingNotes, readDraft, readDraftIn, updateDraft, clearCommittedDrafts, hasPendingDrafts, focus, documents, pendingDocuments, refreshWorkspace, stageWorkingNote };
 }

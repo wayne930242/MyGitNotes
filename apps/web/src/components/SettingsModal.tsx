@@ -25,6 +25,7 @@ interface SettingsModalProps {
   accountSettings?: React.ReactNode;
   /** Core updates concern a deployment's own repository; a repository a visitor imported has none to update. */
   coreUpdates?: boolean;
+  /** The manifest as the repository keeps it, every notebook by its local id; never the keyed configuration routes use. */
   config: WorkspaceConfig | null;
   branch: string;
   onRefreshWorkspace: () => Promise<void>;
