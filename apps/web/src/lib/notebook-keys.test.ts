@@ -3,7 +3,7 @@ import { notebookIdCodec, resolveBareId } from './notebook-keys.js';
 import { bareNotebookRoute, keyedAppUrl } from './routes.js';
 
 // `kb` is the default (home) repository; `campaign` shares the local id `shared` with it and alone has `trpg`.
-// A hidden repository is never loaded, so its notebooks are absent from what the browser resolves against.
+// `absent` is a local id no loaded repository has.
 const notebooks = { 'kb~life': 'repo-kb', 'kb~shared': 'repo-kb', 'campaign~shared': 'repo-campaign', 'campaign~trpg': 'repo-campaign' };
 const resolve = (localId: string) => resolveBareId(notebooks, 'repo-kb', localId);
 
@@ -11,7 +11,7 @@ describe('resolveBareId', () => {
   it('answers the one repository with the local id, else the default repository, else nothing', () => {
     expect(resolve('trpg')).toBe('campaign~trpg');
     expect(resolve('shared')).toBe('kb~shared');
-    expect(resolve('hidden-only')).toBeNull();
+    expect(resolve('absent')).toBeNull();
     expect(resolveBareId({ 'campaign~shared': 'repo-campaign', 'other~shared': 'repo-other' }, 'repo-kb', 'shared')).toBeNull();
     expect(resolve('kb~life')).toBeNull();
   });
@@ -40,7 +40,7 @@ describe('bare-id redirect', () => {
 
   it('leaves keys, unresolved ids, unknown keys and the former all-notebooks value to the page', () => {
     expect(bareNotebookRoute('/notebooks/kb~life/notes/a.md', '?notebook=kb~life', resolve)).toBeNull();
-    expect(bareNotebookRoute('/notebooks/hidden-only/notes/a.md', '', resolve)).toBeNull();
+    expect(bareNotebookRoute('/notebooks/absent/notes/a.md', '', resolve)).toBeNull();
     expect(bareNotebookRoute('/notebooks/missing~life/notes/a.md', '', resolve)).toBeNull();
     expect(bareNotebookRoute('/notebooks/all', '', resolve)).toBeNull();
     expect(bareNotebookRoute('/notes', '', resolve)).toBeNull();
@@ -53,6 +53,6 @@ describe('bare-id redirect', () => {
   it('keys an app link inside a note, keeping its fragment', () => {
     expect(keyedAppUrl('/notebooks/trpg/notes/a.md?view=list#heading', resolve)).toBe('/notebooks/campaign~trpg/notes/a.md?view=list#heading');
     expect(keyedAppUrl('/notebooks/kb~life/notes/a.md#h', resolve)).toBe('/notebooks/kb~life/notes/a.md#h');
-    expect(keyedAppUrl('/notebooks/hidden-only/notes/a.md', resolve)).toBe('/notebooks/hidden-only/notes/a.md');
+    expect(keyedAppUrl('/notebooks/absent/notes/a.md', resolve)).toBe('/notebooks/absent/notes/a.md');
   });
 });
