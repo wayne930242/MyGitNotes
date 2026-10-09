@@ -88,7 +88,8 @@ export function createRemoteMCP(store: RecordStore, configSource: WorkspaceConfi
         await remember(error instanceof CredentialRejected ? error.reason : 'credential-unavailable');
         return res.status(error instanceof SourceError ? error.status : 503).json({ error: error instanceof SourceError ? error.message : 'Agent authorization service unavailable. Retry later.' });
       }
-      // Asset storage finds the caller on the request too: it is the grant's person, not a browser session.
+      // Asset storage finds the caller on the request too: it is the grant's person, never a browser session sent beside the grant.
+      delete req.headers.cookie;
       if (person) (req as express.Request & WorkspaceRequest).person = person;
       const workspace = openWorkspace(grantSettings(settings, grant), token, cache);
       const assets = toolAssets(assetStorage, req, res);

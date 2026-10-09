@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createServer, type Server } from 'node:http';
-import { r2SettingsFromEnv, SourceError } from '@mygitnotes/core';
+import { r2SettingsFromEnv, SourceError, type WorkspaceRequest } from '@mygitnotes/core';
 import { type AssetStorage } from '../src/asset-storage.js';
 import { createApp } from '../src/app.js';
 import { createRecordStore } from '../src/record-store/index.js';
@@ -94,9 +94,9 @@ async function startHosted(assetStorage?: AssetStorage) {
 }
 
 /** One MCP tool call, answered with the tool's structured result, or the HTTP response when the route refused it. */
-async function callTool(name: string, args: Record<string, unknown>, bodyPadding = 0) {
+async function callTool(name: string, args: Record<string, unknown>, bodyPadding = 0, { token = TOKEN, cookie }: { token?: string; cookie?: string; } = {}) {
   const body = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } }) + ' '.repeat(bodyPadding);
-  const response = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Connection: 'close' }, body });
+  const response = await fetch(`${base}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', Connection: 'close', ...(cookie ? { Cookie: cookie } : {}) }, body });
   if (!response.ok) return { status: response.status, body: await response.json() as { error: string; } };
   const result = (await response.json()).result;
   return { status: response.status, isError: result.isError === true, result: JSON.parse(result.content[0].text) };
@@ -155,6 +155,30 @@ describe('MCP asset tools through an asset storage', () => {
     const uploaded = await callTool('add_asset', { notebookId: 'ex', filename: 'plain.pdf', base64Content: file('plain') });
     expect(uploaded).toMatchObject({ isError: false, result: { key: 'ex/plain.pdf' } });
     expect(bucket.objects.has('ex/plain.pdf')).toBe(true);
+  });
+});
+
+describe('the person an MCP upload is charged to', () => {
+  it("is the grant's person even when another person's browser cookie comes with the call", async () => {
+    // Stands in for an edition that, like Pro before it read request.person first, takes a browser session over the grant's person.
+    const seen: { cookie?: string; person?: unknown; }[] = [];
+    const storage: AssetStorage = {
+      resolve: async req => {
+        const request = req as typeof req & WorkspaceRequest;
+        seen.push({ cookie: req.headers.cookie, person: request.person });
+        const who = req.headers.cookie ? 'stranger' : request.person?.userId;
+        return { settings: r2SettingsFromEnv()!, prefix: `r/${who}/`, limits: { maxObjectBytes: 20 * 1024 * 1024 } };
+      },
+    };
+    await startHosted(storage);
+    const granted = 'p'.repeat(43);
+    await createRecordStore(root).set(granted, { kind: 'agent', session: SESSION, site: 'github', person: { realm: 'github:https://github.com:', userId: 42 }, audience: `${base}/mcp`, write: true }, 8 * 3600);
+    const uploaded = await callTool('add_asset', { notebookId: 'ex', filename: 'mine.pdf', base64Content: file('mine') }, 0, { token: granted, cookie: `gh_notes_session=${'s'.repeat(43)}` });
+    expect(uploaded).toMatchObject({ isError: false, result: { storage: 'r2', key: 'r/42/ex/mine.pdf' } });
+    expect(bucket.objects.has('r/stranger/ex/mine.pdf')).toBe(false);
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.every(request => request.cookie === undefined)).toBe(true);
+    expect(seen[0].person).toEqual({ realm: 'github:https://github.com:', userId: 42 });
   });
 });
 

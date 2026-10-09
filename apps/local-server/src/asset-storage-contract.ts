@@ -10,6 +10,13 @@ export interface AssetStorageFixture {
   available(): { req: Request; res: Response; repository: RepositoryHandle; };
   /** A request the storage has no bucket for; omit it when every request has one. */
   unavailable?(): { req: Request; res: Response; repository: RepositoryHandle; };
+  /**
+   * The request `/mcp` hands the storage for a grant of the person `available()` signs in: `request.person` names them
+   * and the request carries no browser cookie. With `otherCookie`, the request also carries the browser cookie of
+   * another person whose scope differs (another plan's object limit, say), as a caller may send beside a grant; `/mcp`
+   * removes it, and a storage must not let it choose the person either. Omit it when the storage does not tell people apart.
+   */
+  granted?(otherCookie: boolean): { req: Request; res: Response; repository: RepositoryHandle; };
 }
 
 /**
@@ -48,6 +55,16 @@ export function assetStorageContract(name: string, makeFixture: () => AssetStora
       if (!fixture.unavailable) return;
       const { req, res, repository } = fixture.unavailable();
       expect(await fixture.storage.resolve(req, res, repository)).toBeNull();
+    });
+
+    it("resolves a grant's request to its person's scope, with no browser cookie and beside another person's", async () => {
+      const { fixture, scope } = await scoped();
+      if (!fixture.granted) return;
+      for (const otherCookie of [false, true]) {
+        const { req, res, repository } = fixture.granted(otherCookie);
+        const granted = await resolveAssetScope(fixture.storage, req, res, repository);
+        expect(granted && { prefix: granted.prefix, bucket: granted.settings.bucket, maxObjectBytes: granted.limits.maxObjectBytes }).toEqual({ prefix: scope.prefix, bucket: scope.settings.bucket, maxObjectBytes: scope.limits.maxObjectBytes });
+      }
     });
 
     it('lets a quota hook refuse an upload with a SourceError and accepts an upload within it', async () => {

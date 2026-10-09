@@ -1,3 +1,4 @@
+import type { WorkspacePerson } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceChoices } from './repository-choice.js';
@@ -7,6 +8,11 @@ export interface WorkspaceChoicesFixture {
   choices: WorkspaceChoices;
   /** Request cookies that make the n-th visitor (1 or 2) a signed-in person; the cookie implementation needs none. */
   visitor(n: number): Promise<Record<string, string>>;
+  /**
+   * The person `/mcp` names on the request for the n-th visitor's grant (`request.person`). Omit it when choices are not
+   * kept per person, as the cookie implementation's are not; a request naming a person then carries no cookie at all.
+   */
+  person?(n: number): Promise<WorkspacePerson>;
 }
 
 /** A browser for one visitor: it sends its cookies and keeps those a response sets or clears. */
@@ -67,6 +73,24 @@ export function workspaceChoicesContract(name: string, makeFixture: () => Worksp
       await fixture.choices.write(two.req, two.res, { repository: 'hubot/wiki', branch: 'trunk' });
       expect(await fixture.choices.read({ headers: first.headers() })).toEqual({ repository: 'octo/notes', branch: 'main' });
       expect(await fixture.choices.read({ headers: second.headers() })).toEqual({ repository: 'hubot/wiki', branch: 'trunk' });
+    });
+
+    it('reads the choice of the person a grant names, from a request without any browser cookie', async () => {
+      if (!fixture.person) return;
+      const visitor = await visit(1);
+      const { req, res } = visitor.exchange();
+      await fixture.choices.write(req, res, { repository: 'octo/notes', branch: 'main' });
+      expect(await fixture.choices.read({ headers: {}, person: await fixture.person(1) })).toEqual({ repository: 'octo/notes', branch: 'main' });
+    });
+
+    it("reads the choice of the person a grant names even beside another visitor's browser cookie", async () => {
+      if (!fixture.person) return;
+      const first = await visit(1), second = await visit(2);
+      const one = first.exchange();
+      await fixture.choices.write(one.req, one.res, { repository: 'octo/notes', branch: 'main' });
+      const two = second.exchange();
+      await fixture.choices.write(two.req, two.res, { repository: 'hubot/wiki', branch: 'trunk' });
+      expect(await fixture.choices.read({ headers: second.headers(), person: await fixture.person(1) })).toEqual({ repository: 'octo/notes', branch: 'main' });
     });
 
     it('forgets a cleared choice', async () => {
