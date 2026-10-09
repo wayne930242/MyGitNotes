@@ -1,9 +1,9 @@
-import { GITHUB_COM, githubSite, siteIdentity, SourceError, type WorkspaceConfigSource, type WorkspacePerson, type WorkspaceSite } from '@mygitnotes/core';
+import { defaultMember, GITHUB_COM, githubSite, siteIdentity, SourceError, type WorkspaceConfigSource, type WorkspacePerson, type WorkspaceSettings, type WorkspaceSite } from '@mygitnotes/core';
 import type { Request, Response } from 'express';
 import { Router } from 'express';
 import { createHash } from 'node:crypto';
 import type { BrowserSessions } from './browser-sessions.js';
-import { choosesRepository, cookieWorkspaceChoices, type WorkspaceChoices } from './repository-choice.js';
+import { choosesRepository, type WorkspaceChoices } from './repository-choice.js';
 import { digest, random, recordLifetime as lifetime, type RecordStore, sealedElsewhere, type StoredRecord } from './record-store/index.js';
 
 export { seal, unseal } from './record-store/index.js';
@@ -118,7 +118,10 @@ export async function authToken(req: Request, res: Response, { store, sessions }
 }
 export interface AuthServices extends SessionServices {
   configSource: WorkspaceConfigSource;
-  /** Where visitors' repository choices are kept; defaults to the sealed cookie. */
+  /**
+   * Where visitors' repository choices are kept, where they choose one. Without it, where visitors bring their own
+   * repositories (`choosesRepository`), each person's repositories are the members their membership store keeps.
+   */
   choices?: WorkspaceChoices;
 }
 /** Sign-in and persistent agent grants, mounted at /api/auth. */
@@ -144,11 +147,17 @@ export async function grantPerson(store: RecordStore, grant: StoredRecord): Prom
   const userId = typeof grant.ownerId === 'string' ? grant.ownerId.slice(grant.ownerId.lastIndexOf(':') + 1) : '';
   return typeof credential.realm === 'string' && userId ? { realm: credential.realm, userId: /^\d+$/.test(userId) ? Number(userId) : userId } : undefined;
 }
+/** The repository a person's workspace opens at: its default member, else its first; null while it has none. */
+function firstMember(settings: WorkspaceSettings): { repository: string; branch: string; } | null {
+  const member = defaultMember(settings) ?? settings.members[0];
+  const source = member?.ref.source;
+  return source && source.type !== 'local' ? { repository: source.repository, branch: source.branch } : null;
+}
 /** Refresh a cookie session's token this close to its expiry when the app asks for the session, ahead of its parallel reads. */
 const sessionProbeRefreshMs = 10 * 60_000;
 /** Provider sign-in, the session probe and logout. */
 export function signInRouter(services: AuthServices): Router {
-  const { store, sessions, configSource, choices = cookieWorkspaceChoices() } = services;
+  const { store, sessions, configSource, choices } = services;
   const router = Router(), providerSite = providerSiteOf(configSource);
   router.get('/session', async (req, res) => {
     try {
@@ -163,8 +172,9 @@ export function signInRouter(services: AuthServices): Router {
         }
       }
       const serverStoreReady = sessions.kind === 'cookie' || store.ready !== false;
-      // Where visitors choose their repository, the app shows the sign-in screen or the picker until they have one.
-      const choice = choosesRepository() ? { repositoryChoice: true, workspace: await choices.read(req) } : {};
+      // Where visitors bring their repository, the app shows the sign-in screen, then the picker until they chose one or,
+      // where each person keeps repositories in Settings (`accountMembers`), the add flow until they have one.
+      const choice = !choosesRepository() ? {} : choices ? { repositoryChoice: true, workspace: await choices.read(req) } : { repositoryChoice: true, accountMembers: true, workspace: session ? firstMember(await configSource.settings(req)) : null };
       res.json({ authenticated: Boolean(session), login: session?.login, provider: provider.type, loginUrl: `/api/auth/${provider.type}`, storage: sessions.kind, ...choice, configured: Boolean(provider.clientId && provider.clientSecret && process.env.SESSION_SECRET && serverStoreReady) });
     } catch {
       res.status(503).json({ error: 'Session store or source configuration unavailable.' });
@@ -217,7 +227,7 @@ export function signInRouter(services: AuthServices): Router {
   });
   router.post('/logout', async (req, res) => {
     try {
-      await choices.signedOut(req, res);
+      await choices?.signedOut(req, res);
       await sessions.clear(req, res);
       res.json({ success: true });
     } catch {

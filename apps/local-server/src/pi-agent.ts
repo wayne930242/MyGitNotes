@@ -1,4 +1,4 @@
-import { agentFolder, INSTRUCTIONS_FILE, resolveSafePath, SourceError } from '@mygitnotes/core';
+import { agentFolder, INSTRUCTIONS_FILE, resolveSafePath, SourceError, type WorkspaceRequest } from '@mygitnotes/core';
 import express from 'express';
 import fs from 'node:fs';
 import type { IncomingMessage } from 'node:http';
@@ -166,10 +166,11 @@ export interface PiAgent {
    */
   upgrade?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean;
   /**
-   * Hears that the workspace's members changed, with the repositories still visible; a session working in a repository
-   * that was hidden or removed ends, so it stops reading it. An agent that runs nothing locally may leave it out.
+   * Hears that the workspace's members changed, with the repositories still visible and the request that changed them
+   * (whose person an agent with a session per person ends it for); a session working in a repository that was hidden or
+   * removed ends, so it stops reading it. An agent that runs nothing locally may leave it out.
    */
-  membershipChanged?: (visible: string[]) => Promise<void>;
+  membershipChanged?: (visible: string[], request: WorkspaceRequest) => Promise<void>;
 }
 
 export interface PiAgentOptions {

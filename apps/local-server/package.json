@@ -10,6 +10,7 @@
     ".": "./src/edition.ts",
     "./pi-bridge-main": "./src/pi-bridge-main.ts",
     "./testing/asset-storage-contract": "./src/asset-storage-contract.ts",
+    "./testing/membership-store-contract": "./src/membership-store-contract.ts",
     "./testing/record-store-contract": "./src/record-store/contract.ts",
     "./testing/workspace-choices-contract": "./src/workspace-choices-contract.ts"
   },

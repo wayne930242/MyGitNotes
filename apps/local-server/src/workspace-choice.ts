@@ -41,7 +41,8 @@ interface GitHubRepository {
   permissions?: { push?: boolean; };
 }
 
-async function github<T>(api: string, token: string, path: string): Promise<{ status: number; body: T | null; }> {
+/** One GitHub API request with the person's token; a body only for a successful answer, and 401 thrown as an expired sign-in. */
+export async function github<T>(api: string, token: string, path: string): Promise<{ status: number; body: T | null; }> {
   const response = await fetch(`${api}${path}`, { redirect: 'error', signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'MyGitNotes', 'X-GitHub-Api-Version': '2022-11-28' } });
   if (response.status === 401) throw new SourceError('GitHub authorization expired. Sign in again.', 401);
   if (!response.ok) return { status: response.status, body: null };
@@ -87,8 +88,12 @@ export function newRepositoryUrl(env: NodeJS.ProcessEnv = process.env): string |
 }
 const pageSize = 50;
 
-/** Listing repositories, and choosing or forgetting the visitor's repository; mounted ahead of the workspace routes. */
-export function workspaceChoiceRouter(services: SessionServices & { choices: WorkspaceChoices; }): Router {
+/**
+ * Listing repositories, and choosing or forgetting the visitor's repository; mounted ahead of the workspace routes.
+ * Without `choices` (an edition that keeps each person's repositories in its membership store) the listing stays for
+ * Settings' add flow and choosing answers 404.
+ */
+export function workspaceChoiceRouter(services: SessionServices & { choices?: WorkspaceChoices; }): Router {
   const router = Router();
   const token = async (req: Request, res: Response) => {
     const url = deploymentGitHubUrl();
@@ -97,7 +102,7 @@ export function workspaceChoiceRouter(services: SessionServices & { choices: Wor
     return value;
   };
   const fail = (res: Response, error: unknown) => res.status(error instanceof SourceError ? error.status : 502).json({ error: error instanceof Error ? error.message : 'Request failed.' });
-  router.use('/workspace/choice', (_req, res, next) => choosesRepository() ? next() : res.status(404).json({ error: 'This deployment serves one configured repository.' }));
+  router.use('/workspace/choice', (_req, res, next) => !choosesRepository() ? res.status(404).json({ error: 'This deployment serves one configured repository.' }) : !services.choices ? res.status(404).json({ error: 'Add repositories in Settings → Repositories.' }) : next());
   router.use('/repositories/available', (_req, res, next) => choosesRepository() ? next() : res.status(404).json({ error: 'This deployment serves one configured repository.' }));
 
   router.get('/repositories/available', async (req, res) => {
@@ -106,7 +111,7 @@ export function workspaceChoiceRouter(services: SessionServices & { choices: Wor
       const url = deploymentGitHubUrl();
       const all = await availableRepositories(await token(req, res), githubApp(), url);
       const matching = query ? all.filter(repository => repository.fullName.toLowerCase().includes(query)) : all;
-      res.json({ repositories: matching.slice(0, pageSize), total: matching.length, githubApp: githubApp(), installUrl: process.env.GITHUB_APP_SLUG ? githubSite(url).installUrl(process.env.GITHUB_APP_SLUG) : null, newRepositoryUrl: newRepositoryUrl(), current: await services.choices.read(req) });
+      res.json({ repositories: matching.slice(0, pageSize), total: matching.length, githubApp: githubApp(), installUrl: process.env.GITHUB_APP_SLUG ? githubSite(url).installUrl(process.env.GITHUB_APP_SLUG) : null, newRepositoryUrl: newRepositoryUrl(), current: services.choices ? await services.choices.read(req) : null });
     } catch (error) {
       fail(res, error);
     }
@@ -125,7 +130,7 @@ export function workspaceChoiceRouter(services: SessionServices & { choices: Wor
       parseSourceConfig({ source: { type: 'github', url, repository: found.full_name, branch } }, '.');
       if (requested && !(await github(api, value, `/repos/${found.full_name}/branches/${encodeURIComponent(branch)}`)).body) throw new SourceError(`Branch ${branch} does not exist in ${found.full_name}.`, 404);
       const choice: WorkspaceChoice = { repository: found.full_name, branch };
-      await services.choices.write(req, res, choice);
+      await services.choices!.write(req, res, choice);
       res.json({ choice });
     } catch (error) {
       fail(res, error instanceof Error && !(error instanceof SourceError) && /Configure source/.test(error.message) ? new SourceError('That branch name is not valid.', 400) : error);
@@ -133,7 +138,7 @@ export function workspaceChoiceRouter(services: SessionServices & { choices: Wor
   });
   router.delete('/workspace/choice', async (req, res) => {
     try {
-      await services.choices.clear(req, res);
+      await services.choices!.clear(req, res);
       res.json({ success: true });
     } catch (error) {
       fail(res, error);

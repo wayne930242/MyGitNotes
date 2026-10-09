@@ -44,8 +44,12 @@ export interface AppServices {
   recordStore: RecordStore;
   /** Where browser sign-ins live: the record store, or sealed cookies in the lightweight mode. */
   sessions: BrowserSessions;
-  /** Where visitors' repository choices are kept, where the deployment lets them choose; defaults to a sealed cookie. */
-  workspaceChoices: WorkspaceChoices;
+  /**
+   * Where visitors' repository choices are kept, where the deployment lets them choose. The community deployment uses a
+   * sealed cookie; an edition that supplies its own `configSource` and no choices keeps each person's repositories in
+   * its `MembershipStore` instead, so `/api/workspace/choice` is not offered and people add repositories in Settings.
+   */
+  workspaceChoices?: WorkspaceChoices;
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
@@ -63,7 +67,7 @@ export interface AppServices {
 }
 
 export function createApp(base: string, overrides: Partial<AppServices> = {}): express.Express {
-  const workspaceChoices = overrides.workspaceChoices ?? cookieWorkspaceChoices();
+  const workspaceChoices = overrides.workspaceChoices ?? (overrides.configSource ? undefined : cookieWorkspaceChoices());
   const configSource = overrides.configSource ?? chosenRepositorySource(base, process.env, workspaceChoices);
   const local = configSource.mode === 'local';
   // The lightweight mode keeps sign-ins in cookies and nothing on the server; local workspaces never use it.
@@ -74,6 +78,9 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   // Core updates of a remote deployment act on its product repository; without one they are not offered. Visitors who
   // choose their own repository never update the deployment's Core, as before product repositories.
   const product = local ? null : productRepository(base);
+  // Visitors open the one repository they chose only where choices are kept; an edition without them keeps each
+  // person's repositories through its membership store.
+  const visitorChoice = choosesRepository() && Boolean(workspaceChoices);
   if (product && choosesRepository()) throw new Error("A product repository (MYGITNOTES_PRODUCT_REPOSITORY or product_repository) offers Core updates, which a deployment where each visitor chooses a repository does not give its visitors. Remove it, or name the deployment's repository with MYGITNOTES_REPOSITORY.");
   const app = express();
   app.disable('x-powered-by');
@@ -108,7 +115,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   // The member list opens no repository, so it works while every repository is hidden or unreachable.
-  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }, async settings => piAgent?.membershipChanged?.(visibleMembers(settings).map(member => member.ref.id))));
+  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }, { repositoryChoice: visitorChoice, onChange: async (settings, request) => piAgent?.membershipChanged?.(visibleMembers(settings).map(member => member.ref.id), request) }));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));
@@ -173,7 +180,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
           const snapshot = await handle.reader.getSnapshot();
           return { ...base, ...manifest, branch: handle.reader.branch, revision: snapshot.sha, write: handle.authenticated && handle.reader.canWrite(snapshot), ...('unavailable' in entry ? { unavailable: entry.unavailable } : {}) };
         }));
-        const body: WorkspaceStatus = { keyedConfig, local: false, defaultRepository: workspace.default?.ref.id ?? null, repositories, coreUpdate: Boolean(product), ...(choosesRepository() ? { repositoryChoice: true } : {}) };
+        const body: WorkspaceStatus = { keyedConfig, local: false, defaultRepository: workspace.default?.ref.id ?? null, repositories, coreUpdate: Boolean(product), ...(visitorChoice ? { repositoryChoice: true } : {}) };
         res.json(body);
       } catch (error) {
         fail(res, error);

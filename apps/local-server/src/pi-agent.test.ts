@@ -339,9 +339,9 @@ describe('pi agent bridge', () => {
     const client = connect(port, base);
     await client.opened;
     await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'ready');
-    await agent!.membershipChanged(['home', 'other']);
+    await agent!.membershipChanged(['home', 'other'], { headers: {} });
     expect(agent!.manager.session?.alive).toBe(true);
-    await agent!.membershipChanged(['other']);
+    await agent!.membershipChanged(['other'], { headers: {} });
     const ended = await client.next(record => record.type === 'bridge_status' && (record.session as { status: string; }).status === 'exited');
     expect(ended.session).toMatchObject({ id: created.session.id, endedBecause: 'repository-hidden' });
     // A page that asks later learns the same, and starting again makes a new session.

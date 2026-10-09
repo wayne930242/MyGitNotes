@@ -130,12 +130,12 @@ describe('Settings → Repositories in a local deployment', () => {
     worktree(product, 'trpg');
     fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - type: local\n    path: ./trpg\n');
     for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: kb, VERCEL: '', APP_URL: '' })) vi.stubEnv(key, value);
-    const membershipChanged = vi.fn(async (_visible: string[]) => {});
+    const membershipChanged = vi.fn(async (_visible: string[], _request: { headers: Record<string, unknown>; }) => {});
     await listen(createApp(product, { piAgent: { router: Router(), membershipChanged } }));
     const { revision } = await members();
     const [kbId, trpgId] = [await idOf('kb'), await idOf('trpg')];
     expect((await call('PATCH', '/api/workspace/members', { repository: trpgId, hidden: true, revision })).status).toBe(200);
-    await vi.waitFor(() => expect(membershipChanged).toHaveBeenCalledWith([kbId]));
+    await vi.waitFor(() => expect(membershipChanged).toHaveBeenCalledWith([kbId], expect.objectContaining({ headers: expect.any(Object) })));
   });
 
   it('stops watching a worktree once it is hidden, ending every open stream so pages reconnect', async () => {
