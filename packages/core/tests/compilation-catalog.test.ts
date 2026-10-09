@@ -14,13 +14,13 @@ vi.setConfig({ testTimeout: 30000 });
 
 const compilation = (id: string, extra = '', items = '  - { id: i1, kind: note, path: notes/ex/a.md }') => `version: 1\nid: ${id}\ntitle: Title ${id}\narrangement: lane\n${extra}items:\n${items}\n`;
 const manifest = 'schema_version: 3\nworkspace:\n  title: QA\n  default_notebook: ex\nnotebooks:\n  - id: ex\n    title: Example\n    root: notes/ex\n  - id: other\n    title: Other\n    root: notes/other\n';
-const query = (overrides: Partial<typeof DEFAULT_NOTE_QUERY> = {}) => ({ ...DEFAULT_NOTE_QUERY, notebookId: 'ex', ...overrides });
+const query = (overrides: Partial<typeof DEFAULT_NOTE_QUERY> = {}) => ({ ...DEFAULT_NOTE_QUERY, notebookId: 'qa~ex', ...overrides });
 const options = { limit: 50, content: false };
 
 async function catalogOf(f: ReturnType<typeof githubFixture>) {
   const reader = f.reader();
   const config = await reader.config();
-  return workspaceCatalog(config, [{ id: reader.id, notebooks: config.notebooks, catalog: reader.catalog() }]);
+  return workspaceCatalog(config, [{ id: reader.id, alias: 'qa', notebooks: config.notebooks, catalog: reader.catalog() }]);
 }
 
 describe('compilations in the remote catalog', () => {
@@ -52,22 +52,22 @@ describe('compilations in the remote catalog', () => {
   });
 
   it('counts compilations apart from notes in the facets', async () => {
-    const facets = (await noteFacets(await catalogOf(githubFixture(files)), false)).notebooks.ex;
+    const facets = (await noteFacets(await catalogOf(githubFixture(files)), false)).notebooks['qa~ex'];
     expect(facets).toMatchObject({ total: 2, tags: { clue: 1 }, directories: { 'notes/ex': 1, 'notes/ex/work': 1 } });
     expect(facets.compilations).toEqual({ total: 3, statuses: { working: 1, '': 2 }, tags: { reading: 1, x: 1 } });
-    expect((await noteFacets(await catalogOf(githubFixture(files)), true)).notebooks.ex.compilations.total).toBe(4);
+    expect((await noteFacets(await catalogOf(githubFixture(files)), true)).notebooks['qa~ex'].compilations.total).toBe(4);
   });
 
   it('leaves the agenda and the graph to notes', async () => {
     const catalog = await catalogOf(githubFixture(files));
-    expect((await noteAgenda(catalog, 'ex', true)).dated.every(note => note.kind !== 'compilation')).toBe(true);
+    expect((await noteAgenda(catalog, 'qa~ex', true)).dated.every(note => note.kind !== 'compilation')).toBe(true);
     const graph = await noteGraph(catalog);
     expect(graph.nodes.map(node => node.path).sort()).toEqual(['notes/ex/a.md', 'notes/ex/work/b.md', 'notes/other/z.md']);
   });
 
   it('looks compilations up by path with their YAML as content', async () => {
     const catalog = await catalogOf(githubFixture(files));
-    const { notes } = await lookupNotes(catalog, [{ notebookId: 'ex', path: 'notes/ex/reading.compilation.yml' }], true);
+    const { notes } = await lookupNotes(catalog, [{ notebookId: 'qa~ex', path: 'notes/ex/reading.compilation.yml' }], true);
     expect(notes).toHaveLength(1);
     expect(YAML.parse(notes[0].content!)).toMatchObject({ id: 'reading', arrangement: 'lane' });
   });
@@ -82,7 +82,7 @@ describe('compilations in the remote catalog', () => {
   it('reports a duplicate id on both files, across notebooks of one repository', async () => {
     const catalog = await catalogOf(githubFixture(files));
     const first = (await queryNotes(catalog, query({ kind: 'compilation' }), options)).notes.find(note => note.path === 'notes/ex/reading.compilation.yml');
-    const second = (await queryNotes(catalog, query({ kind: 'compilation', notebookId: 'other' }), options)).notes.find(note => note.path === 'notes/other/dup.compilation.yml');
+    const second = (await queryNotes(catalog, query({ kind: 'compilation', notebookId: 'qa~other' }), options)).notes.find(note => note.path === 'notes/other/dup.compilation.yml');
     expect(first?.invalid).toBe('Duplicate compilation id "reading" also used by notes/other/dup.compilation.yml');
     expect(second?.invalid).toBe('Duplicate compilation id "reading" also used by notes/ex/reading.compilation.yml');
   });

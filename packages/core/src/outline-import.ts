@@ -1,11 +1,12 @@
 import { z } from 'zod';
+import { NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import { type Bookmark, type BookmarkOwner, bookmarkRepositoryPath, type BookmarksPage, BookmarksPageSchema, validateBookmarkTargetScope } from './bookmarks.js';
 import { isOutlinePath } from './outline.js';
 import { canonicalizeBookmarkUrl } from './bookmark-query.js';
 import { noteMarkdownLink } from './workspace-links.js';
 
 /** Explicit selection of saved legacy entries, never a browser draft or an editable outline tree. */
-export const LegacyOutlineImportSchema = z.object({ repository: z.string().min(1).max(512), notebookId: z.string().min(1).max(128), selectedIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).max(500).refine(ids => new Set(ids).size === ids.length, 'Duplicate selected IDs'), path: z.string().min(1).max(2048), title: z.string().trim().min(1).max(200) }).strict();
+export const LegacyOutlineImportSchema = z.object({ repository: z.string().min(1).max(512), notebookId: z.string().min(1).max(NOTEBOOK_KEY_MAX_LENGTH), selectedIds: z.array(z.string().regex(/^[A-Za-z0-9_-]{1,64}$/)).max(500).refine(ids => new Set(ids).size === ids.length, 'Duplicate selected IDs'), path: z.string().min(1).max(2048), title: z.string().trim().min(1).max(200) }).strict();
 export type LegacyOutlineImportRequest = z.infer<typeof LegacyOutlineImportSchema>;
 export const ApplyLegacyOutlineImportSchema = LegacyOutlineImportSchema.extend({ token: z.string().regex(/^[a-f0-9]{64}$/), acknowledgePartial: z.boolean() }).strict();
 export type LegacyRetainedReason = 'position' | 'query' | 'folder' | 'not-selected' | 'other-owner';

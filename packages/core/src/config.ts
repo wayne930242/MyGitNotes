@@ -3,6 +3,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { NotebookConfig, NotebookMetadataField, NoteTemplate, WorkspaceConfig, WorkspacePreferences, YouTubeDisplayMode } from './types.js';
 import { parseSourceConfig, type RemoteSourceConfig, sourceIdentity } from './source-config.js';
+import { NOTEBOOK_ID_PATTERN } from './notebook-key.js';
 
 export const WORKSPACE_CONFIG_FILENAME = '.mygitnotes.yaml';
 export const LEGACY_WORKSPACE_CONFIG_FILENAME = '.github-notes.yaml';
@@ -91,7 +92,7 @@ export function validateWorkspaceConfig(config: unknown): WorkspaceConfig {
     const item = nb as Record<string, unknown>;
 
     // Validate notebook id: slug format
-    if (typeof item.id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(item.id)) {
+    if (typeof item.id !== 'string' || !NOTEBOOK_ID_PATTERN.test(item.id)) {
       throw new ConfigValidationError(`Notebook ID '${item.id}' must be an alphanumeric/slug string without special characters`);
     }
     if (notebookIds.has(item.id)) {

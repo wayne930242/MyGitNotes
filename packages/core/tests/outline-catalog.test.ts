@@ -26,7 +26,7 @@ afterEach(() => {
 async function catalogOf(f: ReturnType<typeof githubFixture>) {
   const reader = f.reader();
   const config = await reader.config();
-  return workspaceCatalog(config, [{ id: reader.id, notebooks: config.notebooks, catalog: reader.catalog() }]);
+  return workspaceCatalog(config, [{ id: reader.id, alias: 'qa', notebooks: config.notebooks, catalog: reader.catalog() }]);
 }
 
 describe('native outline kind', () => {
@@ -69,7 +69,7 @@ describe('native outline kind', () => {
 
   it('separates queries/facets and compilation IDs while retaining graph, agenda and lookup', async () => {
     const catalog = await catalogOf(githubFixture(files));
-    const query = { ...DEFAULT_NOTE_QUERY, notebookId: 'ex' };
+    const query = { ...DEFAULT_NOTE_QUERY, notebookId: 'qa~ex' };
     const options = { limit: 50, content: true };
     const outlines = await queryNotes(catalog, { ...query, kind: 'outline' }, options);
     expect(outlines.notes).toHaveLength(1);
@@ -77,12 +77,12 @@ describe('native outline kind', () => {
     expect(outlines.notes[0].invalid).toBeUndefined();
     expect((await queryNotes(catalog, query, options)).notes.every(note => !note.kind)).toBe(true);
     expect((await queryNotes(catalog, { ...query, kind: 'all' }, options)).notes).toHaveLength(5);
-    const facets = (await noteFacets(catalog, false)).notebooks.ex;
+    const facets = (await noteFacets(catalog, false)).notebooks['qa~ex'];
     expect(facets).toMatchObject({ total: 2, compilations: { total: 2 }, outlines: { total: 1, tags: { research: 1 }, statuses: { working: 1 } } });
     expect(facets.tags).not.toHaveProperty('research');
-    expect((await lookupNotes(catalog, [{ notebookId: 'ex', path: outlinePath }], true)).notes[0].kind).toBe('outline');
+    expect((await lookupNotes(catalog, [{ notebookId: 'qa~ex', path: outlinePath }], true)).notes[0].kind).toBe('outline');
     expect((await noteGraph(catalog)).nodes.some(note => note.path === outlinePath)).toBe(true);
-    expect((await noteAgenda(catalog, 'ex', false)).tasks.some(task => task.notePath === outlinePath)).toBe(true);
+    expect((await noteAgenda(catalog, 'qa~ex', false)).tasks.some(task => task.notePath === outlinePath)).toBe(true);
   });
 
   it('creates, reads, edits tags/status and rejects collisions/stale GitHub saves', async () => {
@@ -109,9 +109,9 @@ describe('native outline kind', () => {
     expect(note.content.trimStart()).toBe(body);
     const r = reader();
     const config = await r.config();
-    const catalog = await workspaceCatalog(config, [{ id: r.id, notebooks: config.notebooks, catalog: r.catalog() }]);
-    expect((await queryNotes(catalog, { ...DEFAULT_NOTE_QUERY, notebookId: 'ex', kind: 'outline' }, { limit: 50, content: false })).notes.map(item => item.path)).toEqual([target]);
-    expect((await noteFacets(catalog, false)).notebooks.ex.outlines.total).toBe(1);
+    const catalog = await workspaceCatalog(config, [{ id: r.id, alias: 'qa', notebooks: config.notebooks, catalog: r.catalog() }]);
+    expect((await queryNotes(catalog, { ...DEFAULT_NOTE_QUERY, notebookId: 'qa~ex', kind: 'outline' }, { limit: 50, content: false })).notes.map(item => item.path)).toEqual([target]);
+    expect((await noteFacets(catalog, false)).notebooks['qa~ex'].outlines.total).toBe(1);
     expect((await r.notes('ex')).some(item => item.path === target)).toBe(false);
     await reader().save(target, note.content, { ...note.metadata, status: 'done' }, f.head);
     expect(f.writes).toBe(2);

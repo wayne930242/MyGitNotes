@@ -1,5 +1,6 @@
 import YAML from 'yaml';
 import { z } from 'zod';
+import { NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import { type StudyProgression, StudyProgressionSchema } from './study-stages.js';
 import { isNoteHidden } from './note-status.js';
 
@@ -18,7 +19,7 @@ const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
 const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
 /* eslint-enable no-control-regex */
-const notebookId = z.string().min(1).max(128);
+const notebookId = z.string().min(1).max(NOTEBOOK_KEY_MAX_LENGTH);
 const videoId = z.string().regex(/^[\w-]{11}$/);
 const start = z.number().int().min(0).max(86400).default(0);
 const videoTitle = z.string().max(160).optional();

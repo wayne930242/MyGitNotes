@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { type Card, createEmptyCard, fsrs, type Grade } from 'ts-fsrs';
 import { type Familiarity, nextStudyStage, type StudyProgression } from './study-stages.js';
 import { splitNotePages } from './note-pages.js';
+import { NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const STUDY_FILE = '.github-notes-study.yaml';
@@ -16,7 +17,7 @@ const CardSchema = z.object({ ...schedule, kind: z.enum(['forward', 'reverse', '
 const ReadingSchema = z.object({ due: date.optional(), lastRead: date.optional(), step: finite.int() }).strict();
 const StageScheduleSchema = z.object({ laneId: id, status: z.string().max(200), due: date }).strict();
 /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
-const NoteSchema = z.object({ id, notebookId: z.string().min(1).max(128), path: z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'), 'Invalid note path.'), sourceId: z.string().min(1).max(200).optional(), title: z.string().max(2000), pages: z.array(z.object({ id, source: z.string().max(1024 * 1024) }).strict()).min(1).max(100), cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema, stage: StageScheduleSchema.optional(), lastMovedAt: date.optional() }).strict();
+const NoteSchema = z.object({ id, notebookId: z.string().min(1).max(NOTEBOOK_KEY_MAX_LENGTH), path: z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part && part !== '.' && part !== '..'), 'Invalid note path.'), sourceId: z.string().min(1).max(200).optional(), title: z.string().max(2000), pages: z.array(z.object({ id, source: z.string().max(1024 * 1024) }).strict()).min(1).max(100), cards: z.array(CardSchema).min(1).max(200), reading: ReadingSchema, stage: StageScheduleSchema.optional(), lastMovedAt: date.optional() }).strict();
 /* eslint-enable no-control-regex */
 const BeforeSchema = z.object({ stage: StageScheduleSchema.optional(), lastMovedAt: date.optional(), reading: ReadingSchema, cards: z.array(z.object(schedule).strict()).max(200) }).strict();
 const EventSchema = z.object({ id, noteId: id, cardId: id.optional(), at: date, kind: z.enum(['read', 'snooze', 'fixed', 'review', 'configure', 'suspend', 'resume', 'rebind', 'undo', 'stage-review', 'stage-read', 'stage-postpone']), rating: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).optional(), transition: z.object({ laneId: id, fromStatus: z.string().max(200).nullable(), toStatus: z.string().max(200), intervalDays: z.number().finite().positive().max(3650) }).strict().optional(), algorithm: z.literal('ts-fsrs@5.4.2').optional(), before: BeforeSchema.optional(), undoOf: id.optional() }).strict();
@@ -88,7 +89,8 @@ export const STUDY_DOCUMENT: WorkspaceDocument<StudyWorkspace> = {
   maxBytes: STUDY_MAX_BYTES,
   scopes: ['study', 'study-transition', 'folders', 'files'],
   schema: StudyWorkspaceSchema,
-  fileSchema: StudyWorkspaceSchema,
+  // As stored, every note names its notebook by local id.
+  fileSchema: StudyWorkspaceSchema.refine(study => study.notes.every(note => note.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH), 'A stored study names its notebook by local id.'),
   empty: emptyStudyWorkspace,
   // Relocation rewrites the stored object so unrelated fields keep their stored form.
   read: value => {
@@ -108,6 +110,7 @@ export const STUDY_DOCUMENT: WorkspaceDocument<StudyWorkspace> = {
     }
     return changed;
   },
+  mapNotebookIds: (study, map) => ({ ...study, notes: study.notes.map(note => ({ ...note, notebookId: map(note.notebookId) })) }),
 };
 const newId = () => globalThis.crypto.randomUUID();
 const serializedCard = ({ last_review, ...card }: Card) => SchedulerSchema.parse({ ...card, due: card.due.toISOString(), ...(last_review ? { last_review: last_review.toISOString() } : {}) });

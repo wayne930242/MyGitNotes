@@ -11,6 +11,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./notebook-key": {
+      "types": "./dist/notebook-key.d.ts",
+      "import": "./dist/notebook-key.js"
+    },
     "./repository": {
       "types": "./dist/repository.d.ts",
       "import": "./dist/repository.js"

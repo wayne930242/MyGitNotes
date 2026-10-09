@@ -54,9 +54,12 @@ describe('workspace repositories', () => {
   });
   it('serves every notebook from the home repository and rejects unknown notebooks and repositories', async () => {
     const repositories = createWorkspaceRepositories({ home, openHome: scope => ({ scope }), manifest: () => ({ load: async () => ({ config, revision: 'a'.repeat(40) }), save: vi.fn() }) });
-    expect((await repositories.forNotebook('ex')).ref.id).toBe(home.id);
+    expect((await repositories.forNotebook('repo~ex')).ref.id).toBe(home.id);
     expect(await repositories.home.handle.scope()).toEqual(config);
-    await expect(repositories.forNotebook('missing')).rejects.toMatchObject({ status: 404 });
+    await expect(repositories.forNotebook('repo~missing')).rejects.toMatchObject({ status: 404 });
+    // A bare id is the browser's to redirect first; an unknown alias never falls back to a bare-id lookup.
+    await expect(repositories.forNotebook('ex')).rejects.toMatchObject({ status: 400 });
+    await expect(repositories.forNotebook('other~ex')).rejects.toMatchObject({ status: 404 });
     await expect(repositories.byId('github:owner/other@main')).rejects.toMatchObject({ status: 404 });
     expect((await repositories.all()).map(entry => entry.notebooks.map(notebook => notebook.id))).toEqual([['ex']]);
   });
@@ -114,9 +117,11 @@ describe('notebook repositories', () => {
     expect(all.map(entry => [entry.ref.id, entry.notebooks.map(notebook => notebook.id)])).toEqual([[home.id, ['life', 'also-home']], ['github:owner/trpg@main', ['trpg']]]);
     expect((await repositories.scope(home.id)).notebooks.map(notebook => notebook.id)).toEqual(['life', 'also-home']);
     expect((await repositories.scope('github:owner/trpg@main')).notebooks.map(notebook => notebook.id)).toEqual(['trpg']);
-    expect((await repositories.forNotebook('trpg')).ref.id).toBe('github:owner/trpg@main');
-    await repositories.forNotebook('trpg');
+    expect((await repositories.forNotebook('trpg~trpg')).ref.id).toBe('github:owner/trpg@main');
+    await repositories.forNotebook('trpg~trpg');
     expect(opened).toHaveBeenCalledTimes(1);
+    expect((await repositories.keyedConfig()).notebooks.map(notebook => notebook.id)).toEqual(['home~life', 'trpg~trpg', 'home~also-home']);
+    expect((await repositories.keyedConfig()).workspace.default_notebook).toBe('home~life');
   });
 
   it('asks for the notebook when a path lies in notebooks of two repositories', async () => {
@@ -129,8 +134,8 @@ describe('notebook repositories', () => {
     const repositories = open(async () => ({ reason: 'no-access', message: 'Repository unavailable.' }));
     const [, trpgEntry] = await repositories.all();
     expect(trpgEntry).toMatchObject({ unavailable: { reason: 'no-access' } });
-    await expect(repositories.forNotebook('trpg')).rejects.toMatchObject({ status: 503, message: 'TRPG: Repository unavailable.' });
-    expect((await repositories.forNotebook('life')).ref.id).toBe(home.id);
+    await expect(repositories.forNotebook('trpg~trpg')).rejects.toMatchObject({ status: 503, message: 'TRPG: Repository unavailable.' });
+    expect((await repositories.forNotebook('home~life')).ref.id).toBe(home.id);
   });
 
   it('marks notebook repositories unmapped when nothing opens them', async () => {

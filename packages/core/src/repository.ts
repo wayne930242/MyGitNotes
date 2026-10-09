@@ -1,4 +1,5 @@
 import { SourceError } from './github-api.js';
+import type { NotebookKey } from './notebook-key.js';
 import { type SourceConfig, sourceIdentity } from './source-config.js';
 import type { WorkspaceConfig } from './types.js';
 import type { UnavailableRepository } from './workspace-repositories.js';
@@ -70,14 +71,18 @@ export interface RepositoryStatus {
   revision: string;
   /** Whether the requester may commit to this repository. */
   write: boolean;
-  /** Ids of the notebooks this repository serves. */
-  notebooks: string[];
+  /** The repository's alias in this workspace, the first part of its notebooks' keys. */
+  alias: string;
+  /** Keys of the notebooks this repository serves. */
+  notebooks: NotebookKey[];
   unavailable?: UnavailableRepository['unavailable'];
 }
 /** The answer of `GET /api/workspace`. */
 export interface WorkspaceStatus {
-  /** Absent before a worktree has its first manifest. */
+  /** The manifest as the home repository stores it, with local notebook ids; absent before a worktree has its first manifest. */
   config: WorkspaceConfig | null;
+  /** `config` as the workspace names it: each notebook's `id` and `workspace.default_notebook` are notebook keys. */
+  keyedConfig: WorkspaceConfig | null;
   /** The manifest's own revision, sent back when saving it; empty for a worktree. */
   configRevision: string;
   local: boolean;

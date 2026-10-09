@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import type { WorkspaceDocument } from './workspace-documents.js';
 import { BookmarkError } from './bookmark-error.js';
 import { bookmarkPath, BookmarkUrlSchema, SavedBookmarkQuerySchema } from './bookmark-query.js';
@@ -27,7 +28,7 @@ export interface BookmarksPage {
   version: 1;
   notebooks: NotebookBookmarks[];
 }
-export const BookmarksPageSchema = z.object({ version: z.literal(1), notebooks: z.array(z.object({ notebookId: z.string().min(1).max(128), groups: z.array(z.object({ id, label }).strict()).max(100), bookmarks: z.array(BookmarkSchema).max(500) }).strict()).max(100) }).strict().superRefine((page, ctx) => {
+export const BookmarksPageSchema = z.object({ version: z.literal(1), notebooks: z.array(z.object({ notebookId: z.string().min(1).max(NOTEBOOK_KEY_MAX_LENGTH), groups: z.array(z.object({ id, label }).strict()).max(100), bookmarks: z.array(BookmarkSchema).max(500) }).strict()).max(100) }).strict().superRefine((page, ctx) => {
   const unique = (values: string[]) => new Set(values).size === values.length;
   if (!unique(page.notebooks.map(nb => nb.notebookId))) ctx.addIssue({ code: 'custom', message: 'Duplicate notebook collection' });
   if (page.notebooks.reduce((n, nb) => n + nb.groups.length, 0) > 100 || page.notebooks.reduce((n, nb) => n + nb.bookmarks.length, 0) > 500) ctx.addIssue({ code: 'custom', message: 'Bookmark collection limit exceeded' });
@@ -204,4 +205,4 @@ export function relocateBookmarkPaths(page: BookmarksPage, notebook: BookmarkOwn
   }
   return changed;
 }
-export const BOOKMARKS_DOCUMENT: WorkspaceDocument<BookmarksPage> = { file: BOOKMARKS_FILE, label: 'Bookmarks', maxBytes: BOOKMARKS_MAX_BYTES, scopes: ['folders', 'files'], retired: true, schema: BookmarksPageSchema, fileSchema: BookmarksPageSchema, empty: emptyBookmarksPage, read: value => BookmarksPageSchema.parse(value), relocate: relocateBookmarkPaths, validateChange: validateBookmarksChange, validateReferences: validateBookmarkPositions };
+export const BOOKMARKS_DOCUMENT: WorkspaceDocument<BookmarksPage> = { file: BOOKMARKS_FILE, label: 'Bookmarks', maxBytes: BOOKMARKS_MAX_BYTES, scopes: ['folders', 'files'], retired: true, schema: BookmarksPageSchema, fileSchema: BookmarksPageSchema, empty: emptyBookmarksPage, read: value => BookmarksPageSchema.parse(value), relocate: relocateBookmarkPaths, validateChange: validateBookmarksChange, validateReferences: validateBookmarkPositions, mapNotebookIds: (page, map) => ({ ...page, notebooks: page.notebooks.map(collection => ({ ...collection, notebookId: map(collection.notebookId) })) }) };

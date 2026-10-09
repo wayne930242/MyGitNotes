@@ -1,12 +1,18 @@
 import path from 'node:path';
 import { SourceError } from './github-api.js';
+import { deriveAlias, isBareNotebookId, type NotebookKey, notebookKey, parseNotebookKey, repositoryName } from './notebook-key.js';
 import { type RepositoryId, type RepositoryRef, repositoryRef, type RepositoryScope, type UnavailableReason } from './repository.js';
 import type { NotebookConfig, WorkspaceConfig } from './types.js';
 import type { ManifestStore } from './workspace-config-source.js';
 
+/** A notebook as its repository's manifest declares it (`id` is the local id), with its workspace key. */
+export type KeyedNotebook = NotebookConfig & { key: NotebookKey; };
+
 export interface AvailableRepository<H> {
   ref: RepositoryRef;
-  notebooks: NotebookConfig[];
+  /** The repository's alias in this workspace, the first part of its notebooks' keys. */
+  alias: string;
+  notebooks: KeyedNotebook[];
   handle: H;
 }
 export interface Unavailability {
@@ -15,7 +21,8 @@ export interface Unavailability {
 }
 export interface UnavailableRepository {
   ref: RepositoryRef;
-  notebooks: NotebookConfig[];
+  alias: string;
+  notebooks: KeyedNotebook[];
   unavailable: Unavailability;
 }
 export type WorkspaceRepository<H> = AvailableRepository<H> | UnavailableRepository;
@@ -23,19 +30,27 @@ export type WorkspaceRepository<H> = AvailableRepository<H> | UnavailableReposit
 /** Answers which repository serves each notebook of one request's workspace. */
 export interface WorkspaceRepositories<H> {
   /** The home repository, available without loading the manifest. */
-  readonly home: { ref: RepositoryRef; handle: H; };
+  readonly home: { ref: RepositoryRef; alias: string; handle: H; };
   manifest(): Promise<{ config: WorkspaceConfig; revision: string; derived?: boolean; }>;
   saveManifest(yaml: string, revision: string): Promise<{ config: WorkspaceConfig; revision: string; }>;
+  /** The manifest as the workspace names it: each notebook's `id` and `workspace.default_notebook` are notebook keys. */
+  keyedConfig(): Promise<WorkspaceConfig>;
   /** Every repository of the workspace, the home repository first, each opened or marked unavailable. */
   all(): Promise<WorkspaceRepository<H>[]>;
-  forNotebook(notebookId: string): Promise<AvailableRepository<H>>;
+  /** The repository serving the notebook a key names, with that notebook; a bare local id is refused and an unknown key is not found. */
+  forNotebook(key: NotebookKey): Promise<AvailableRepository<H> & { notebook: KeyedNotebook; }>;
+  /**
+   * The key a bare local id stands for: the one repository whose manifest has a notebook with that id,
+   * else the home repository's notebook with it, else null.
+   */
+  resolveBareId(localId: string): Promise<NotebookKey | null>;
   /**
    * The repository whose notebook contains a repository-relative `path`, with that notebook.
    * A path inside notebooks of several repositories is ambiguous and must be named by notebook.
    */
-  forPath(path: string): Promise<AvailableRepository<H> & { notebook: NotebookConfig; }>;
+  forPath(path: string): Promise<AvailableRepository<H> & { notebook: KeyedNotebook; }>;
   byId(id: RepositoryId): Promise<AvailableRepository<H>>;
-  /** The manifest restricted to the notebooks the repository serves. */
+  /** The manifest restricted to the notebooks the repository serves, with their local ids. */
   scope(id: RepositoryId): Promise<WorkspaceConfig>;
 }
 
@@ -53,38 +68,51 @@ export interface WorkspaceRepositoriesOptions<H> {
 
 interface Group {
   ref: RepositoryRef;
-  notebooks: NotebookConfig[];
+  alias: string;
+  notebooks: KeyedNotebook[];
 }
 
-/** Notebooks grouped by the repository that serves them, the home repository first; roots must not overlap within one repository. */
-function groupNotebooks(config: WorkspaceConfig, home: RepositoryRef, isHome: (ref: RepositoryRef) => boolean): Group[] {
-  const groups = new Map<RepositoryId, Group>([[home.id, { ref: home, notebooks: [] }]]);
+/**
+ * Notebooks grouped by the repository that serves them, the home repository first; roots must not overlap within one
+ * repository. Each repository's alias derives from its name in that order, so it is the same on every request.
+ */
+function groupNotebooks(config: WorkspaceConfig, home: RepositoryRef, homeAlias: string, isHome: (ref: RepositoryRef) => boolean): Group[] {
+  const groups = new Map<RepositoryId, Group>([[home.id, { ref: home, alias: homeAlias, notebooks: [] }]]);
+  const aliases = new Set([homeAlias]);
   for (const notebook of config.notebooks) {
     const declared = notebook.source ? repositoryRef(notebook.source) : home;
     const ref = declared.id === home.id || isHome(declared) ? home : declared;
-    const group = groups.get(ref.id) ?? { ref, notebooks: [] };
+    let group = groups.get(ref.id);
+    if (!group) {
+      const alias = deriveAlias(repositoryName(ref.source), aliases);
+      aliases.add(alias);
+      group = { ref, alias, notebooks: [] };
+      groups.set(ref.id, group);
+    }
     for (const other of group.notebooks) {
       const a = path.posix.relative(other.root, notebook.root);
       const b = path.posix.relative(notebook.root, other.root);
       if (!a.startsWith('..') || !b.startsWith('..')) throw new SourceError(`Notebooks '${other.id}' and '${notebook.id}' have overlapping roots in repository ${ref.id}.`, 422);
     }
-    group.notebooks.push(notebook);
-    groups.set(ref.id, group);
+    group.notebooks.push({ ...notebook, key: notebookKey(group.alias, notebook.id) });
   }
   return [...groups.values()];
 }
 
 const isUnavailability = <H>(value: H | Unavailability): value is Unavailability => Boolean(value && typeof value === 'object' && 'reason' in value && 'message' in value && !('kind' in value));
+const withoutKey = ({ key: _key, ...notebook }: KeyedNotebook): NotebookConfig => notebook;
 
 export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOptions<H>): WorkspaceRepositories<H> {
   const { home: homeRef } = options;
+  const homeAlias = deriveAlias(repositoryName(homeRef.source), new Set());
   const isHome = options.isHome ?? (() => false);
-  const groups = async () => groupNotebooks((await manifest.load()).config, homeRef, isHome);
+  const group = (config: WorkspaceConfig) => groupNotebooks(config, homeRef, homeAlias, isHome);
+  const groups = async () => group((await manifest.load()).config);
   const scope = async (id: RepositoryId): Promise<WorkspaceConfig> => {
     const { config } = await manifest.load();
-    const group = groupNotebooks(config, homeRef, isHome).find(candidate => candidate.ref.id === id);
-    if (!group) throw new SourceError('Repository is not part of this workspace.', 404);
-    return { ...config, notebooks: group.notebooks };
+    const found = group(config).find(candidate => candidate.ref.id === id);
+    if (!found) throw new SourceError('Repository is not part of this workspace.', 404);
+    return { ...config, notebooks: found.notebooks.map(withoutKey) };
   };
   const homeHandle = options.openHome(() => scope(homeRef.id));
   const manifest = options.manifest(homeHandle);
@@ -98,10 +126,10 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
     }
     return pending;
   };
-  const entry = async (group: Group): Promise<WorkspaceRepository<H>> => {
-    if (group.ref.id === homeRef.id) return { ...group, handle: homeHandle };
-    const handle = await open(group.ref);
-    return isUnavailability(handle) ? { ...group, unavailable: handle } : { ...group, handle };
+  const entry = async (found: Group): Promise<WorkspaceRepository<H>> => {
+    if (found.ref.id === homeRef.id) return { ...found, handle: homeHandle };
+    const handle = await open(found.ref);
+    return isUnavailability(handle) ? { ...found, unavailable: handle } : { ...found, handle };
   };
   const available = (found: WorkspaceRepository<H>): AvailableRepository<H> => {
     if ('handle' in found) return found;
@@ -110,27 +138,45 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
   };
   const all = async () => Promise.all((await groups()).map(entry));
   return {
-    home: { ref: homeRef, handle: homeHandle },
+    home: { ref: homeRef, alias: homeAlias, handle: homeHandle },
     manifest: () => manifest.load(),
     saveManifest: (yaml, revision) => manifest.save(yaml, revision),
+    async keyedConfig() {
+      const { config } = await manifest.load();
+      const keys = new Map<string, NotebookKey>();
+      for (const found of group(config)) for (const notebook of found.notebooks) keys.set(notebook.id, notebook.key);
+      // One manifest declares every notebook, so its local ids are unique here.
+      const key = (id: string) => keys.get(id) ?? id;
+      return { ...config, workspace: { ...config.workspace, default_notebook: key(config.workspace.default_notebook) }, notebooks: config.notebooks.map(notebook => ({ ...notebook, id: key(notebook.id) })) };
+    },
     all,
-    async forNotebook(notebookId) {
-      const group = (await groups()).find(candidate => candidate.notebooks.some(notebook => notebook.id === notebookId));
-      if (!group) throw new SourceError('Notebook is not configured.', 404);
-      return available(await entry(group));
+    async forNotebook(key) {
+      const parsed = parseNotebookKey(key);
+      if (!parsed && isBareNotebookId(key)) throw new SourceError(`Name the notebook by its key (<alias>~${key}).`, 400);
+      const found = parsed && (await groups()).find(candidate => candidate.alias === parsed.alias);
+      const notebook = found?.notebooks.find(candidate => candidate.id === parsed!.localId);
+      if (!found || !notebook) throw new SourceError('Notebook is not configured.', 404);
+      return { ...available(await entry(found)), notebook };
+    },
+    async resolveBareId(localId) {
+      if (!isBareNotebookId(localId)) return null;
+      const all = await groups();
+      const matches = all.flatMap(found => found.notebooks.filter(notebook => notebook.id === localId));
+      if (matches.length === 1) return matches[0].key;
+      return all.find(found => found.ref.id === homeRef.id)?.notebooks.find(notebook => notebook.id === localId)?.key ?? null;
     },
     async forPath(file) {
-      const matches = (await groups()).flatMap(group => group.notebooks.filter(notebook => file.startsWith(`${notebook.root}/`)).map(notebook => ({ group, notebook })));
+      const matches = (await groups()).flatMap(found => found.notebooks.filter(notebook => file.startsWith(`${notebook.root}/`)).map(notebook => ({ found, notebook })));
       if (!matches.length) throw new SourceError('Path is not in a configured notebook.', 403);
-      if (new Set(matches.map(match => match.group.ref.id)).size > 1) throw new SourceError('The path lies in notebooks of more than one repository. Name its notebook.', 400);
+      if (new Set(matches.map(match => match.found.ref.id)).size > 1) throw new SourceError('The path lies in notebooks of more than one repository. Name its notebook.', 400);
       // Roots of one repository never overlap, so one repository holds at most one match.
-      const [{ group, notebook }] = matches;
-      return { ...available(await entry(group)), notebook };
+      const [{ found, notebook }] = matches;
+      return { ...available(await entry(found)), notebook };
     },
     async byId(id) {
-      const group = (await groups()).find(candidate => candidate.ref.id === id);
-      if (!group) throw new SourceError('Repository is not part of this workspace.', 404);
-      return available(await entry(group));
+      const found = (await groups()).find(candidate => candidate.ref.id === id);
+      if (!found) throw new SourceError('Repository is not part of this workspace.', 404);
+      return available(await entry(found));
     },
     scope,
   };

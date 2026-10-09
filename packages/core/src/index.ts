@@ -46,6 +46,7 @@ export { type CommitNoteChange, type CommitNoteDeletion, type CommitNoteWrite, t
 export { GitLabSource } from './gitlab-source.js';
 export { createRemoteSource, openRemoteHome } from './remote-factory.js';
 export { MANIFEST_FILES, RemoteManifest } from './remote-manifest.js';
+export * from './notebook-key.js';
 export * from './repository.js';
 export * from './workspace-config-source.js';
 export * from './workspace-repositories.js';

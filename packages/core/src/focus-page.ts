@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NOTEBOOK_ID_MAX_LENGTH, NOTEBOOK_KEY_MAX_LENGTH } from './notebook-key.js';
 import type { WorkspaceDocument } from './workspace-documents.js';
 
 export const FOCUS_PAGE_FILE = '.github-notes-focus.yaml';
@@ -17,7 +18,8 @@ const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
 /* eslint-disable no-control-regex -- Reject control characters in persisted paths, identifiers or filenames. */
 const repoPath = z.string().min(1).max(2048).refine(value => !/[\\\x00-\x1f\x7f]/.test(value) && value.split('/').every(part => part !== '' && part !== '.' && part !== '..'), 'Invalid workspace path');
 /* eslint-enable no-control-regex */
-const notebookId = z.string().min(1).max(128);
+// A local id on disk, a notebook key on the wire.
+const notebookId = z.string().min(1).max(NOTEBOOK_KEY_MAX_LENGTH);
 
 /** A tab names a note or a compilation by its repository-relative path. */
 export const FocusTabSchema = z.discriminatedUnion('kind', [z.object({ kind: z.literal('note'), path: repoPath }).strict()]);
@@ -277,4 +279,7 @@ export function ownFocusPage(page: FocusPage, notebooks: readonly { id: string; 
   return foreign ? { page: { ...page, focuses }, foreign } : { page, foreign };
 }
 
-export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusPageSchema, empty: emptyFocusPage, read: readFocusPage, relocate: (page, notebook, move) => relocateFocusPaths(page, notebook.id, move), own: ownFocusPage };
+/** The Focus file as stored: every Focus names its notebook by local id. */
+const FocusFileSchema = FocusPageSchema.refine(page => page.focuses.every(focus => focus.notebookId.length <= NOTEBOOK_ID_MAX_LENGTH), 'A stored Focus names its notebook by local id.');
+
+export const FOCUS_DOCUMENT: WorkspaceDocument<FocusPage> = { file: FOCUS_PAGE_FILE, label: 'Focus', maxBytes: FOCUS_MAX_BYTES, scopes: ['focus', 'folders', 'files'], schema: FocusPageSchema, fileSchema: FocusFileSchema, empty: emptyFocusPage, read: readFocusPage, relocate: (page, notebook, move) => relocateFocusPaths(page, notebook.id, move), own: ownFocusPage, mapNotebookIds: (page, map) => ({ ...page, focuses: page.focuses.map(focus => ({ ...focus, notebookId: map(focus.notebookId) })) }) };

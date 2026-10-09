@@ -6,6 +6,7 @@ import { type SortField, sortNotes, type SortOrder } from './note-sort.js';
 import { extractTodoTasks } from './note-agenda.js';
 import { buildNoteGraph } from './note-graph.js';
 import { hashJson } from './remote-cache.js';
+import { type NotebookKey, notebookKey } from './notebook-key.js';
 import { type RepositoryId, type RevisionSet, StaleRevisionError } from './repository.js';
 import { DEFAULT_NOTE_QUERY, entryKind, isCompilationEntry, NOTE_KIND_FILTERS, type NoteAgenda, type NotebookFacets, noteContentSnippet, noteDirectory, type NoteFacets, type NoteGraph, type NoteKindFilter, type NoteListItem, type NoteLookup, noteMatchesQuery, type NotePaths, type NoteQuery, type NoteQueryPage, noteQueryStatuses, type NoteRef, noteRefKey } from './note-query.js';
 
@@ -79,12 +80,23 @@ export function parseRevisions(value: unknown): RevisionSet {
 
 export interface CatalogRepository {
   id: RepositoryId;
+  /** The repository's alias in the workspace; its notebooks are named `<alias>~<id>` above the catalog. */
+  alias: string;
+  /** The notebooks the repository serves, with their local ids. */
   notebooks: NotebookConfig[];
   catalog: RepositoryCatalog;
 }
 
+/** One notebook the catalog serves: by its key above the catalog, by its local id to its repository's catalog. */
+interface ServedNotebook {
+  repository: CatalogRepository;
+  local: NotebookConfig;
+  keyed: NotebookConfig;
+}
+
 /**
- * Joins the catalogs of a workspace's repositories. `expected` holds the revisions the caller
+ * Joins the catalogs of a workspace's repositories. Above the catalog a notebook's `id` and each note's `notebookId`
+ * are notebook keys; each repository's catalog sees local ids. `expected` holds the revisions the caller
  * works from; a repository that moved on, or is no longer part of the workspace, is stale.
  * A cached branch head may lag a commit another server instance made, so a mismatch is
  * checked against the uncached head before the caller is told it is behind.
@@ -96,38 +108,54 @@ export async function workspaceCatalog(config: WorkspaceConfig, repositories: Ca
     if (!repository || await repository.catalog.revision() !== revision && await repository.catalog.revision(true) !== revision) stale.push(id);
   }
   if (stale.length) throw new StaleRevisionError(stale);
-  const owner = new Map(repositories.flatMap(repository => repository.notebooks.map(notebook => [notebook.id, repository] as const)));
-  const served = { ...config, notebooks: config.notebooks.filter(notebook => owner.has(notebook.id)) };
-  const repositoryOf = (notebookId: string) => {
-    const repository = owner.get(notebookId);
-    if (!repository) throw new SourceError('Notebook is not configured.', 404);
-    return repository;
+  const notebooks = new Map<NotebookKey, ServedNotebook>();
+  for (const repository of repositories) {
+    for (const local of repository.notebooks) {
+      const key = notebookKey(repository.alias, local.id);
+      notebooks.set(key, { repository, local, keyed: { ...local, id: key } });
+    }
+  }
+  const defaultNotebook = [...notebooks.values()].find(served => served.local.id === config.workspace.default_notebook)?.keyed.id ?? config.workspace.default_notebook;
+  const served = { ...config, workspace: { ...config.workspace, default_notebook: defaultNotebook }, notebooks: [...notebooks.values()].map(notebook => notebook.keyed) };
+  const notebookOf = (key: string) => {
+    const notebook = notebooks.get(key);
+    if (!notebook) throw new SourceError('Notebook is not configured.', 404);
+    return notebook;
   };
+  const toLocal = <T extends { notebookId: string; }>(item: T): T => ({ ...item, notebookId: notebookOf(item.notebookId).local.id });
+  const toKey = (repository: CatalogRepository) => <T extends { notebookId: string; }>(item: T): T => ({ ...item, notebookId: notebookKey(repository.alias, item.notebookId) });
   return {
     config: async () => served,
-    repository: notebookId => repositoryOf(notebookId).id,
-    revisions: async notebooks => {
-      const involved = new Set(notebooks.map(notebook => repositoryOf(notebook.id)));
+    repository: key => notebookOf(key).repository.id,
+    revisions: async list => {
+      const involved = new Set(list.map(notebook => notebookOf(notebook.id).repository));
       const entries = await Promise.all([...involved].map(async repository => [repository.id, await repository.catalog.revision()] as const));
       return Object.fromEntries(entries.filter(([, revision]) => revision));
     },
-    index: notebook => indexWithIdentity(repositoryOf(notebook.id), notebook),
+    index: async notebook => {
+      const { repository, local } = notebookOf(notebook.id);
+      return (await indexWithIdentity(repository, local)).map(toKey(repository));
+    },
     contents: async notes => {
       const groups = new Map<CatalogRepository, NoteListItem[]>();
       for (const note of notes) {
-        const repository = repositoryOf(note.notebookId);
+        const { repository } = notebookOf(note.notebookId);
         groups.set(repository, [...(groups.get(repository) ?? []), note]);
       }
       const parts = await Promise.all([...groups].map(async ([repository, group]) => {
-        const bodies = await repository.catalog.contents(group);
+        const bodies = await repository.catalog.contents(group.map(toLocal));
         return group.map(note => [noteRefKey(note), bodies.get(note.path) ?? ''] as const);
       }));
       return new Map(parts.flat());
     },
-    // A result spanning several repositories has no single content key to cache it under.
-    memo: (kind, notebooks, compute) => {
-      const involved = new Set(notebooks.map(notebook => repositoryOf(notebook.id)));
-      return involved.size === 1 ? [...involved][0].catalog.memo(kind, notebooks, compute) : compute();
+    // A result spanning several repositories has no single content key to cache it under. A remembered result names
+    // notebooks by key, so the alias joins its kind.
+    memo: (kind, list, compute) => {
+      const involved = list.map(notebook => notebookOf(notebook.id));
+      const repositories = new Set(involved.map(notebook => notebook.repository));
+      if (repositories.size !== 1) return compute();
+      const [repository] = repositories;
+      return repository.catalog.memo(`${kind}:${repository.alias}`, involved.map(notebook => notebook.local), compute);
     },
   };
 }

@@ -30,6 +30,8 @@ export interface WorkspaceDocument<T = unknown> {
   validateReferences?(current: T, next: T, notebooks: readonly { id: string; root: string; }[], readBody: (path: string) => Promise<string | null>): Promise<void>;
   /** Keeps only content owned by its notebook; `foreign` reports that something was dropped. */
   own?(value: T, notebooks: readonly { id: string; root: string; }[]): { page: T; foreign: boolean; };
+  /** A copy with every notebook id passed through `map`: local ids on disk, notebook keys on the wire. */
+  mapNotebookIds(value: T, map: (notebookId: string) => string): T;
 }
 
 export const WORKSPACE_DOCUMENTS: readonly WorkspaceDocument[] = [STUDY_DOCUMENT, FOCUS_DOCUMENT, BOOKMARKS_DOCUMENT];
