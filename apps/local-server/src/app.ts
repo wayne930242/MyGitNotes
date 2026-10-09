@@ -3,7 +3,7 @@ import type { RemoteCache } from '@mygitnotes/core';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, productRepository, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, visibleMembers, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
+import { agentWorkspaceFile, agentWorkspaces, BOOKMARKS_DOCUMENT, classifyResource, FOCUS_DOCUMENT, keyedItem, lookupNotes, noteAgenda, type NotebookConfig, noteFacets, noteGraph, parseNoteQuery, productRepository, queryNotePaths, queryNotes, RemoteSource, replaceFileTags, repositoryManifestStatus, type RepositoryStatus, resolveSafePath, SourceError, StaleRevisionError, type UnavailableReason, visibleMembers, type WorkspaceConfigSource, type WorkspaceStatus } from '@mygitnotes/core';
 import { createRemoteCache } from './remote-cache-store.js';
 import { createRecordStore, NoRecordStore, type RecordStore, storageMode } from './record-store/index.js';
 import { type BrowserSessions, cookieSessions, storedSessions } from './browser-sessions.js';
@@ -32,6 +32,9 @@ export function applicationRoot() {
   while (!fs.existsSync(path.join(dir, 'pnpm-workspace.yaml')) && path.dirname(dir) !== dir) dir = path.dirname(dir);
   return dir;
 }
+
+/** Why a repository the provider did read can still be unavailable: its branch is missing or its manifest does not load. */
+const READABLE_UNAVAILABLE: readonly UnavailableReason[] = ['missing-branch', 'invalid-manifest'];
 
 /** What an edition supplies to the server; the community edition uses the defaults. */
 export interface AppServices {
@@ -158,8 +161,9 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
         const workspace = workspaceOf(res);
         // `?fresh=1` opened every repository at its current branch head, and each manifest is read from that snapshot.
         const [keyedConfig, listed] = await Promise.all([workspace.keyedConfig(), workspace.all()]);
-        // A signed-out visitor is not told the names of repositories the provider refused them, private ones among them.
-        const entries = signedIn(res) ? listed : listed.filter(entry => !('unavailable' in entry && entry.unavailable.reason === 'no-access'));
+        // A signed-out visitor is told only of repositories the provider let them read: one it refused, a private one among
+        // them, or one it was never asked for is not named.
+        const entries = signedIn(res) ? listed : listed.filter(entry => !('unavailable' in entry) || READABLE_UNAVAILABLE.includes(entry.unavailable.reason));
         const repositories = await Promise.all(entries.map(async (entry): Promise<RepositoryStatus> => {
           const base = { id: entry.ref.id, type: entry.ref.source.type, repository: entry.ref.source.type === 'local' ? undefined : entry.ref.source.repository, alias: entry.alias, notebooks: entry.notebooks.map(notebook => notebook.key) };
           const manifest = repositoryManifestStatus(await workspace.manifestOf(entry.ref.id));

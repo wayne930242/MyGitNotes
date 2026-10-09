@@ -198,6 +198,9 @@ export function resolveDeploymentMembers(source: SourceConfig, entries: ServerRe
   for (const [position, entry] of entries.entries()) {
     if (entry === ownEntry) continue;
     if (!local && entry.branch === undefined) throw new Error(`${at(entry)} needs a branch.`);
+    // A remote deployment signs in on its own site only, so a repository elsewhere could never open; it is refused here
+    // rather than listed, with its name, to every visitor.
+    if (!local && !sameSite(siteOf(source), entry.identity as SourceConfig)) throw new Error(`${at(entry)} is not on the deployment's platform and site (${siteIdentity(siteOf(source))}); a remote deployment reaches only repositories there.`);
     const twice = entries.slice(0, position).find(earlier => earlier !== ownEntry && (sameRepository(earlier.identity, entry.identity) || (local && sameDirectory(earlier.path!, entry.path!))));
     if (twice) throw new Error(`${at(entry)} names the repository of repositories[${twice.index}] again; a repository is a member once, even on two branches.`);
   }

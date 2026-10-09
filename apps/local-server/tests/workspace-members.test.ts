@@ -5,9 +5,10 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createServer, type Server } from 'node:http';
 import { Router } from 'express';
-import { deploymentConfigSource } from '@mygitnotes/core';
+import { deploymentConfigSource, repositoryRef, type WorkspaceConfigSource } from '@mygitnotes/core';
 import { callWorkspaceRemoteTool } from '@mygitnotes/mcp-server';
 import { createApp } from '../src/app.js';
+import { endEventStreams } from '../src/event-stream.js';
 import { createRecordStore } from '../src/record-store/index.js';
 import { openWorkspace, prewarmLocalScans, type RemoteHandle } from '../src/request-workspace.js';
 import { chosenRepositorySource, type WorkspaceChoices } from '../src/workspace-choice.js';
@@ -167,6 +168,44 @@ describe('Settings → Repositories in a local deployment', () => {
     second.controller.abort();
   });
 
+  it('never subscribes a stream whose members changed after its request read them and before its route ran', async () => {
+    const product = scratch();
+    const kb = worktree(product, 'kb'), trpg = worktree(product, 'trpg');
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - type: local\n    path: ./trpg\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'local', MYGITNOTES_LOCAL_PATH: kb, VERCEL: '', APP_URL: '' })) vi.stubEnv(key, value);
+    const deployment = deploymentConfigSource(product);
+    let changeAfterRead = false;
+    // A change (hiding trpg, say) lands once this request has read the members that still list trpg.
+    const configSource: WorkspaceConfigSource = {
+      ...deployment,
+      async settings(req) {
+        const settings = await deployment.settings(req);
+        if (changeAfterRead) {
+          changeAfterRead = false;
+          endEventStreams();
+        }
+        return settings;
+      },
+    };
+    await listen(createApp(product, { configSource }));
+    changeAfterRead = true;
+    const controller = new AbortController();
+    const response = await fetch(`${base}/api/workspace/events`, { signal: controller.signal });
+    const reader = response.body!.getReader();
+    let received = '';
+    const reading = (async () => {
+      for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) received += new TextDecoder().decode(chunk.value);
+    })().catch(() => {});
+    try {
+      await settle(300);
+      expect(received).toContain('event: change\ndata: {"membership":true}\n\n');
+      expect(worktreeSubscriberCount(trpg)).toBe(0);
+    } finally {
+      controller.abort();
+      await reading;
+    }
+  });
+
   it('never scans a hidden worktree to warm the server', async () => {
     const { product, journal } = await start();
     fs.appendFileSync(path.join(product, 'mygitnotes.server.yaml'), `  - type: local\n    path: ${journal}\n    hidden: true\n`);
@@ -298,5 +337,55 @@ describe('a hidden member of a hosted workspace', () => {
     // Someone signed in learns that the repository is listed and that they cannot reach it.
     const signedIn = (await call('GET', '/api/workspace', undefined, { Cookie: `gh_notes_session=${session}` })).body;
     expect(signedIn.repositories.map((repository: { alias: string; unavailable?: { reason: string; }; }) => [repository.alias, repository.unavailable?.reason])).toEqual([['kb', undefined], ['private-diary', 'no-access']]);
+  });
+
+  it('answers a signed-out guess at a refused member exactly as one at a member that does not exist', async () => {
+    const product = scratch();
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: github, repository: secret-owner/private-diary, branch: main }\n');
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    fakeProvider(['owner/kb']);
+    await listen(createApp(product));
+    const answer = async (url: string) => {
+      const response = await fetch(base + url);
+      return `${response.status} ${await response.text()}`;
+    };
+    const refused = 'github:secret-owner/private-diary@main', missing = 'github:secret-owner/nothing-here@main';
+    // An agenda over an unknown notebook is empty rather than not found; it must be as empty for the refused one.
+    for (const [guess, wrong, status] of [['/api/notes?notebookId=private-diary~life', '/api/notes?notebookId=nothing-here~life', 404], ['/api/notes/read?path=notes/life/note.md&notebookId=private-diary~life', '/api/notes/read?path=notes/life/note.md&notebookId=nothing-here~life', 404], ['/api/notes/agenda?notebookId=private-diary~life', '/api/notes/agenda?notebookId=nothing-here~life', 200], ['/api/history?path=notes/life/note.md&notebookId=private-diary~life', '/api/history?path=notes/life/note.md&notebookId=nothing-here~life', 404], [`/api/history?path=notes/life/note.md&repository=${encodeURIComponent(refused)}`, `/api/history?path=notes/life/note.md&repository=${encodeURIComponent(missing)}`, 404], [`/api/history/commit?path=notes/life/note.md&commit=${'a'.repeat(40)}&repository=${encodeURIComponent(refused)}`, `/api/history/commit?path=notes/life/note.md&commit=${'a'.repeat(40)}&repository=${encodeURIComponent(missing)}`, 404]] as const) {
+      const [answered, expected] = [await answer(guess), await answer(wrong)];
+      expect([guess, answered]).toEqual([guess, expected]);
+      expect([guess, answered.split(' ')[0]]).toEqual([guess, String(status)]);
+    }
+  });
+
+  it('never names to a signed-out visitor a member the provider was not asked for', async () => {
+    const product = scratch();
+    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: 'owner/kb', MYGITNOTES_BRANCH: 'main', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '' })) vi.stubEnv(key, value);
+    fakeProvider(['owner/kb']);
+    // The server file refuses a repository on another platform or site when it is loaded, naming the entry, not the repository.
+    fs.writeFileSync(path.join(product, 'mygitnotes.server.yaml'), 'repositories:\n  - { type: gitlab, repository: secret-owner/other-site, branch: main }\n');
+    await listen(createApp(product));
+    const refusal = await fetch(`${base}/api/workspace`);
+    const refusalText = await refusal.text();
+    expect([refusal.status, JSON.parse(refusalText).setupRequired]).toEqual([503, true]);
+    expect(refusalText).toContain('repositories[0] is not on the deployment');
+    expect(refusalText).not.toMatch(/secret-owner|other-site/);
+    await new Promise<void>(resolve => server!.close(() => resolve()));
+    // Another edition's members may still name one there; the workspace lists it only to someone signed in.
+    fs.rmSync(path.join(product, 'mygitnotes.server.yaml'));
+    const deployment = deploymentConfigSource(product);
+    const configSource: WorkspaceConfigSource = {
+      ...deployment,
+      async settings(req) {
+        const settings = await deployment.settings(req);
+        return { ...settings, members: [...settings.members, { ref: repositoryRef({ type: 'gitlab', url: 'https://gitlab.com', repository: 'secret-owner/other-site', branch: 'main' }), alias: 'other-site', default: false, hidden: false, editable: 'none' }] };
+      },
+    };
+    await listen(createApp(product, { configSource }));
+    const anonymous = await fetch(`${base}/api/workspace`);
+    const text = await anonymous.text();
+    expect(anonymous.status).toBe(200);
+    expect(JSON.parse(text).repositories.map((repository: { alias: string; }) => repository.alias)).toEqual(['kb']);
+    expect(text).not.toMatch(/secret-owner|other-site/);
   });
 });

@@ -57,6 +57,8 @@ export function openWorkspace(settings: WorkspaceSettings, token: string | undef
   return createWorkspaceRepositories<RepositoryHandle>({
     members,
     manifest: (member, handle) => settings.manifest(member, () => new RemoteManifest((handle as RemoteHandle).reader)),
+    // Signed out, a member the provider refused answers as a missing one, so a guessed private name is not confirmed.
+    refusedAsMissing: !token,
     async openRepository(member, scope) {
       const { ref } = member;
       if (ref.source.type === 'local' || !sameSite(site, ref.source)) return { reason: 'unsupported-platform', message: `${ref.id} is not on the workspace's platform and site.` };

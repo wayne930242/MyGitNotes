@@ -320,6 +320,16 @@ repositories:
     path: ../trpg-notes
 ```
 
+線上部署用同樣的方式列出其他儲存庫，不寫 `path`，每個儲存庫要寫 `branch`。這些儲存庫必須和部署在同一個平台與站台；寫了其他平台或站台的項目屬於設定錯誤，錯誤訊息會指出是第幾筆。線上部署任何 GitHub 帳號都能登入，所以每個可見成員的名稱，包括私有儲存庫，任何登入的人都看得到；沒登入的訪客只會看到 provider 允許他讀取的儲存庫。要讓訪客看不到某個儲存庫的名稱，在那筆項目加上 `hidden: true`：
+
+```yaml
+repositories:
+  - type: github
+    repository: owner/private-journal
+    branch: main
+    hidden: true
+```
+
 連不上的儲存庫、或 manifest 無法載入的儲存庫，會標成無法使用並顯示原因，其他儲存庫照常運作；「設定」頁會開啟有問題的 manifest 讓人修正。每個儲存庫各自保存 Screen、Focus、Study 設定檔和 Agent 檔案；跨儲存庫的提交會在每個儲存庫各產生一個 commit。
 
 ### 轉換 `source` 筆記本

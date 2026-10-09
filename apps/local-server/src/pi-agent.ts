@@ -7,6 +7,7 @@ import path from 'node:path';
 import type { Duplex } from 'node:stream';
 import { WebSocketServer } from 'ws';
 import { commandAvailable, piCommand, type PiLocation, PiSession, type PiSessionInfo, resumableSession, WebToolError } from './pi-session.js';
+import { membershipGeneration } from './event-stream.js';
 import { asLocal, noteRepository, repositoryOrDefault } from './request-workspace.js';
 
 export const PI_SOCKET_PATH = '/api/pi/ws';
@@ -120,10 +121,14 @@ export class PiSessionManager {
     return this.current;
   }
 
-  /** Ends the live session and starts a fresh one in `folder`; its conversation does not carry over. */
-  async restart(folder: AgentFolder): Promise<PiSession> {
+  /**
+   * Ends the live session and starts a fresh one in `folder`; its conversation does not carry over. `beforeStart` runs
+   * once the old session has ended and may refuse the start by throwing.
+   */
+  async restart(folder: AgentFolder, beforeStart?: () => void): Promise<PiSession> {
     this.assertAvailable();
     await this.end();
+    beforeStart?.();
     this.current = new PiSession({ ...folder, command: this.command, webTools: this.webTools });
     return this.current;
   }
@@ -212,8 +217,20 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder, webToo
     if (webTools) manager.webTools = { url: `http://127.0.0.1:${req.socket.localPort}${req.baseUrl}${WEB_TOOLS_PATH}` };
   };
   router.use((req, res, next) => agentClientAllowed(req) ? next() : res.status(403).json({ error: 'The agent panel is available only from this computer, or to its owner through pnpm dev:remote.' }));
+  /**
+   * Refuses a start when the workspace's members changed after this request read them: the folder it resolved may lie in
+   * a repository just hidden, which `membershipChanged` could not end a session in since none had started yet.
+   */
+  const assertMembersUnchanged = (res: express.Response) => {
+    const startedUnder = res.locals.membershipGeneration;
+    if (typeof startedUnder === 'number' && startedUnder !== membershipGeneration()) throw new SourceError("The workspace's repositories changed while the agent was starting. Start it again.", 409);
+  };
   // Pi only ever starts in an agent workspace, never at a path the request spells out.
-  const requestedFolder = (req: express.Request, res: express.Response) => resolveFolder(res, req.body?.repository, req.body?.folder);
+  const requestedFolder = async (req: express.Request, res: express.Response) => {
+    const folder = await resolveFolder(res, req.body?.repository, req.body?.folder);
+    assertMembersUnchanged(res);
+    return folder;
+  };
 
   router.get('/session', (_req, res) => {
     res.json({ ...sessionBody(manager.session), piAvailable: manager.available });
@@ -229,7 +246,7 @@ export function createPiAgent({ command, resolveFolder = workspaceFolder, webToo
   router.put('/session', async (req, res) => {
     try {
       noteWebTools(req);
-      res.json(sessionBody(await manager.restart(await requestedFolder(req, res))));
+      res.json(sessionBody(await manager.restart(await requestedFolder(req, res), () => assertMembersUnchanged(res))));
     } catch (error) {
       fail(res, error);
     }

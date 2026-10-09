@@ -320,6 +320,16 @@ repositories:
     path: ../trpg-notes
 ```
 
+A hosted deployment lists further repositories the same way, without `path` and with each repository's `branch`. They must be on the deployment's own platform and site; an entry on another one is a configuration error that names the entry. On a hosted deployment any GitHub account can sign in, so the name of every visible member, private ones included, is shown to anyone signed in; a visitor who is not signed in sees only repositories the provider lets them read. Add `hidden: true` to an entry to keep that repository's name from visitors:
+
+```yaml
+repositories:
+  - type: github
+    repository: owner/private-journal
+    branch: main
+    hidden: true
+```
+
 A repository that cannot be reached, or whose manifest does not load, shows as unavailable with the reason; the other repositories work normally, and Settings opens the broken manifest so it can be fixed. Each repository keeps its own Screen, Focus and Study files and Agent files, and a commit that spans repositories creates one commit in each.
 
 ### Converting `source` notebooks

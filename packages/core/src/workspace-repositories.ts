@@ -74,6 +74,11 @@ export interface WorkspaceRepositoriesOptions<H> {
   openRepository(member: WorkspaceMember, scope: RepositoryScope): Promise<H | Unavailability>;
   /** The manifest store of an opened member. */
   manifest(member: WorkspaceMember, handle: H): ManifestStore;
+  /**
+   * Answers for a member the provider refused (`no-access`) exactly as for one the workspace does not have, so a request
+   * that is not signed in cannot tell a private member's guessed alias or id from a wrong guess.
+   */
+  refusedAsMissing?: boolean;
 }
 
 /** One member as this request opened it: its handle and manifest, or why it cannot serve. */
@@ -89,9 +94,17 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
   const defaultOne = members.find(member => member.default) ?? null;
   /** Each member opens once per workspace. */
   const opened = new Map<RepositoryId, Promise<Opened<H>>>();
+  const notMember = () => new SourceError('Repository is not part of this workspace.', 404);
   const memberOf = (id: RepositoryId) => {
     const found = members.find(member => member.ref.id === id);
-    if (!found) throw new SourceError('Repository is not part of this workspace.', 404);
+    if (!found) throw notMember();
+    return found;
+  };
+  const refused = (found: Opened<H>) => Boolean(options.refusedAsMissing && 'unavailable' in found && found.unavailable.reason === 'no-access');
+  /** The member a request names by id, opened; one refused to this request is not found, as an unknown id is not. */
+  const openById = async (id: RepositoryId) => {
+    const found = await open(memberOf(id));
+    if (refused(found)) throw notMember();
     return found;
   };
   const open = (member: WorkspaceMember): Promise<Opened<H>> => {
@@ -125,7 +138,7 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
   };
   const all = async () => (await Promise.all(members.map(open))).map(entry);
   async function scope(id: RepositoryId): Promise<WorkspaceConfig> {
-    const found = await open(memberOf(id));
+    const found = await openById(id);
     if ('unavailable' in found) throw new SourceError(found.unavailable.message, 503);
     const { read } = found;
     if (read.state === 'missing') return { schema_version: SUPPORTED_SCHEMA_VERSION, workspace: { title: repositoryName(found.member.ref.source), default_notebook: '' }, notebooks: [] };
@@ -138,11 +151,11 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
       return available(await open(defaultOne));
     },
     async manifestOf(id) {
-      const found = await open(memberOf(id));
+      const found = await openById(id);
       return repositoryManifest(found.read ?? null, repositoryName(found.member.ref.source), found.member.alias);
     },
     async saveManifest(id, yaml, revision) {
-      const found = await open(memberOf(id));
+      const found = await openById(id);
       // A repository whose manifest cannot be loaded is still open, so its manifest can be fixed and saved.
       if (found.handle === undefined) throw new SourceError((found as { unavailable: Unavailability; }).unavailable.message, 503);
       return options.manifest(found.member, found.handle).save(yaml, revision);
@@ -163,6 +176,7 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
       const member = parsed && members.find(candidate => candidate.alias === parsed.alias);
       if (!member) throw new SourceError('Notebook is not configured.', 404);
       const found = await open(member);
+      if (refused(found)) throw new SourceError('Notebook is not configured.', 404);
       if ('unavailable' in found) throw new SourceError(found.unavailable.message, 503);
       const notebook = found.notebooks.find(candidate => candidate.id === parsed!.localId);
       if (!notebook) throw new SourceError('Notebook is not configured.', 404);
@@ -183,8 +197,8 @@ export function createWorkspaceRepositories<H>(options: WorkspaceRepositoriesOpt
       const [{ repository, notebook }] = matches;
       return { ...(repository as AvailableRepository<H>), notebook };
     },
-    byId: async id => available(await open(memberOf(id))),
-    handleOf: async id => (await open(memberOf(id))).handle,
+    byId: async id => available(await openById(id)),
+    handleOf: async id => (await openById(id)).handle,
     scope,
   };
 }

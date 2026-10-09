@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
+import { endEventStreams, membershipGeneration } from './event-stream.js';
 import { agentClientAllowed, type AgentFolder, createPiAgent, resolveAgentCwd, resumableSession } from './pi-agent.js';
 import { commandAvailable, jsonlSplitter, MCP_STATUS_KEY, type PiMcpServer, TRUST_EXTENSION, TRUST_STATUS_KEY, WEB_CHAT_PROMPT, WEB_TOOLS_EXTENSION, WEB_TOOLS_PROMPT } from './pi-session.js';
 
@@ -74,14 +75,16 @@ afterEach(async () => {
   temp = undefined;
 });
 
-function testFolder(workspace: string) {
+function testFolder(workspace: string, resolving?: () => void) {
   return async (_res: unknown, repository: unknown, folder: unknown): Promise<AgentFolder> => {
+    resolving?.();
     if (repository !== 'home') throw new SourceError('Unknown repository.', 404);
     return { cwd: resolveAgentCwd(folder ? path.join(workspace, String(folder)) : workspace), location: { repository, folder: String(folder ?? '') } };
   };
 }
 
-async function start({ webTools = false } = {}) {
+/** `resolving` runs while each request resolves its folder, as a membership change made meanwhile would. */
+async function start({ webTools = false, resolving }: { webTools?: boolean; resolving?: () => void; } = {}) {
   // Inside the home directory, which is the only place a session may run.
   temp = fs.mkdtempSync(path.join(os.homedir(), '.mygitnotes-pi-agent-test-'));
   const script = path.join(temp, 'fake-pi.cjs');
@@ -90,9 +93,14 @@ async function start({ webTools = false } = {}) {
   fs.writeFileSync(command, `#!/bin/sh\nexec "${process.execPath}" "${script}" "$@"\n`, { mode: 0o755 });
   const workspace = fs.realpathSync(temp);
   // Repository `home` lives at the temp root; any folder name maps to the directory of that name inside it.
-  agent = createPiAgent({ command, resolveFolder: testFolder(workspace), webTools });
+  agent = createPiAgent({ command, resolveFolder: testFolder(workspace, resolving), webTools });
   const app = express();
   app.use(express.json());
+  // As requestWorkspace does before it reads the members.
+  app.use((_req, res, next) => {
+    res.locals.membershipGeneration = membershipGeneration();
+    next();
+  });
   // As createApp does: Pi's own calls are answered ahead of the workspace a signed-in request opens.
   if (agent.tools) app.use('/api/pi', agent.tools);
   app.use('/api/pi', agent.router);
@@ -309,6 +317,20 @@ describe('pi agent bridge', () => {
 
     expect(await (await post(base, 'DELETE')).json()).toEqual({ session: null });
     await expect(connect(port, base).opened).rejects.toThrow('HTTP 409');
+  });
+
+  it('starts no session when the members changed while its folder was being resolved, and asks the page to retry', async () => {
+    let change = true;
+    const { base } = await start({ resolving: () => change && endEventStreams() });
+    for (const method of ['POST', 'PUT']) {
+      const refused = await post(base, method);
+      expect([method, refused.status, (await refused.json() as { error: string; }).error]).toEqual([method, 409, expect.stringContaining('Start it again')]);
+      expect(agent!.manager.session).toBeUndefined();
+    }
+    // The page's retry reads the members as they are now and starts.
+    change = false;
+    expect((await post(base, 'POST')).status).toBe(200);
+    expect(agent!.manager.session?.alive).toBe(true);
   });
 
   it('ends a session whose repository was hidden, saying so, and keeps one whose repository stays', async () => {
