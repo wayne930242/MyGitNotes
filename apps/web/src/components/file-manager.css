@@ -56,6 +56,8 @@
 
 .assets-main > .file-manager { width: 100%; flex: 1; }
 .file-affected { max-height: 160px; overflow: auto; padding-left: 20px; list-style: disc; font-size: 12px; }
+.r2-hidden-unchecked { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--color-warning); border-radius: var(--radius-control); background: var(--color-warning-soft); font-size: 12px; }
+.file-operation .r2-hidden-unchecked label { flex-direction: row; align-items: center; gap: 8px; font-weight: 600; }
 
 .file-detail-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .file-detail-title strong { min-width: 0; overflow-wrap: anywhere; }

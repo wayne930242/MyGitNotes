@@ -35,10 +35,11 @@ import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { type NoteLocation, NoteLocationProvider, readOnlyReason } from './lib/note-location.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
+import { NOTE_QUERY_KEY } from './lib/use-note-queries.js';
 import { notebookRoute, noteRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
 import { draftScope, pageRepository } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { fetchFileDiff, fetchGitStatus, readNote } from './lib/api.js';
 import { workingDiff } from './lib/working-notes.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
@@ -180,6 +181,17 @@ export const AppContent: React.FC = () => {
   const { changeFilters, clearFilters, changeAllNotebooks, setActiveTab, agentSystemRef, resourceNavigationBusy, setResourceNavigationBusy, notebookSwitchBusy, setSelectedNotebookId, setSelectedFolder, setViewMode } = useWorkspaceNavigation({ location, queryState, selectedFolders, setFilterQuery, navigate, route, activeTab, selectedNotebookId, folderRoot, viewMode, selectedFolder, config, editorRegistry, fileManagerRef, loading, editorRoute, resolveBareNotebook });
 
   const { commitRequest, isCommitOpen, setIsCommitOpen, openCommitModal, panelRemoteChanges, panelGetPreview, panelDescribeChanges } = useChangeDialog({ activeTab, agentSystemRef, remote, documents, setActionError, activeWorkingNotes, pendingDocuments, canWriteNotebook, repositoryFor });
+  // With every repository hidden or unavailable there is no notebook to show, and Settings is where the person
+  // recovers: it opens there (decision C8).
+  const nothingToShow = !loading && !loadError && !config?.notebooks.length;
+  useEffect(() => {
+    if (nothingToShow && activeTab !== 'settings') navigate('/settings#settings-repositories', { replace: true });
+  }, [nothingToShow, activeTab, navigate]);
+  /** After a membership change: the workspace again, and no cached result of a repository that left or was hidden. */
+  const membershipChanged = async () => {
+    await refreshWorkspace(true);
+    await queryClient.resetQueries({ queryKey: NOTE_QUERY_KEY });
+  };
   useLeaveWarning(Boolean(panelRemoteChanges?.length));
 
   // Aggregated tags across the workspace for autocomplete
@@ -598,6 +610,12 @@ export const AppContent: React.FC = () => {
                       <main className='workspace-route settings-main has-sidebar-drawer'>
                         <SettingsModal
                           manifest={{ repositories, defaultRepository: sourceId, initialRepository: repositoryFor(selectedNotebookId)?.id ?? sourceId, onManifestRevision: setManifestRevision }}
+                          repositories={{
+                            repositories,
+                            onMembershipChanged: membershipChanged,
+                            onOpenChanges: () => openCommitModal(),
+                          }}
+                          recovery={nothingToShow}
                           local={!remote}
                           coreUpdates={coreUpdate}
                           accountSettings={

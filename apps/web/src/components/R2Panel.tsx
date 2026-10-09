@@ -63,6 +63,8 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
   const [selected, setSelected] = useState(''), [operation, setOperation] = useState<Operation>();
   const [name, setName] = useState(''), [destination, setDestination] = useState(''), [references, setReferences] = useState<R2References>();
   const [copied, setCopied] = useState(false);
+  /** The person accepted that hidden repositories go unchecked for this delete or move. */
+  const [uncheckedConfirmed, setUncheckedConfirmed] = useState(false);
   const operationForm = useRef<HTMLFormElement>(null), pendingSelection = useRef('');
   const { root, folders } = r2Folders(listing, showHidden);
   const inRoot = (key: string) => key.slice(listing.prefix.length);
@@ -83,6 +85,7 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
     void run(async () => {
       setOperation(kind);
       setReferences(undefined);
+      setUncheckedConfirmed(false);
       setName(kind === 'move' ? baseName(target) : '');
       setDestination(parentPath(target));
       if (kind !== 'mkdir') setReferences(await fetchR2References(notebookId, target, directoryTarget));
@@ -105,11 +108,11 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
       } else if (operation === 'move') {
         const moved = r2Join(destination, name.trim());
         await beforeChange?.();
-        const result = await moveR2(notebookId, target, moved, directoryTarget);
+        const result = await moveR2(notebookId, target, moved, directoryTarget, uncheckedConfirmed);
         if (result.notes.length) await onNotesChanged();
         await finish(directoryTarget ? moved : destination, directoryTarget ? '' : moved);
       } else if (operation === 'delete') {
-        await deleteR2(notebookId, target, directoryTarget);
+        await deleteR2(notebookId, target, directoryTarget, uncheckedConfirmed);
         await finish(directoryTarget ? parentPath(target) : directory);
       }
     });
@@ -121,6 +124,7 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
       setSelected(key);
     });
   const relative = (key: string) => key === root ? 'R2' : `R2/${inRoot(key)}`;
+  const unchecked = references?.hidden ?? [];
   const destinations = [root, ...folders].filter(folder => !directoryTarget || folder !== target && !folder.startsWith(target + '/'));
   const rawUrl = selectedObject ? r2RawUrl(notebookId, selectedObject.key) : '';
   const presentation = selectedObject ? r2PreviewType(selectedObject.key).kind : 'file';
@@ -338,9 +342,18 @@ function R2Browser({ notebookId, listing, directory, mutable, showHidden, busy, 
               </>
             )
             : <LoadingStatus>{t('files.loading')}</LoadingStatus>)}
+          {operation !== 'mkdir' && unchecked.length > 0 && (
+            <div role='alert' className='r2-hidden-unchecked'>
+              <p>{t('files.r2HiddenUnchecked', { repositories: unchecked.map(repository => `${repository.alias} (${repository.repository ?? repository.path ?? repository.id})`).join(', ') })}</p>
+              <label>
+                <input type='checkbox' checked={uncheckedConfirmed} disabled={busy} onChange={event => setUncheckedConfirmed(event.target.checked)} />
+                {t('files.r2HiddenConfirm')}
+              </label>
+            </div>
+          )}
           <div className='file-actions'>
             <button type='button' className='ui-button' disabled={busy} onClick={() => setOperation(undefined)}>{t('common.cancel')}</button>
-            <Button type='submit' variant={operation === 'delete' ? 'danger' : 'primary'} disabled={busy || operation !== 'mkdir' && !references || operation === 'move' && r2Join(destination, name.trim()) === target}>{operation === 'delete' ? t('files.confirmDelete') : t('common.save')}</Button>
+            <Button type='submit' variant={operation === 'delete' ? 'danger' : 'primary'} disabled={busy || operation !== 'mkdir' && !references || operation === 'move' && r2Join(destination, name.trim()) === target || operation !== 'mkdir' && unchecked.length > 0 && !uncheckedConfirmed}>{operation === 'delete' ? t('files.confirmDelete') : t('common.save')}</Button>
           </div>
         </form>
       )}

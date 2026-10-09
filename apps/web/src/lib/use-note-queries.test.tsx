@@ -4,7 +4,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
-import { handleNoteQueryError, invalidateNoteQueries, resetStaleNoteQueries, scopedRevisions, setNoteQueryScope, useNoteList, useStaleNoteQueries } from './use-note-queries.js';
+import { handleNoteQueryError, invalidateNoteQueries, noteLookupOptions, notePageOptions, notePathsOptions, resetStaleNoteQueries, scopedRevisions, setNoteQueryScope, useNoteList, useStaleNoteQueries } from './use-note-queries.js';
 import { ApiError } from './api.js';
 
 const REVISION = 'a'.repeat(40);
@@ -148,4 +148,13 @@ it('restarts a rejected cursor and leaves a malformed first page alone', () => {
   } finally {
     vi.useRealTimers();
   }
+});
+
+it('keys every query by the repositories loaded, so an answer requested before a hide never fills a query after it', () => {
+  // A local workspace has no revisions to tell the two memberships apart.
+  const before = { sourceId: 'local:/kb', revisions: {}, repositories: {}, members: 'local:/kb\nlocal:/journal', drafts: {} };
+  const after = { ...before, members: 'local:/kb' };
+  expect(notePageOptions(before, { notebookId: 'all' }).queryKey).not.toEqual(notePageOptions(after, { notebookId: 'all' }).queryKey);
+  expect(notePathsOptions(before, { notebookId: 'all' }).queryKey).not.toEqual(notePathsOptions(after, { notebookId: 'all' }).queryKey);
+  expect(noteLookupOptions(before, [{ notebookId: 'kb~kb', path: 'notes/kb/a.md' }], true).queryKey).not.toEqual(noteLookupOptions(after, [{ notebookId: 'kb~kb', path: 'notes/kb/a.md' }], true).queryKey);
 });

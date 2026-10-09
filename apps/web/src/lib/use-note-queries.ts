@@ -22,17 +22,22 @@ export interface NoteQueryScope {
   revisions: RevisionSet;
   /** Each notebook's repository, so a query depends only on the revisions it reads. */
   repositories: Record<string, RepositoryId>;
+  /**
+   * The repositories the workspace loaded, so an answer requested under another membership (a local workspace has no
+   * revisions to tell them apart) never fills a query of this one: a hidden repository's results cannot come back.
+   */
+  members?: string;
   drafts: WorkingNotes;
 }
 
 const EMPTY_DRAFTS: WorkingNotes = {};
-let currentScope: NoteQueryScope = { sourceId: '', revisions: {}, repositories: {}, drafts: EMPTY_DRAFTS };
+let currentScope: NoteQueryScope = { sourceId: '', revisions: {}, repositories: {}, members: '', drafts: EMPTY_DRAFTS };
 const listeners = new Set<() => void>();
 const readScope = () => currentScope;
 
 /** Publishes the workspace identity every note query runs against; components read it through `useNoteQueryScope`. */
 export function setNoteQueryScope(next: NoteQueryScope): void {
-  if (currentScope.sourceId === next.sourceId && sameValue(currentScope.revisions, next.revisions) && sameValue(currentScope.repositories, next.repositories) && currentScope.drafts === next.drafts) return;
+  if (currentScope.sourceId === next.sourceId && (currentScope.members ?? '') === (next.members ?? '') && sameValue(currentScope.revisions, next.revisions) && sameValue(currentScope.repositories, next.repositories) && currentScope.drafts === next.drafts) return;
   currentScope = next;
   /* eslint-disable unicorn/no-useless-spread -- Snapshot the collection because callbacks may mutate subscriptions or editors during iteration. */
   for (const listener of [...listeners]) listener();
@@ -106,7 +111,7 @@ export function scopedRevisions(scope: NoteQueryScope, notebookId = 'all'): Revi
 }
 
 export const noteQueryInput = (query: Partial<NoteQuery>): NoteQuery => ({ ...DEFAULT_NOTE_QUERY, ...query });
-const queryKey = (scope: NoteQueryScope, revisions: RevisionSet, kind: string, params: unknown) => [...NOTE_QUERY_KEY, scope.sourceId, Object.entries(revisions).sort(([a], [b]) => a.localeCompare(b)), kind, params];
+const queryKey = (scope: NoteQueryScope, revisions: RevisionSet, kind: string, params: unknown) => [...NOTE_QUERY_KEY, scope.sourceId, Object.entries(revisions).sort(([a], [b]) => a.localeCompare(b)), kind, params, scope.members ?? ''];
 const errorText = (error: unknown) => error instanceof Error ? error.message : error ? String(error) : '';
 
 /** Keeps a deeply equal value identical across renders, so inline query objects do not restart queries. */

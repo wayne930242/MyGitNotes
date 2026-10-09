@@ -14,6 +14,8 @@ export interface R2References {
   objects: string[];
   /** Referencing notes of every repository, named by notebook and path. */
   notes: NoteRef[];
+  /** Hidden repositories sharing the key space, which are never read and so not checked (decision C7). */
+  hidden?: { id: string; alias: string; repository?: string; path?: string; }[];
 }
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -35,8 +37,9 @@ export async function fetchR2(notebookId: string): Promise<R2Listing | undefined
 export const r2RawUrl = (notebookId: string, key: string) => '/api/r2/raw?' + query({ notebookId, key });
 export const fetchR2References = (notebookId: string, key: string, directory: boolean) => request<R2References>('/api/r2/references?' + query({ notebookId, key, ...(directory ? { directory: '1' } : {}) }));
 export const createR2Folder = (notebookId: string, key: string) => post<{ key: string; }>('/api/r2/mkdir', { notebookId, key });
-export const moveR2 = (notebookId: string, key: string, destination: string, directory: boolean) => post<{ moves: Record<string, string>; notes: NoteRef[]; }>('/api/r2/move', { notebookId, key, destination, directory });
-export const deleteR2 = (notebookId: string, key: string, directory: boolean) => post<{ deleted: string[]; }>('/api/r2/delete', { notebookId, key, directory });
+/** `confirmHidden` says the person accepted that hidden repositories were not checked; without it the server refuses while there are any. */
+export const moveR2 = (notebookId: string, key: string, destination: string, directory: boolean, confirmHidden = false) => post<{ moves: Record<string, string>; notes: NoteRef[]; }>('/api/r2/move', { notebookId, key, destination, directory, ...(confirmHidden ? { confirmHidden } : {}) });
+export const deleteR2 = (notebookId: string, key: string, directory: boolean, confirmHidden = false) => post<{ deleted: string[]; }>('/api/r2/delete', { notebookId, key, directory, ...(confirmHidden ? { confirmHidden } : {}) });
 
 /** Uploads directly to the bucket through a presigned PUT URL; the file body never passes through the server. */
 export async function uploadR2(notebookId: string, key: string, file: File): Promise<void> {

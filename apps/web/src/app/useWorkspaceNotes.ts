@@ -22,9 +22,10 @@ export function useWorkspaceNotes({ sourceId, repositories, activeWorkingNotes, 
   const queryClient = useQueryClient();
   const revisions = useMemo(() => revisionSet(repositories), [repositories]);
   const notebooks = useMemo(() => notebookRepositories(repositories), [repositories]);
+  const members = repositories.map(repository => repository.id).join('\n');
   useLayoutEffect(() => {
-    setNoteQueryScope({ sourceId, revisions, repositories: notebooks, drafts: activeWorkingNotes });
-  }, [sourceId, revisions, notebooks, activeWorkingNotes]);
+    setNoteQueryScope({ sourceId, revisions, repositories: notebooks, members, drafts: activeWorkingNotes });
+  }, [sourceId, revisions, notebooks, members, activeWorkingNotes]);
   const queryScope = useNoteQueryScope();
   const invalidateNotes = () => {
     void invalidateNoteQueries(queryClient);

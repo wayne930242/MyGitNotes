@@ -2,12 +2,13 @@ import { CoreUpdates } from './CoreUpdates.js';
 import { ProductVersion } from './ProductVersion.js';
 import { useWorkspaceSidebarDrawer, WorkspaceSidebar, WorkspaceSidebarPortal, WorkspaceSidebarToggle } from './WorkspaceChrome.js';
 import React from 'react';
-import { Check, Globe, History, Palette, RefreshCw, Save, Shield } from 'lucide-react';
+import { AlertCircle, Check, FolderGit2, Globe, History, Palette, RefreshCw, Save, Shield } from 'lucide-react';
 import { Select } from './Select.js';
 import { useVersionNumbering, type VersionNumbering, writeVersionNumbering } from '../lib/version-display.js';
 import { ThemeChoice } from '../lib/themes.js';
 import { ThemeSelector } from './ThemeSelector.js';
 import { ManifestSettings, type ManifestSettingsProps } from './ManifestSettings.js';
+import { RepositoriesSettings, type RepositoriesSettingsProps } from './RepositoriesSettings.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useSettingsSections } from '../lib/web-features.js';
 
@@ -15,6 +16,10 @@ interface SettingsModalProps {
   local?: boolean;
   /** Each repository's manifest, the editor opening on the current notebook's repository. */
   manifest: Omit<ManifestSettingsProps, 'onRefreshWorkspace'>;
+  /** Settings → Repositories: the workspace's members. */
+  repositories?: RepositoriesSettingsProps;
+  /** No repository shows notes: every one is hidden or unavailable, so Settings is where the person recovers (decision C8). */
+  recovery?: boolean;
   accountSettings?: React.ReactNode;
   /** Core updates concern a deployment's own repository; a repository a visitor imported has none to update. */
   coreUpdates?: boolean;
@@ -23,7 +28,7 @@ interface SettingsModalProps {
   onSelectTheme: (theme: ThemeChoice) => void;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ manifest, local = true, accountSettings, coreUpdates = true, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ manifest, repositories, recovery = false, local = true, accountSettings, coreUpdates = true, onRefreshWorkspace, currentTheme, onSelectTheme }) => {
   const { t, language, setLanguage } = useTranslation();
   const sidebar = useWorkspaceSidebarDrawer();
   const featureSections = useSettingsSections();
@@ -33,7 +38,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ manifest, local = 
       <WorkspaceSidebarPortal>
         <WorkspaceSidebar label={t('settings.title')} className='settings-sidebar'>
           <div className='sidebar-section-label'>{t('nav.settings')}</div>
-          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['versions', t('settings.versionNumbers'), History], ['access', t('layout.access'), Shield], ...(coreUpdates ? [['updates', t('settings.coreUpdates'), RefreshCw] as const] : []), ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
+          {[...([['language', t('settings.language'), Globe], ['theme', t('settings.theme'), Palette], ['versions', t('settings.versionNumbers'), History], ['access', t('layout.access'), Shield], ...(coreUpdates ? [['updates', t('settings.coreUpdates'), RefreshCw] as const] : []), ...(repositories ? [['repositories', t('repositories.title'), FolderGit2] as const] : []), ['manifest', t('layout.manifest'), Save]] as const), ...featureSections.map(section => [section.id, section.title, section.icon] as const)].map(([id, label, Icon]) => (
             <a
               key={id}
               href={`#settings-${id}`}
@@ -54,6 +59,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ manifest, local = 
       <div className='workspace-content'>
         <div className='workspace-scroll'>
           <div className='settings-panel'>
+            {recovery && (
+              <p role='alert' className='p-3 rounded-lg text-xs flex items-start gap-2 bg-warning-soft text-warning border border-warning/40'>
+                <AlertCircle className='w-4 h-4 shrink-0' />
+                <span>{t('repositories.recovery')}</span>
+              </p>
+            )}
             {/* Language Selector */}
             <div id='settings-language' className='flex flex-col gap-3'>
               <div>
@@ -120,6 +131,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ manifest, local = 
             <ProductVersion />
             <div id='settings-access'>{accountSettings}</div>
             {coreUpdates && <CoreUpdates local={local} />}
+            {repositories && <RepositoriesSettings {...repositories} />}
             <ManifestSettings {...manifest} onRefreshWorkspace={onRefreshWorkspace} />
             {featureSections.map(section => (
               <div key={section.id} id={`settings-${section.id}`} className='flex flex-col gap-3'>
