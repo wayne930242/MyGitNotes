@@ -397,6 +397,18 @@ try {
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Compilation"]'));
   console.log('PASS Escape returns the card to reading with focus on Edit, then closes the compilation (K2)');
 
+  // E3: the thumbnail and medium cards keep their size too, and the editor scrolls inside them.
+  for (const [id, label] of [['thumbs', 'thumbnail'], ['medium', 'medium']]) {
+    await zoom(id, 1440, 900);
+    const sized = await cardBox('.compilation-view', 'a');
+    await startByBody('.compilation-view', 'a');
+    assert.equal((await cardBox('.compilation-view', 'a')).height, sized.height, `The ${label} card grew when it began editing`);
+    await page.screenshot({ path: path.join(SHOTS_EDIT, `zoom-1440-${label}-editing.png`) });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
+  }
+  console.log('PASS thumbnail and medium cards keep their size while editing (E3)');
+
   // E2/E13-ish: a button edits as well, and Done saves; a link in the body does not start editing.
   await zoom('pins', 1440, 900);
   await click(`${cardSel('c')} button[aria-label="Edit Note C"]`);
