@@ -188,6 +188,8 @@ describe('a list an account keeps', () => {
     expect(within(line).getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', 'https://example.com/upgrade');
     expect(line).not.toHaveClass('text-danger');
     expect(screen.getByRole('button', { name: 'Add repository' })).toBeDisabled();
+    // Faded as the other disabled actions are, not as a primary action, which keeps its colored surface when disabled.
+    expect(screen.getByRole('button', { name: 'Add repository' })).not.toHaveClass('ui-button-primary');
     expect(row('diary').getByRole('button', { name: 'Show' })).toBeDisabled();
     expect(row('diary').getByRole('button', { name: 'Make default' })).toBeDisabled();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -196,6 +198,7 @@ describe('a list an account keeps', () => {
     cleanup();
     show({ repositories });
     await screen.findByText('NOTES');
+    expect(screen.getByRole('button', { name: 'Add repository' })).toHaveClass('ui-button-primary');
     api.setMemberHidden.mockRejectedValueOnce(new MembershipApiError('This workspace shows at most 2 repositories. Hide one first.', 403, 'visible-limit'));
     fireEvent.click(row('diary').getByRole('button', { name: 'Show' }));
     await waitFor(() => expect(document.querySelector('[data-members-limit]')).toHaveTextContent('Hide a repository to add or show another.'));

@@ -210,7 +210,8 @@ export function RepositoriesSettings({ repositories, onMembershipChanged, onOpen
       {answer.limit && <MembersLimitLine limit={answer.limit} refusal={limitRefusal} />}
       {changeable && answer.adds === 'repository' && (
         <div>
-          <Button variant='primary' disabled={busy || full} title={fullReason} onClick={() => setAdding(true)}>
+          {/* At the limit it fades as the disabled Show and Make default do; a disabled primary keeps its colored surface. */}
+          <Button variant={full ? 'default' : 'primary'} disabled={busy || full} title={fullReason} onClick={() => setAdding(true)}>
             <Plus className='w-3.5 h-3.5' />
             <span>{t('repositories.add')}</span>
           </Button>
