@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from './note-navigation.js';
+import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from './note-navigation.js';
 
 describe('note editor navigation', () => {
   it('finds every case-insensitive, non-overlapping text match', () => {
@@ -40,32 +40,6 @@ describe('note editor navigation', () => {
     it('returns null when index is out of bounds', () => {
       expect(chooseOutlineHeading(outline, -1)).toBeNull();
       expect(chooseOutlineHeading(outline, 5)).toBeNull();
-    });
-  });
-
-  describe('isEditableTarget', () => {
-    it('returns false for null or non-Element targets', () => {
-      expect(isEditableTarget(null)).toBe(false);
-      expect(isEditableTarget({} as unknown as EventTarget)).toBe(false);
-    });
-
-    it('identifies inputs, textareas, contenteditable and codemirror content elements', () => {
-      class MockElement {
-        constructor(private matchesSelector: boolean) {}
-        closest(_selector: string) {
-          return this.matchesSelector ? {} : null;
-        }
-      }
-      const originalElement = globalThis.Element;
-      try {
-        globalThis.Element = MockElement as unknown as typeof Element;
-        const matchingEl = new MockElement(true) as unknown as EventTarget;
-        const nonMatchingEl = new MockElement(false) as unknown as EventTarget;
-        expect(isEditableTarget(matchingEl)).toBe(true);
-        expect(isEditableTarget(nonMatchingEl)).toBe(false);
-      } finally {
-        globalThis.Element = originalElement;
-      }
     });
   });
 });

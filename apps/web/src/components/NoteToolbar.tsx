@@ -1,5 +1,5 @@
 import './note-toolbar.css';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, type Ref, useImperativeHandle, useRef, useState } from 'react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, Eye, EyeOff, FileText, FolderTree, GalleryHorizontalEnd, Kanban, LayoutGrid, LayoutList, ListTree, Plus, Search, X } from 'lucide-react';
 import { WorkspaceSidebarToggle } from './WorkspaceChrome.js';
@@ -37,12 +37,25 @@ interface NoteToolbarProps {
   /** The Focus switcher and division picker. */
   focusControls?: ReactNode;
   onImportLegacy?: () => void;
+  /** Lets the "Search the note list" command reach the field, opening it first on narrow screens. */
+  searchRef?: Ref<NoteSearchHandle>;
 }
 
-export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onNewNote, onNewCompilation, onNewOutline, templates = [], onNewFromTemplate, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onImportLegacy }: NoteToolbarProps) {
+export interface NoteSearchHandle {
+  focus: () => void;
+}
+
+export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHiddenChange, onDescendantsChange, sortField, sortOrder, onSortChange, readOnly, viewMode, setViewMode, onNewNote, onNewCompilation, onNewOutline, templates = [], onNewFromTemplate, query, onQueryChange, filtersOpen, onToggleFilters, focusControls, onImportLegacy, searchRef }: NoteToolbarProps) {
   const { t } = useTranslation();
   // Below 768px the field is hidden behind a button and expands over the toolbar.
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  useImperativeHandle(searchRef, () => ({
+    focus: () => {
+      setSearchOpen(true);
+      requestAnimationFrame(() => searchInput.current?.focus());
+    },
+  }), []);
   return (
     <div className='header-note-actions flex items-center gap-2.5 flex-1 min-w-0 justify-end'>
       <WorkspaceSidebarToggle label={t('filters.notebookPanel')} open={filtersOpen} controlsId='notebook-panel' onClick={onToggleFilters} />
@@ -52,7 +65,7 @@ export function NoteToolbar({ showHidden, descendants, hiddenNoteCount, onShowHi
       <div id='note-toolbar-search' className='note-toolbar-search' role='search' data-open={searchOpen || undefined}>
         <label className='note-search-field'>
           <Search size={15} aria-hidden='true' />
-          <input type='search' aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={query} onChange={event => onQueryChange(event.target.value)} />
+          <input ref={searchInput} type='search' aria-label={t('header.searchPlaceholder')} placeholder={t('header.searchPlaceholder')} value={query} onChange={event => onQueryChange(event.target.value)} />
         </label>
         <button type='button' className='ui-icon-button note-search-close' aria-label={t('common.close')} onClick={() => setSearchOpen(false)}>
           <X size={16} aria-hidden='true' />

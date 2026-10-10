@@ -1,0 +1,17 @@
+.keyboard-shortcuts-panel[data-mode='help'] { width: min(820px, calc(100vw - 24px)); }
+.shortcut-help-count { padding: 0 14px 4px; color: var(--color-muted); font-size: 11px; }
+.shortcut-help-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); align-items: start; gap: 4px 20px; max-height: min(600px, calc(100dvh - 230px)); padding: 4px 12px 12px; overflow-y: auto; }
+.shortcut-help-group h3 { padding: 8px 4px 4px; color: var(--color-muted); font-size: 11px; font-weight: 650; letter-spacing: 0.02em; text-transform: uppercase; }
+.shortcut-help-group ul { display: flex; flex-direction: column; gap: 1px; }
+.shortcut-help-group li { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 5px 4px; border-radius: 6px; font-size: 12px; }
+.shortcut-help-group li[data-unavailable] .shortcut-help-name > span { color: var(--color-muted); }
+.shortcut-help-name { display: flex; flex: 1 1 auto; flex-direction: column; gap: 1px; min-width: 0; }
+.shortcut-help-name small { color: var(--color-muted); font-size: 10px; }
+.shortcut-help-reason { font-style: italic; }
+.shortcut-help-keys { display: flex; flex: 0 1 auto; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 4px; max-width: 60%; }
+.shortcut-help-keys > small { color: var(--color-muted); font-size: 10px; white-space: nowrap; }
+.shortcut-help-binding { display: flex; justify-content: flex-end; align-items: center; gap: 4px; white-space: nowrap; }
+.shortcut-help-binding > span { display: inline-flex; align-items: center; gap: 4px; }
+.shortcut-help-binding small { color: var(--color-muted); font-size: 10px; }
+.shortcut-help-keys kbd { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 5px; border: 1px solid var(--workspace-divider); border-radius: 5px; background: var(--color-bg); font-family: ui-monospace, monospace; font-size: 11px; white-space: nowrap; }
+@media (max-width: 767px) { .shortcut-help-groups { grid-template-columns: minmax(0, 1fr); max-height: calc(100dvh - 200px); } }

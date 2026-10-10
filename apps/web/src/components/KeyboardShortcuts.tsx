@@ -1,60 +1,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Keyboard, Search, X } from 'lucide-react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
-import type { WorkspaceTab } from '../lib/routes.js';
 import { useTranslation } from '../lib/i18n/index.js';
-import { isEditableTarget } from '../lib/note-navigation.js';
 import { useNoteCandidateResults } from '../lib/note-completion.js';
+import { type CommandSpec, type ResolvedCommand, useCommands, useRegisterCommands } from '../lib/commands/registry.js';
+import { useCompositionTracker } from '../lib/keyboard/KeyboardDispatcher.js';
+import { formatKeys } from '../lib/keyboard/keys.js';
+import { SHORTCUT_GROUPS } from '../lib/keyboard/keymap.js';
+import { keyEnvironment } from '../lib/keyboard/platform.js';
+import { ShortcutHelp } from './palette/ShortcutHelp.js';
 
 export type ShortcutSurfaceMode = 'palette' | 'help';
-
-/** A palette-only command supplied by the page that owns it; it has no direct key. */
-export interface PaletteCommand {
-  id: string;
-  label: string;
-  /** One line on what running the command does, shown under its label and matched by the filter. */
-  description?: string;
-  disabled: boolean;
-  unavailableReason?: string;
-  run: () => void;
-}
 
 interface KeyboardShortcutsProps {
   mode: ShortcutSurfaceMode | null;
   onModeChange: (mode: ShortcutSurfaceMode | null) => void;
+  /** While the commit dialog is open the palette and its keys stay closed. */
   suspended?: boolean;
-  /** The page stays put while the note editor is open, so only the palette's own shortcuts and note search remain. */
-  noteEditorOpen?: boolean;
-  activeTab: WorkspaceTab;
-  canCreateNote: boolean;
   selectedNotebookId: string;
-  onNavigate: (tab: WorkspaceTab) => void | Promise<void>;
-  onCreateNote: () => void;
-  onFocusSearch: () => void;
   onOpenNote: (note: NoteListItem) => void | Promise<void>;
-  pageCommands?: readonly PaletteCommand[];
 }
 
-interface ShortcutCommand {
-  id: string;
-  accelerator?: string;
-  paletteVisible?: boolean;
-  label: string;
-  description?: string;
-  disabled: boolean;
-  unavailableReason?: string;
-  run: () => void;
-}
-
-/** One row of the quick-open palette: either an existing command or a note search result. */
-type PaletteEntry = { kind: 'command'; command: ShortcutCommand; } | { kind: 'note'; note: NoteListItem; };
+/** One row of the quick-open palette: either a registered command or a note search result. */
+type PaletteEntry = { kind: 'command'; command: ResolvedCommand; } | { kind: 'note'; note: NoteListItem; };
 
 const paletteEntryId = (entry: PaletteEntry) => entry.kind === 'command' ? entry.command.id : entry.note.path;
 const paletteOptionId = (id: string) => `shortcut-command-${encodeURIComponent(id)}`;
-const isComposingKey = (event: KeyboardEvent) => event.isComposing || event.keyCode === 229;
+const unavailable = (command: ResolvedCommand) => !command.availability.enabled;
+const unavailableReason = (command: ResolvedCommand) => command.availability.enabled ? undefined : command.availability.reason;
+/** Groups in help order; within a group, palette-only commands come before keyed ones. */
+const paletteOrder = (command: ResolvedCommand) => SHORTCUT_GROUPS.indexOf(command.group) * 2 + (command.keys.length ? 1 : 0);
 
-export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteEditorOpen = false, activeTab, canCreateNote, selectedNotebookId, onNavigate, onCreateNote, onFocusSearch, onOpenNote, pageCommands = [] }: KeyboardShortcutsProps) {
+export function KeyboardShortcuts({ mode, onModeChange, suspended = false, selectedNotebookId, onOpenNote }: KeyboardShortcutsProps) {
   const { t } = useTranslation();
+  const composition = useCompositionTracker();
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
@@ -86,10 +65,6 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
   const previousFocus = useRef<HTMLElement | null>(null);
   const restoreFocus = useRef(true);
   const previousMode = useRef<ShortcutSurfaceMode | null>(null);
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-  const paletteShortcut = isMac ? '⌘+⇧+F' : 'Ctrl+Shift+F';
-  const commandPaletteShortcut = isMac ? '⌘+⇧+P' : 'Ctrl+Shift+P';
-  const helpShortcut = isMac ? '⌘+/' : 'Ctrl+/';
 
   /** Updates `modeRef` in lockstep with the request, so a keydown listener whose closure hasn't
    *  been re-registered yet still sees the mode we just asked for, not a stale render's value. */
@@ -106,6 +81,11 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
   /** Opens the palette and resets its query/selection/focus immediately, instead of waiting on
    *  the `[mode]` effect below - which a same-batch close+reopen can cause React to skip. */
   const openPalette = useCallback((initialQuery = '') => {
+    if (modeRef.current === 'palette') {
+      setQuery(initialQuery);
+      requestAnimationFrame(() => inputRef.current?.focus());
+      return;
+    }
     openingQuery.current = initialQuery;
     requestMode('palette');
     setQuery(initialQuery);
@@ -114,18 +94,21 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [requestMode]);
 
-  const commands = useMemo<ShortcutCommand[]>(() => [...[{ id: 'notes', label: t('nav.notes'), description: t('shortcuts.describe.notes'), disabled: false, run: () => onNavigate('notes') }, { id: 'agent', label: t('nav.agent'), description: t('shortcuts.describe.agent'), disabled: false, run: () => onNavigate('agent') }, { id: 'assets', label: t('nav.assets'), description: t('shortcuts.describe.assets'), disabled: false, run: () => onNavigate('assets') }, { id: 'new-note', label: t('header.newNote'), description: t('shortcuts.describe.newNote'), disabled: !canCreateNote, unavailableReason: t('shortcuts.requiresWriteAccess'), run: onCreateNote }, { id: 'search', label: t('shortcuts.search'), description: t('shortcuts.describe.search'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: onFocusSearch }, { id: 'settings', label: t('nav.settings'), description: t('shortcuts.describe.settings'), disabled: false, run: () => onNavigate('settings') }, ...pageCommands].map(command => noteEditorOpen && !command.disabled ? { ...command, disabled: true, unavailableReason: t('shortcuts.requiresClosedNote') } : command), { id: 'help', accelerator: helpShortcut, label: t('shortcuts.help'), description: t('shortcuts.describe.help'), disabled: false, run: () => requestMode('help') }, { id: 'open-palette', accelerator: paletteShortcut, paletteVisible: false, label: t('shortcuts.searchNotes'), disabled: false, run: () => openPalette() }, { id: 'open-command-palette', accelerator: commandPaletteShortcut, paletteVisible: false, label: t('shortcuts.openCommands'), disabled: false, run: () => openPalette('>') }], [activeTab, canCreateNote, commandPaletteShortcut, helpShortcut, noteEditorOpen, onCreateNote, onFocusSearch, onNavigate, openPalette, pageCommands, paletteShortcut, requestMode, t]);
+  // The surface's own commands: the dispatcher runs them for their keys, the palette and help list them.
+  const suspendedReason = t('shortcuts.requiresClosedDialog');
+  const whenNotSuspended = () => suspended ? { enabled: false as const, reason: suspendedReason } : { enabled: true as const };
+  const surfaceCommands: CommandSpec[] = [{ id: 'palette.notes', palette: false, availability: whenNotSuspended, run: () => openPalette() }, { id: 'palette.commands', palette: false, availability: whenNotSuspended, run: () => openPalette('>') }, { id: 'help.open', availability: whenNotSuspended, run: () => modeRef.current === 'help' ? dismiss() : requestMode('help') }];
+  useRegisterCommands(surfaceCommands);
+  const allCommands = useCommands();
 
   const palette = mode === 'palette';
-  /** VS Code-style mode switch: a leading `>` or `/` reaches the unchanged command list; any other query searches notes. */
+  /** VS Code-style mode switch: a leading `>` or `/` reaches the command list; any other query searches notes. */
   const paletteKind: 'notes' | 'commands' = query.startsWith('>') || query.startsWith('/') ? 'commands' : 'notes';
   const commandFilterText = paletteKind === 'commands' ? query.slice(1).trim().toLocaleLowerCase() : '';
   const noteSearchText = paletteKind === 'notes' ? query : '';
 
-  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
-  const paletteCommands = useMemo(() => commands.filter(command => command.paletteVisible !== false), [commands]);
-  const filteredCommands = useMemo(() => commandFilterText ? paletteCommands.filter(command => `${command.label} ${command.id} ${command.description ?? ''}`.toLocaleLowerCase().includes(commandFilterText)) : paletteCommands, [commandFilterText, paletteCommands]);
-  /* eslint-enable react/refs */
+  const paletteCommands = useMemo(() => allCommands.filter(command => command.palette).map((command, index) => ({ command, index })).sort((a, b) => paletteOrder(a.command) - paletteOrder(b.command) || a.index - b.index).map(({ command }) => command), [allCommands]);
+  const filteredCommands = commandFilterText ? paletteCommands.filter(command => `${command.title} ${command.englishTitle} ${command.id} ${command.description ?? ''}`.toLocaleLowerCase().includes(commandFilterText)) : paletteCommands;
 
   // Notes are searched by title, path and notebook, matching a note the same way clicking it in the list would open it.
   const { notes: noteCandidates, loading: noteCandidatesLoading } = useNoteCandidateResults(palette && paletteKind === 'notes' ? noteSearchText : null, '');
@@ -136,28 +119,23 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
     return current.length && others.length ? [...current, ...others] : noteCandidates;
   }, [noteCandidates, selectedNotebookId]);
 
-  const paletteEntries = useMemo<PaletteEntry[]>(() => paletteKind === 'commands' ? filteredCommands.map(command => ({ kind: 'command' as const, command })) : sortedNoteCandidates.map(note => ({ kind: 'note' as const, note })), [paletteKind, filteredCommands, sortedNoteCandidates]);
-  /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
-  const enabledEntries = useMemo(() => paletteEntries.filter(entry => entry.kind !== 'command' || !entry.command.disabled), [paletteEntries]);
-  /* eslint-enable react/refs */
-
-  const executeCommand = useCallback((command: ShortcutCommand | undefined) => {
-    if (!command || command.disabled) return false;
-    if (command.id === 'help') command.run();
-    else {
-      dismiss(false);
-      command.run();
-    }
-    return true;
-  }, [dismiss]);
+  const paletteEntries: PaletteEntry[] = paletteKind === 'commands' ? filteredCommands.map(command => ({ kind: 'command' as const, command })) : sortedNoteCandidates.map(note => ({ kind: 'note' as const, note }));
+  const enabledEntries = paletteEntries.filter(entry => entry.kind !== 'command' || !unavailable(entry.command));
 
   const executeEntry = useCallback((entry: PaletteEntry | undefined): boolean => {
     if (!entry) return false;
-    if (entry.kind === 'command') return executeCommand(entry.command);
-    dismiss(false);
-    void onOpenNote(entry.note);
+    if (entry.kind === 'note') {
+      dismiss(false);
+      void onOpenNote(entry.note);
+      return true;
+    }
+    const { command } = entry;
+    if (unavailable(command) || !command.run) return false;
+    // Help replaces the palette in the same panel; every other command closes it first.
+    if (command.id !== 'help.open') dismiss(false);
+    void command.run({ source: 'palette', previousFocus: previousFocus.current });
     return true;
-  }, [executeCommand, dismiss, onOpenNote]);
+  }, [dismiss, onOpenNote]);
 
   useEffect(() => {
     const priorMode = previousMode.current;
@@ -172,7 +150,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
       setSelectedId(null);
       requestAnimationFrame(() => inputRef.current?.focus());
     } else if (mode === 'help' && priorMode !== 'help') {
-      requestAnimationFrame(() => panelRef.current?.focus());
+      requestAnimationFrame(() => (panelRef.current?.querySelector<HTMLElement>('input') ?? panelRef.current)?.focus());
     } else if (!mode && priorMode && restoreFocus.current) {
       previousFocus.current?.focus();
     }
@@ -186,7 +164,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
 
   useEffect(() => {
     if (!selectedId || mode !== 'palette') return;
-    document.getElementById(`shortcut-command-${selectedId}`)?.scrollIntoView({ block: 'nearest' });
+    document.getElementById(paletteOptionId(selectedId))?.scrollIntoView({ block: 'nearest' });
   }, [mode, selectedId]);
 
   useEffect(() => {
@@ -202,40 +180,12 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
     if (suspended && mode) dismiss(false);
   }, [dismiss, mode, suspended]);
 
+  // Keys inside the open surface; the chords that open it belong to the dispatcher.
   useEffect(() => {
+    if (!mode) return;
     const keydown = (event: KeyboardEvent) => {
-      if (suspended) return;
-      const slashKey = event.code === 'Slash' || event.key === '/';
-      const primary = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-      if ((event.code === 'KeyP' || event.key.toLowerCase() === 'p') && primary && event.shiftKey && !event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (modeRef.current === 'palette') {
-          setQuery('>');
-          requestAnimationFrame(() => inputRef.current?.focus());
-        } else openPalette('>');
-        return;
-      }
-      if ((event.code === 'KeyF' || event.key.toLowerCase() === 'f') && primary && event.shiftKey && !event.altKey) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (modeRef.current === 'palette') {
-          setQuery('');
-          requestAnimationFrame(() => inputRef.current?.focus());
-        } else openPalette();
-        return;
-      }
-      if (noteEditorOpen && !mode) return;
-      if (slashKey && primary && !event.altKey && !event.shiftKey && !isEditableTarget(event.target)) {
-        event.preventDefault();
-        event.stopPropagation();
-        if (modeRef.current === 'help') dismiss();
-        else requestMode('help');
-        return;
-      }
-      if (!mode) return;
       // IME owns Enter, arrows and Escape while choosing or cancelling a candidate.
-      if (mode === 'palette' && isComposingKey(event)) return;
+      if (composition.composing(event)) return;
       if (event.key === 'Escape') {
         event.preventDefault();
         event.stopPropagation();
@@ -258,12 +208,11 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
         event.preventDefault();
         event.stopPropagation();
         executeEntry(enabledEntries.find(entry => paletteEntryId(entry) === selectedIdRef.current) || enabledEntries[0]);
-        return;
       }
     };
     document.addEventListener('keydown', keydown, true);
     return () => document.removeEventListener('keydown', keydown, true);
-  }, [dismiss, enabledEntries, executeEntry, isMac, mode, noteEditorOpen, openPalette, requestMode, suspended]);
+  }, [composition, dismiss, enabledEntries, executeEntry, mode]);
 
   if (!mode) return null;
   const modeHintKey = paletteKind === 'commands' ? 'shortcuts.commandsModeHint' : 'shortcuts.notesModeHint';
@@ -273,7 +222,7 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
   const footerKey = paletteKind === 'commands' ? 'shortcuts.paletteFooter' : 'shortcuts.paletteFooterNotes';
   /* eslint-disable react/refs -- The palette synchronizes its mode and selection before immediate keyboard events can run. */
   return (
-    <div ref={panelRef} role='dialog' aria-modal='false' aria-label={t(palette ? 'shortcuts.paletteTitle' : 'shortcuts.title')} data-mode={mode} className='keyboard-shortcuts-panel' tabIndex={-1}>
+    <div ref={panelRef} role='dialog' aria-modal='false' aria-label={t(palette ? 'shortcuts.paletteTitle' : 'shortcuts.title')} data-mode={mode} data-key-scope={mode} className='keyboard-shortcuts-panel' tabIndex={-1}>
       <div className='keyboard-shortcuts-heading'>
         <div>
           <Keyboard aria-hidden='true' />
@@ -286,62 +235,57 @@ export function KeyboardShortcuts({ mode, onModeChange, suspended = false, noteE
           <X size={16} />
         </button>
       </div>
-      {palette && (
-        <div className='keyboard-shortcuts-search'>
-          <Search aria-hidden='true' />
-          <input ref={inputRef} type='text' role='combobox' aria-expanded='true' aria-controls='shortcut-command-list' aria-activedescendant={selectedId ? paletteOptionId(selectedId) : undefined} aria-label={t(searchLabelKey)} placeholder={t(placeholderKey)} value={query} onChange={event => setQuery(event.target.value)} autoComplete='off' />
-        </div>
-      )}
-      <div id='shortcut-command-list' className='keyboard-shortcuts-list' role={palette ? 'listbox' : 'list'}>
-        {palette
-          ? paletteEntries.map(entry => {
-            const id = paletteEntryId(entry);
-            const disabled = entry.kind === 'command' && entry.command.disabled;
-            const label = entry.kind === 'command' ? entry.command.label : (entry.note.title || entry.note.path);
-            const command = entry.kind === 'command' ? entry.command : null;
-            return (
-              <button
-                type='button'
-                key={id}
-                id={paletteOptionId(id)}
-                data-command-id={id}
-                className={id === selectedId ? 'is-active' : ''}
-                role='option'
-                aria-selected={id === selectedId}
-                disabled={disabled}
-                aria-disabled={disabled}
-                onMouseEnter={() => {
-                  if (!disabled) {
-                    selectedIdRef.current = id;
-                    setSelectedId(id);
-                  }
-                }}
-                onClick={() => executeEntry(entry)}
-              >
-                {command
-                  ? (
-                    <span className='keyboard-shortcuts-command'>
-                      <span className='keyboard-shortcuts-command-title'>
-                        <span>{label}</span>
-                        <code>{command.id}</code>
-                      </span>
-                      {command.description && <small className='keyboard-shortcuts-description'>{command.description}</small>}
-                    </span>
-                  )
-                  : <span>{label}</span>}
-                {entry.kind === 'command' ? (disabled && <small>{entry.command.unavailableReason}</small>) : <small>{entry.note.path}</small>}
-              </button>
-            );
-          })
-          : commands.filter(command => command.accelerator).map(command => (
-            <button type='button' key={command.id} id={`shortcut-command-${command.id}`} data-command-id={command.id} data-shortcut-key={command.accelerator} role='listitem' disabled={command.disabled} aria-disabled={command.disabled} onClick={() => executeCommand(command)}>
-              <kbd>{command.accelerator}</kbd>
-              <span>{command.label}</span>
-              {command.disabled && <small>{command.unavailableReason}</small>}
-            </button>
-          ))}
-        {palette && paletteEntries.length === 0 && <p className='keyboard-shortcuts-empty' role='status'>{t(noResultsKey)}</p>}
-      </div>
+      {palette
+        ? (
+          <>
+            <div className='keyboard-shortcuts-search'>
+              <Search aria-hidden='true' />
+              <input ref={inputRef} type='text' role='combobox' aria-expanded='true' aria-controls='shortcut-command-list' aria-activedescendant={selectedId ? paletteOptionId(selectedId) : undefined} aria-label={t(searchLabelKey)} placeholder={t(placeholderKey)} value={query} onChange={event => setQuery(event.target.value)} autoComplete='off' />
+            </div>
+            <div id='shortcut-command-list' className='keyboard-shortcuts-list' role='listbox'>
+              {paletteEntries.map(entry => {
+                const id = paletteEntryId(entry);
+                const command = entry.kind === 'command' ? entry.command : null;
+                const disabled = command ? unavailable(command) : false;
+                return (
+                  <button
+                    type='button'
+                    key={id}
+                    id={paletteOptionId(id)}
+                    data-command-id={id}
+                    className={id === selectedId ? 'is-active' : ''}
+                    role='option'
+                    aria-selected={id === selectedId}
+                    disabled={disabled}
+                    aria-disabled={disabled}
+                    onMouseEnter={() => {
+                      if (!disabled) {
+                        selectedIdRef.current = id;
+                        setSelectedId(id);
+                      }
+                    }}
+                    onClick={() => executeEntry(entry)}
+                  >
+                    {command
+                      ? (
+                        <span className='keyboard-shortcuts-command'>
+                          <span className='keyboard-shortcuts-command-title'>
+                            <span>{command.title}</span>
+                            <code>{command.id}</code>
+                          </span>
+                          {command.description && <small className='keyboard-shortcuts-description'>{command.description}</small>}
+                        </span>
+                      )
+                      : <span>{entry.kind === 'note' && (entry.note.title || entry.note.path)}</span>}
+                    {command ? (disabled ? <small>{unavailableReason(command)}</small> : command.keys[0] && <kbd>{formatKeys(command.keys[0], keyEnvironment).join(' ')}</kbd>) : entry.kind === 'note' && <small>{entry.note.path}</small>}
+                  </button>
+                );
+              })}
+              {paletteEntries.length === 0 && <p className='keyboard-shortcuts-empty' role='status'>{t(noResultsKey)}</p>}
+            </div>
+          </>
+        )
+        : <ShortcutHelp commands={allCommands} />}
       <p className='keyboard-shortcuts-footer'>{t(palette ? footerKey : 'shortcuts.escape')}</p>
     </div>
   );

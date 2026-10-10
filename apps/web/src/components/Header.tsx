@@ -5,6 +5,9 @@ import { useTranslation } from '../lib/i18n/index.js';
 import type { WorkspaceTab } from '../lib/routes.js';
 import type { NotebookConfig } from '../lib/types.js';
 import { Select } from './Select.js';
+import { ariaKeyShortcuts, formatKeys } from '../lib/keyboard/keys.js';
+import { bindingsFor, keymapEntry } from '../lib/keyboard/keymap.js';
+import { keyEnvironment } from '../lib/keyboard/platform.js';
 
 interface HeaderProps {
   /** Notebooks whose repository cannot serve them; the switcher marks them. */
@@ -30,6 +33,9 @@ export function Header({ workspaceTitle, notebookGroups, unavailableNotebooks = 
   useEffect(() => {
     document.title = `${t(`nav.${activeTab}`)} · MyGitNotes`;
   }, [activeTab, t]);
+  // The button opens quick open on note search, the same as its chord.
+  const [paletteKeys] = bindingsFor(keymapEntry('palette.notes'), keyEnvironment);
+  const paletteLabel = paletteKeys ? t('shortcuts.openWithKeys', { keys: formatKeys(paletteKeys, keyEnvironment).join(' ') }) : t('shortcuts.open');
   const items = [{ id: 'notes', label: t('nav.notes'), icon: BookOpen }, { id: 'graph', label: t('nav.graph'), icon: Network }, { id: 'assets', label: t('nav.assets'), icon: ImageIcon }, { id: 'settings', label: t('nav.settings'), icon: Settings }] as const;
   return (
     <header className='workspace-header'>
@@ -79,7 +85,7 @@ export function Header({ workspaceTitle, notebookGroups, unavailableNotebooks = 
             <button type='button' disabled={navigationDisabled} className='ui-icon-button header-agent' data-header-agent='' aria-label={t('nav.agent')} title={t('nav.agent')} aria-current={activeTab === 'agent' ? 'page' : undefined} onClick={() => setActiveTab('agent')}>
               <Bot size={17} />
             </button>
-            <button type='button' disabled={navigationDisabled} className='ui-icon-button header-command' data-header-command='' aria-label={t('shortcuts.open')} title={t('shortcuts.open')} onClick={onOpenCommands}>
+            <button type='button' disabled={navigationDisabled} className='ui-icon-button header-command' data-header-command='' aria-label={t('shortcuts.open')} aria-keyshortcuts={paletteKeys && ariaKeyShortcuts(paletteKeys, keyEnvironment)} title={paletteLabel} onClick={onOpenCommands}>
               <Keyboard size={17} />
             </button>
             {accountControls}

@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
-import { createElement } from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { createElement, createRef } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { I18nProvider } from '../lib/i18n/index.js';
-import { NoteToolbar } from './NoteToolbar.js';
+import { type NoteSearchHandle, NoteToolbar } from './NoteToolbar.js';
 
 beforeEach(() => {
   window.matchMedia = ((query: string) => ({ matches: !query.includes('max-width: 767px'), media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false })) as unknown as typeof window.matchMedia;
@@ -82,4 +82,14 @@ it('keeps the field behind a button on phones: the button opens it over the tool
   expect(search).toHaveAttribute('data-open');
   fireEvent.click(screen.getByRole('button', { name: '關閉' }));
   expect(search).not.toHaveAttribute('data-open');
+});
+
+it('lets the "Search the note list" command open the field on phones and put the cursor in it', async () => {
+  const search = createRef<NoteSearchHandle>();
+  render(createElement(I18nProvider, null, createElement(NoteToolbar, { ...baseProps, searchRef: search })));
+  const field = screen.getByRole('searchbox', { name: '搜尋筆記、標籤、內文...' });
+  act(() => search.current!.focus());
+  expect(document.getElementById('note-toolbar-search')).toHaveAttribute('data-open');
+  expect(screen.getByRole('button', { name: '搜尋筆記、標籤、內文...' })).toHaveAttribute('aria-expanded', 'true');
+  await waitFor(() => expect(document.activeElement).toBe(field));
 });

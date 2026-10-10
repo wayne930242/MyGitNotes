@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { ShortcutSurfaceMode } from '../components/KeyboardShortcuts.js';
 import { WorkspaceTab } from '../lib/routes.js';
-import { type PaletteCommand } from '../components/KeyboardShortcuts.js';
+import type { Availability, CommandSpec } from '../lib/commands/registry.js';
 import { FOCUS_DIVISIONS, focusTabKey } from '@mygitnotes/core/focus-page';
 import { CURRENT_FOCUS } from '../lib/focus-view.js';
 import type { I18nContextValue } from '../lib/i18n/index.js';
@@ -16,6 +16,8 @@ interface Params {
   showFocus: ReturnType<typeof useFocusPanes>['showFocus'];
   zoomFocusNote: ReturnType<typeof useFocusNoteNavigation>['zoomFocusNote'];
 }
+
+const available = (enabled: boolean, reason: string): Availability => enabled ? { enabled: true } : { enabled: false, reason };
 
 export function useShortcutSurface({ noteFocus, focusDisplay, t, activeTab, showFocus, zoomFocusNote }: Params) {
   const [shortcutMode, setShortcutMode] = useState<ShortcutSurfaceMode | null>(null);
@@ -37,25 +39,25 @@ export function useShortcutSurface({ noteFocus, focusDisplay, t, activeTab, show
   };
   const lastFocus = noteFocus.view.last && (noteFocus.view.last === CURRENT_FOCUS || noteFocus.focuses.some(item => item.id === noteFocus.view.last)) ? noteFocus.view.last : CURRENT_FOCUS;
   const zoomablePath = activeFocusPane?.key?.startsWith('note:') ? activeFocusPane.key.slice('note:'.length) : null;
-  const focusCommands: PaletteCommand[] = [{ id: 'focus-toggle', label: t(noteFocus.shown ? 'focus.close' : 'focus.open'), description: t('shortcuts.describe.focusToggle'), disabled: activeTab !== 'notes', unavailableReason: t('shortcuts.requiresNotes'), run: () => void showFocus(noteFocus.shown ? null : lastFocus) }, { id: 'focus-next-pane', label: t('focus.nextPane'), description: t('shortcuts.describe.focusNextPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, unavailableReason: t('shortcuts.requiresTwoFocusPanes'), run: () => cycleFocusPane(1) }, { id: 'focus-previous-pane', label: t('focus.previousPane'), description: t('shortcuts.describe.focusPreviousPane'), disabled: (focusDisplay?.panes.length ?? 0) < 2, unavailableReason: t('shortcuts.requiresTwoFocusPanes'), run: () => cycleFocusPane(-1) }, { id: 'focus-next-tab', label: t('focus.nextTab'), description: t('shortcuts.describe.focusNextTab'), disabled: !activeFocusPane, unavailableReason: t('shortcuts.requiresFocusTab'), run: () => cycleFocusTab(1) }, { id: 'focus-previous-tab', label: t('focus.previousTab'), description: t('shortcuts.describe.focusPreviousTab'), disabled: !activeFocusPane, unavailableReason: t('shortcuts.requiresFocusTab'), run: () => cycleFocusTab(-1) }, {
+  const focusCommands: CommandSpec[] = [{ id: 'focus-toggle', group: 'focus', title: t(noteFocus.shown ? 'focus.close' : 'focus.open'), description: t('shortcuts.describe.focusToggle'), availability: () => available(activeTab === 'notes', t('shortcuts.requiresNotes')), run: () => void showFocus(noteFocus.shown ? null : lastFocus) }, { id: 'focus-next-pane', group: 'focus', title: t('focus.nextPane'), description: t('shortcuts.describe.focusNextPane'), availability: () => available((focusDisplay?.panes.length ?? 0) >= 2, t('shortcuts.requiresTwoFocusPanes')), run: () => cycleFocusPane(1) }, { id: 'focus-previous-pane', group: 'focus', title: t('focus.previousPane'), description: t('shortcuts.describe.focusPreviousPane'), availability: () => available((focusDisplay?.panes.length ?? 0) >= 2, t('shortcuts.requiresTwoFocusPanes')), run: () => cycleFocusPane(-1) }, { id: 'focus-next-tab', group: 'focus', title: t('focus.nextTab'), description: t('shortcuts.describe.focusNextTab'), availability: () => available(Boolean(activeFocusPane), t('shortcuts.requiresFocusTab')), run: () => cycleFocusTab(1) }, { id: 'focus-previous-tab', group: 'focus', title: t('focus.previousTab'), description: t('shortcuts.describe.focusPreviousTab'), availability: () => available(Boolean(activeFocusPane), t('shortcuts.requiresFocusTab')), run: () => cycleFocusTab(-1) }, {
     id: 'focus-close-tab',
-    label: t('focus.closeCurrentTab'),
+    group: 'focus',
+    title: t('focus.closeCurrentTab'),
     description: t('shortcuts.describe.focusCloseTab'),
-    disabled: !noteFocus.editable || !activeFocusPane?.key,
-    unavailableReason: t('shortcuts.requiresEditableFocusTab'),
+    availability: () => available(Boolean(noteFocus.editable && activeFocusPane?.key), t('shortcuts.requiresEditableFocusTab')),
     run: () => {
       if (activeFocusPane?.key) void noteFocus.close(activeFocusPane.key, activeFocusPane.pane).catch(() => {});
     },
   }, {
     id: 'focus-zoom-tab',
-    label: t('focus.zoomCurrentTab'),
+    group: 'focus',
+    title: t('focus.zoomCurrentTab'),
     description: t('shortcuts.describe.focusZoomTab'),
-    disabled: !zoomablePath,
-    unavailableReason: t('shortcuts.requiresFocusNote'),
+    availability: () => available(Boolean(zoomablePath), t('shortcuts.requiresFocusNote')),
     run: () => {
       if (zoomablePath) zoomFocusNote(zoomablePath);
     },
-  }, ...FOCUS_DIVISIONS.map(division => ({ id: `focus-division-${division}`, label: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }), description: t('shortcuts.describe.focusDivision'), disabled: !noteFocus.editable || !noteFocus.layout || noteFocus.layout.division === division, unavailableReason: t('shortcuts.requiresEditableFocus'), run: () => void noteFocus.setDivision(division).catch(() => {}) }))];
+  }, ...FOCUS_DIVISIONS.map((division): CommandSpec => ({ id: `focus-division-${division}`, group: 'focus', title: t('focus.divisionCommand', { name: t(`focus.division.${division}`) }), description: t('shortcuts.describe.focusDivision'), availability: () => available(Boolean(noteFocus.editable && noteFocus.layout && noteFocus.layout.division !== division), t('shortcuts.requiresEditableFocus')), run: () => void noteFocus.setDivision(division).catch(() => {}) }))];
 
   return { focusCommands, shortcutMode, setShortcutMode };
 }

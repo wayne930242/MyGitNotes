@@ -5,6 +5,7 @@ import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { handleNoteQueryError } from '../lib/use-note-queries.js';
 import { I18nProvider } from '../lib/i18n/index.js';
+import { KeyboardRoot } from '../lib/keyboard/KeyboardDispatcher.js';
 import { WorkspaceGate } from '../components/WorkspaceSetup.js';
 import { ConnectionState } from '../components/AuthControls.js';
 import { PanelProvider } from '../lib/panel-context.js';
@@ -39,7 +40,9 @@ function App() {
     <I18nProvider>
       <WorkspaceGate>
         <React.Suspense fallback={<ConnectionState loading error='' onRetry={() => {}} />}>
-          <AppContent />
+          <KeyboardRoot>
+            <AppContent />
+          </KeyboardRoot>
         </React.Suspense>
       </WorkspaceGate>
     </I18nProvider>

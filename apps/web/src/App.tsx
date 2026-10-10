@@ -27,6 +27,7 @@ import { useFileNavigation } from './app/useFileNavigation.js';
 import { useChangeDialog } from './app/useChangeDialog.js';
 import { useQuickNoteCommit } from './app/useQuickNoteCommit.js';
 import { useShortcutSurface } from './app/useShortcutSurface.js';
+import { useAppCommands } from './app/useAppCommands.js';
 import { type NoteListItem, noteQueryStatuses, type NoteRef, noteRefKey, sameNote } from '@mygitnotes/core/note-query';
 import { useWorkspaceSync } from './lib/use-workspace-sync.js';
 import { discardDocumentDraft } from './lib/use-workspace-document.js';
@@ -38,7 +39,7 @@ import { useNavigate } from 'react-router-dom';
 import { notebookRoute, noteRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
 import { draftScope, pageRepository } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchFileDiff, fetchGitStatus, readNote } from './lib/api.js';
 import { workingDiff } from './lib/working-notes.js';
 import { NoteListSentinel } from './components/NoteListSentinel.js';
@@ -57,7 +58,8 @@ import { RenameNoteDialog } from './components/RenameNoteDialog.js';
 import { AgentAccessSettings, AuthControls, ConnectionState } from './components/AuthControls.js';
 import { Header } from './components/Header.js';
 import { KeyboardShortcuts } from './components/KeyboardShortcuts.js';
-import { NoteToolbar } from './components/NoteToolbar.js';
+import { type NoteSearchHandle, NoteToolbar } from './components/NoteToolbar.js';
+import { KeyboardRoot } from './lib/keyboard/KeyboardDispatcher.js';
 import { PageToolbar, SidebarProvider, WorkspaceSidebarPortal, WorkspaceSplitLayout } from './components/WorkspaceChrome.js';
 import { useVisualViewport } from './lib/use-visual-viewport.js';
 import { Sidebar } from './components/Sidebar.js';
@@ -283,6 +285,8 @@ export const AppContent: React.FC = () => {
   };
 
   const { focusCommands, shortcutMode, setShortcutMode } = useShortcutSurface({ noteFocus, focusDisplay, t, activeTab, showFocus, zoomFocusNote });
+  const noteSearch = useRef<NoteSearchHandle>(null);
+  useAppCommands({ t, activeTab, setActiveTab: tab => void setActiveTab(tab), canCreateNote: canWrite, createNote: () => void createNote(), focusNoteSearch: () => noteSearch.current?.focus(), noteEditorOpen, pageCommands: focusCommands });
 
   // With a Focus displayed, the browse region docks beside it (list, flat) or above it (card, kanban).
   const topDock = viewMode === 'card' || viewMode === 'kanban';
@@ -422,23 +426,7 @@ export const AppContent: React.FC = () => {
               {defaultRepository?.manifest === 'derived' && defaultRepository.config && <DerivedManifestNotice repository={defaultRepository.id} config={defaultRepository.config} configRevision={defaultRepository.configRevision} canWrite={manifestWritable} onCreated={() => refreshWorkspace(true)} />}
               {/* Top Header */}
               <Header unavailableNotebooks={repositories.filter(repository => repository.unavailable).flatMap(repository => repository.notebooks)} workspaceTitle={currentRepository?.title || 'MyGitNotes'} notebookGroups={notebookGroups} accountControls={renderAccountControls ? renderAccountControls({ local: !remote }) : <AuthControls local={!remote} />} notebooks={config?.notebooks || []} selectedNotebookId={selectedNotebookId} onSelectNotebook={id => void setSelectedNotebookId(id)} notebookDisabled={loading || resourceNavigationBusy || notebookSwitchBusy} activeTab={activeTab} setActiveTab={setActiveTab} onCreateNote={() => void createNote()} createNoteDisabled={!canWrite} onOpenCommands={() => setShortcutMode('palette')} navigationDisabled={noteEditorOpen || isCommitOpen} />
-              <KeyboardShortcuts
-                mode={shortcutMode}
-                onModeChange={setShortcutMode}
-                suspended={isCommitOpen}
-                noteEditorOpen={noteEditorOpen}
-                activeTab={activeTab}
-                canCreateNote={canWrite}
-                selectedNotebookId={selectedNotebookId}
-                onNavigate={tab => void setActiveTab(tab)}
-                onCreateNote={() => void createNote()}
-                onFocusSearch={() => {
-                  if (activeTab === 'notes') setFiltersOpen(true);
-                  requestAnimationFrame(() => document.querySelector<HTMLInputElement>('.header-search input')?.focus());
-                }}
-                onOpenNote={note => void handleOpenNote(note)}
-                pageCommands={focusCommands}
-              />
+              <KeyboardShortcuts mode={shortcutMode} onModeChange={setShortcutMode} suspended={isCommitOpen} selectedNotebookId={selectedNotebookId} onOpenNote={note => void handleOpenNote(note)} />
               {routeError && (
                 <div role='alert' className='px-6 py-3 text-sm text-danger'>
                   {routeError.startsWith('route.') ? t(routeError as any) : routeError} <button className='underline' onClick={() => navigate('/notes')}>{t('route.goToNotes')}</button>
@@ -550,7 +538,7 @@ export const AppContent: React.FC = () => {
                         <main className='workspace-main notes-main'>
                           <PageToolbar>
                             {dockToggle}
-                            <NoteToolbar onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onNewNote={() => void createNote()} onNewOutline={() => void createNote({ kind: 'outline' })} onNewCompilation={() => void createUntitledCompilation()} templates={config?.notebooks.find(nb => nb.id === selectedNotebookId)?.templates} onNewFromTemplate={templateId => void createNote({ templateId })} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
+                            <NoteToolbar searchRef={noteSearch} onImportLegacy={() => setLegacyImportOpen(true)} sortField={sortField} sortOrder={sortOrder} onSortChange={handleSortChange} readOnly={!canWrite} viewMode={viewMode} setViewMode={setViewMode} hiddenNoteCount={facetsQuery.facets ? notebookFacets.hidden : null} showHidden={showHidden} descendants={route.descendants} onShowHiddenChange={value => changeFilters({ showHidden: value })} onDescendantsChange={value => changeFilters({ descendants: value })} onNewNote={() => void createNote()} onNewOutline={() => void createNote({ kind: 'outline' })} onNewCompilation={() => void createUntitledCompilation()} templates={config?.notebooks.find(nb => nb.id === selectedNotebookId)?.templates} onNewFromTemplate={templateId => void createNote({ templateId })} query={searchQuery} onQueryChange={value => changeFilters({ q: value })} filtersOpen={filtersOpen} onToggleFilters={() => setFiltersOpen(open => !open)} focusControls={<FocusControls focus={noteFocus} onShow={key => void showFocus(key)} onReload={() => void focusPage.reload()} browseToggle={focusCapacity === 1 ? { showing: focusNarrowView === 'browse', onToggle: () => setFocusNarrowView(view => view === 'browse' ? 'focus' : 'browse') } : undefined} />} />
                           </PageToolbar>
                           {noteFocus.layout
                             ? (
@@ -792,7 +780,9 @@ export const App: React.FC = () => {
   return (
     <I18nProvider>
       <WorkspaceGate>
-        <AppContent />
+        <KeyboardRoot>
+          <AppContent />
+        </KeyboardRoot>
       </WorkspaceGate>
     </I18nProvider>
   );

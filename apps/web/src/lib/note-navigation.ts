@@ -87,7 +87,3 @@ export function chooseOutlineHeading(outline: OutlineHeading[], index: number, o
   if (!heading) return null;
   return { heading, line: heading.line, shouldClosePanel: options.closeAfter ?? false, focusEditor: options.focusEditor ?? false };
 }
-
-export function isEditableTarget(target: EventTarget | null): boolean {
-  return typeof Element !== 'undefined' && target instanceof Element && Boolean(target.closest('input, textarea, select, [role="combobox"], [contenteditable="true"], .cm-content'));
-}

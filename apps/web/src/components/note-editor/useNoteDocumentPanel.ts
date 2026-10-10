@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import YAML from 'yaml';
-import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, isEditableTarget, parseMarkdownOutline } from '../../lib/note-navigation.js';
+import { chooseOutlineHeading, findOutlineIndexForLine, findTextMatches, parseMarkdownOutline } from '../../lib/note-navigation.js';
+import { isEditableTarget } from '../../lib/keyboard/context.js';
+import { matchesCommand } from '../../lib/keyboard/keymap.js';
 import type { MarkdownEditorHandle, MarkdownEditorMode } from '../MarkdownEditor.js';
 import type { NotePanelMode } from './types.js';
 import { usePiAgentAvailable } from '../../lib/pi-agent/session.js';
@@ -145,9 +147,8 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
   /* eslint-disable react/refs -- The editor keeps current draft and event callbacks in refs for async saves and imperative keyboard handlers. */
   shortcutAction.current = event => {
     const slashKey = event.code === 'Slash' || event.key === '/';
-    const primary = /Mac|iPhone|iPad/.test(navigator.platform) ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
-    // Cmd/Ctrl+Shift+E opens the note commands leader in zoom only.
-    if ((event.code === 'KeyE' || event.key.toLowerCase() === 'e') && primary && event.shiftKey && !event.altKey) {
+    // The leader (Mod+Shift+E in the table) opens the note commands in zoom only.
+    if (matchesCommand(event, 'editor.leader')) {
       if (frame !== 'zoom') return false;
       setIsEditorLeaderOpen(open => !open);
       return true;
