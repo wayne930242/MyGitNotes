@@ -24,6 +24,8 @@ source:
   tag: clue
 sort: { field: updated, order: desc }
 `;
+const legacyStack = dynamic;
+const book = dynamic.replace('arrangement: stack', 'arrangement: book');
 const owner = { notebookId: 'one', path: 'notes/one/reading.compilation.yml' };
 
 describe('compilation file', () => {
@@ -32,7 +34,7 @@ describe('compilation file', () => {
     expect(file).toMatchObject({ id: 'reading-queue', title: 'Reading queue', arrangement: 'lane', size: 'medium', tags: ['reading'], status: 'working' });
     expect(compilationRow(file, owner)).toMatchObject({ kind: 'custom', view: 'medium', notebookId: 'one', path: owner.path, items: [{ id: 'a1', kind: 'note', notebookId: 'one', path: 'notes/one/a.md' }, { id: 'v1', kind: 'youtube', videoId: 'dQw4w9WgXcQ' }, { id: 'f1', kind: 'folder', notebookId: 'one' }] });
     const row = compilationRow(parseCompilation(dynamic, 'notes/one'), owner);
-    expect(row).toMatchObject({ kind: 'dynamic', view: 'stack', source: { kind: 'tag', tag: 'clue', notebookId: 'one' }, sort: { field: 'updated', order: 'desc' } });
+    expect(row).toMatchObject({ kind: 'dynamic', view: 'book', source: { kind: 'tag', tag: 'clue', notebookId: 'one' }, sort: { field: 'updated', order: 'desc' } });
   });
   it('defaults a lane without a size to small and folder sources to recursive', () => {
     const file = parseCompilation('version: 1\nid: x\ntitle: X\narrangement: lane\nsource: { kind: folder, path: notes/one/sub }\n');
@@ -47,12 +49,26 @@ describe('compilation file', () => {
     const graph = parseCompilation('version: 1\nid: g\ntitle: G\narrangement: graph\nitems: []\ngraph: { nodes: [{ path: notes/one/a.md, x: 1, y: 2, expanded: true }] }\n');
     expect(compilationFile(compilationRow(graph, owner))).toEqual(graph);
   });
-  it('keeps the lane size while the compilation is stacked, so switching back restores it', () => {
+  it('keeps the lane size while the compilation is a book, so switching back restores it', () => {
     const row = compilationRow(parseCompilation(custom, 'notes/one'), owner);
-    const stacked = compilationFile({ ...row, view: 'stack' });
-    expect(stacked).toMatchObject({ arrangement: 'stack', size: 'medium' });
-    expect(compilationRow(stacked, owner).view).toBe('stack');
-    expect(compilationFile({ ...compilationRow(stacked, owner), view: 'medium' })).toMatchObject({ arrangement: 'lane', size: 'medium' });
+    const booked = compilationFile({ ...row, view: 'book' });
+    expect(booked).toMatchObject({ arrangement: 'book', size: 'medium' });
+    expect(compilationRow(booked, owner).view).toBe('book');
+    expect(compilationFile({ ...compilationRow(booked, owner), view: 'medium' })).toMatchObject({ arrangement: 'lane', size: 'medium' });
+  });
+  it('reads the legacy stack token as a book and writes it as book', () => {
+    const file = parseCompilation(legacyStack, 'notes/one');
+    expect(file.arrangement).toBe('book');
+    expect(parseCompilation(book, 'notes/one')).toEqual(file);
+    expect(compilationRow(file, owner).view).toBe('book');
+    expect(YAML.parse(serializeCompilation(file)).arrangement).toBe('book');
+    expect(serializeCompilation(file)).not.toContain('stack');
+    expect(YAML.parse(serializeCompilation(compilationFile(compilationRow(file, owner)))).arrangement).toBe('book');
+    expect(() => parseCompilation(legacyStack.replace('arrangement: stack', 'arrangement: carousel'))).toThrow('arrangement');
+  });
+  it('writes a legacy stack file as book when the compilation itself is copied, and the version stays 1', () => {
+    const copy = copyCompilation(parseCompilation(legacyStack, 'notes/one'), []);
+    expect(YAML.parse(serializeCompilation(copy))).toMatchObject({ version: 1, arrangement: 'book' });
   });
   it('rejects a file that does not hold exactly one of items and source, or sorts pinned items', () => {
     for (const body of ['', 'items: []\nsource: { kind: tag, tag: t }', 'items: []\nsort: { field: title, order: asc }']) {
@@ -103,7 +119,8 @@ describe('compilation listing fields', () => {
     const fields = compilationFields(custom, owner.path, 'notes/one');
     expect(fields).toMatchObject({ title: 'Reading queue', tags: ['reading'], status: 'working', metadata: { id: 'reading-queue', arrangement: 'lane', size: 'medium', itemCount: 3 } });
     expect(fields.invalid).toBeUndefined();
-    expect(compilationFields(dynamic, owner.path).metadata).toMatchObject({ arrangement: 'stack', sourceKind: 'tag' });
+    expect(compilationFields(dynamic, owner.path).metadata).toMatchObject({ arrangement: 'book', sourceKind: 'tag' });
+    expect(compilationFields(book, owner.path).metadata).toMatchObject({ arrangement: 'book', sourceKind: 'tag' });
     expect(JSON.stringify(compilationFields(`${custom}graph: { nodes: [] }\n`, owner.path).metadata)).not.toContain('nodes');
   });
   it('still lists an invalid file, with what can be read and the reason', () => {

@@ -87,7 +87,7 @@ function CompilationRowDialog({ notebooks, assets, folders, selectedNotebookId, 
         )}
         <label>
           {t('screen.view')}
-          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'stack', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
+          <Select aria-label={t('screen.view')} value={view} disabled={disabled} onValueChange={value => setView(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'book', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />
         </label>
         <details className='study-advanced' open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}>
           <summary>{t('study.advanced')}</summary>

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, forwardRef, Fragment, type ReactNode, useEffect } from 'react';
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { NoteEditingProvider, useNoteEditing } from '../lib/note-editing.js';
@@ -92,4 +92,29 @@ it('shows every host as open in zoom while zoom runs its own editor', () => {
   expect(screen.queryByTestId('editor')).toBeNull();
   expect(screen.getByTestId('pane')).toHaveTextContent('This note is open in zoom.');
   expect(screen.getByTestId('card')).toHaveTextContent('This note is open in zoom.');
+});
+
+const claimingCard = () => provide(createElement('section', { 'data-testid': 'pane' }, createElement(HostedNoteEditor, { notebookId: 'a', path: 'notes/a.md', frame: 'pane', active: true })), createElement('section', { 'data-testid': 'card' }, createElement(HostedNoteEditor, { notebookId: 'a', path: 'notes/a.md', frame: 'compact', active: false, claim: true })));
+
+it('takes the editor from its owner when mounted to claim it, saving the owner first', async () => {
+  render(claimingCard());
+  await waitFor(() => expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toHaveAttribute('data-frame', 'compact'));
+  expect(flushEditors).toHaveBeenCalledWith(['a:notes/a.md']);
+  expect(screen.getAllByTestId('editor')).toHaveLength(1);
+  expect(screen.getByTestId('pane')).toHaveTextContent('This note is open for editing elsewhere.');
+  expect(flushEditors).toHaveBeenCalledTimes(1);
+});
+
+it('claims nothing when it is the first host of the note', async () => {
+  render(provide(createElement(HostedNoteEditor, { notebookId: 'a', path: 'notes/a.md', frame: 'compact', active: false, claim: true })));
+  await waitFor(() => expect(screen.getByTestId('editor')).toBeInTheDocument());
+  expect(flushEditors).not.toHaveBeenCalled();
+});
+
+it('falls back to the preview with its Edit here button when the claim fails', async () => {
+  flushEditors.mockResolvedValue(false);
+  render(claimingCard());
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Edit here' })).toBeInTheDocument());
+  expect(screen.getByTestId('pane').querySelector('[data-testid="editor"]')).toBeInTheDocument();
+  expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toBeNull();
 });

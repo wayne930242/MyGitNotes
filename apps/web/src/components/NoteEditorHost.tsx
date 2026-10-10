@@ -1,5 +1,5 @@
 import { noteRefKey, sameNote } from '@mygitnotes/core/note-query';
-import React, { useId, useLayoutEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Pencil } from 'lucide-react';
 import type { NoteItem } from '../lib/types.js';
@@ -21,6 +21,8 @@ export interface HostedNoteEditorProps {
   editorRef?: React.Ref<NoteEditorHandle>;
   onSession?: NoteEditorProps['onSession'];
   onCaret?: NoteEditorProps['onCaret'];
+  /** Mounted because the person asked to edit here: the host takes the note's editor from its owner instead of showing the preview. */
+  claim?: boolean;
 }
 
 /**
@@ -29,7 +31,7 @@ export interface HostedNoteEditorProps {
  * remounting; while zoom shows the note the other hosts say so, and otherwise they show a preview with a
  * control that moves editing there.
  */
-export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, path, frame, active, documentPanel, editorRef, onSession, onCaret }) => {
+export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, path, frame, active, documentPanel, editorRef, onSession, onCaret, claim = false }) => {
   const { t } = useTranslation();
   const editing = useNoteEditing();
   const { hosts } = editing;
@@ -41,6 +43,16 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
     return () => hosts.release(key, id);
   }, [hosts, key, id]);
   const owner = hosts.owner(key) === id;
+  // A host that was asked to edit claims the note once it is registered; until the claim settles it shows the loading status, and a failed claim leaves the preview with its Edit here button.
+  const [claiming, setClaiming] = useState(claim);
+  const claimed = useRef(false);
+  const { claimEditor } = editing;
+  useEffect(() => {
+    if (!claim || claimed.current || hosts.owner(key) === id) return;
+    claimed.current = true;
+    setClaiming(true);
+    void claimEditor(key, id).finally(() => setClaiming(false));
+  }, [claim, claimEditor, hosts, key, id]);
   const lookup = useNoteLookup([{ notebookId, path }], true);
   const found = lookup.notes[0], committed = lookup.committed[0];
   const loaded = found && typeof found.content === 'string' ? found as NoteItem : null;
@@ -69,6 +81,7 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
 
   if (zoom && !lending) return <p className='note-editor-placeholder' role='status'>{t('focus.editingInZoom')}</p>;
   if (!note) return lookup.error ? <p className='note-editor-placeholder' role='alert'>{lookup.error}</p> : <LoadingStatus className='note-editor-placeholder'>{t('notes.loadingNote')}</LoadingStatus>;
+  if (!owner && claim && claiming) return <LoadingStatus className='note-editor-placeholder'>{t('notes.loadingNote')}</LoadingStatus>;
   if (!owner) return <NotePreview note={note} onClaim={() => void editing.claimEditor(key, id)} />;
   const props = editing.editorProps(note, committed && typeof committed.content === 'string' ? committed as NoteItem : undefined);
   return (

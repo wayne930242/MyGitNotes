@@ -3,7 +3,7 @@ import { type KeyText, matchesKeys, type ParsedKeys, parseKeys } from './keys.js
 import { type Browser, type KeyEnvironment, keyEnvironment, type Platform } from './platform.js';
 
 /** Where a key acts. `global` covers every other scope, including text fields and editors. */
-export type KeyScope = 'global' | 'palette' | 'help' | 'note' | 'markdown-editor' | 'code-editor' | 'link-completion' | 'outline-panel' | 'find-panel' | 'document-panel' | 'focus-tabs' | 'focus-division' | 'table' | 'directive' | 'image' | 'graph' | 'assistant-input' | 'file-list' | 'drawer' | 'compilation' | 'asset-preview';
+export type KeyScope = 'global' | 'palette' | 'help' | 'note' | 'markdown-editor' | 'code-editor' | 'link-completion' | 'outline-panel' | 'find-panel' | 'document-panel' | 'focus-tabs' | 'focus-division' | 'table' | 'directive' | 'image' | 'graph' | 'assistant-input' | 'file-list' | 'drawer' | 'compilation' | 'compilation-edit' | 'asset-preview';
 
 /** Who acts on the key: the global dispatcher, a CodeMirror keymap built from this table, or a widget's own handler. */
 export type KeyHandler = 'dispatcher' | 'codemirror' | 'widget';
@@ -56,6 +56,7 @@ export const KEYMAP: readonly KeymapEntry[] = [
   entry('help.close', 'general', ['help'], 'widget', ['Escape']),
   entry('drawer.close', 'panes', ['drawer'], 'widget', ['Escape']),
   entry('compilation.close', 'general', ['compilation'], 'widget', ['Escape']),
+  entry('compilation.finishEdit', 'general', ['compilation-edit'], 'widget', ['Escape']),
   entry('files.open', 'list', ['file-list'], 'widget', ['Enter']),
   // Quick open
   entry('palette.notes', 'palette', ['global'], 'dispatcher', ['Mod+Shift+F'], { phase: 'capture', description: 'command.palette.notes.describe' }),

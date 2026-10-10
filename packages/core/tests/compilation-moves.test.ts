@@ -46,6 +46,11 @@ describe('pinned references follow a file move', () => {
     expect(after.files.get('notes/a/two/live.compilation.yml')!.toString()).toBe(dynamic);
     expect(pinned(after.files.get('notes/a/reading.compilation.yml')!)[1]).toBe('notes/a/two/again.md');
   });
+  it('keeps the legacy stack token when a move rewrites the compilation', () => {
+    const after = planFileChange(fileSnapshot(), { kind: 'move', notebookId: 'a', path: 'notes/a/one', destination: 'notes/a/renamed' });
+    const text = after.files.get('notes/a/two/live.compilation.yml')!.toString();
+    expect(YAML.parse(text)).toMatchObject({ arrangement: 'stack', source: { path: 'notes/a/renamed' } });
+  });
   it('rewrites pinned references when a folder is moved or its contents are folded into the parent', () => {
     const moved = planFolderChange(folderSnapshot(), { kind: 'move', notebookId: 'a', path: 'one', parent: 'two' });
     expect(pinned(moved.files.get('notes/a/reading.compilation.yml')!)).toEqual(['notes/a/two/one/note.md', 'notes/a/two/other.md', 'notes/a/two/one', undefined]);

@@ -7,6 +7,7 @@ import { type CompilationItem, type CompilationRow, moveCompilationItem } from '
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useNoteEditing } from '../lib/note-editing.js';
 import { useCompilationActions } from '../lib/compilation-actions.js';
+import { CompilationEditingProvider, useCompilationEditing } from '../lib/compilation-editing.js';
 import { useOutlineActions } from '../lib/outline-actions.js';
 import { planCompilationCopy } from '../lib/compilation-copy.js';
 import { screenCollision, screenKeyboardCoordinates } from '../lib/compilation-drag.js';
@@ -23,7 +24,7 @@ import { type CompilationContentProps, compilationItemTitle } from './Compilatio
 import { CompilationAddItem, CompilationEditRow } from './CompilationDialogs.js';
 import { CompilationLane } from './CompilationLane.js';
 import { CompilationOrderDialog } from './CompilationOrderDialog.js';
-import { CompilationStack } from './CompilationStack.js';
+import { CompilationBook } from './CompilationBook.js';
 import { LoadingStatus } from './LoadingStatus.js';
 import { ReorderToggle } from './ReorderToggle.js';
 import { useCompilationAssets, useCompilationItemOpen } from './useCompilationItemOpen.js';
@@ -47,11 +48,12 @@ export interface CompilationViewProps {
   onClose?: () => void;
 }
 
-/** One open compilation: its header, then the lane, stack or graph arrangement. Edits write the file through the note actions. */
+/** One open compilation: its header, then the lane, book or graph arrangement. Edits write the file through the note actions. */
 export function CompilationView({ notebookId, path, notebooks, folders, frame, onOpenNote, onOpenFolder, onClose }: CompilationViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const editing = useNoteEditing();
+  const slots = useCompilationEditing();
   const actions = useCompilationActions();
   const outlines = useOutlineActions();
   const compilation = useCompilation({ notebookId, path }, notebooks);
@@ -116,6 +118,11 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
     if (await editing.flushEditors()) navigate(compilationStudyRoute(notebookId, path));
   };
   const change = (next: CompilationRow) => compilation.change({ rows: [next] });
+  // A change of arrangement unmounts the slot being edited, so its note is saved first and a failed save keeps everything as it is (E8).
+  const rearrange = (current: CompilationRow, next: CompilationRow) => {
+    if (next.view === current.view) return change(next);
+    void slots.finish().then(saved => saved && change(next));
+  };
   const addToFocus = compilation.note ? editing.addToFocus({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
   const move = compilation.writable && compilation.note ? editing.moveNote?.({ ...compilation.note, content: compilation.note.content ?? '' }) : undefined;
   // Renaming retitles the compilation through its own row, then the file follows the new name.
@@ -132,7 +139,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       study,
       facets: facets.facets,
       onStudy: () => void startStudy(),
-      onView: (next: CompilationRow['view']) => change({ ...current, view: next }),
+      onView: (next: CompilationRow['view']) => rearrange(current, { ...current, view: next }),
       onStudyChange: (value: NonNullable<CompilationRow['study']>) => change({ ...current, study: value }),
       onAdd: () => setDialog('add'),
       extra: (
@@ -149,7 +156,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
               <ListTree aria-hidden='true' />
             </button>
           )}
-          {!disabled && current.kind === 'custom' && current.view !== 'stack' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => setReorder(value => !value)} />}
+          {!disabled && current.kind === 'custom' && current.view !== 'book' && current.view !== 'graph' && <ReorderToggle active={reorder} disabled={disabled} onToggle={() => void slots.finish().then(saved => saved && setReorder(value => !value))} />}
           {(compilation.writable || addToFocus) && (
             // Secondary actions share one menu so the header stays on one line in a narrow Focus pane.
             <DropdownMenu.Root>
@@ -200,7 +207,7 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
       onRename: rename(current),
       onCreateNote: actions.createNote,
     };
-    if (current.view === 'stack') return <CompilationStack {...common} />;
+    if (current.view === 'book') return <CompilationBook {...common} />;
     return (
       <DndContext
         sensors={sensors}
@@ -221,7 +228,12 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
         <CompilationLane
           {...common}
           reorder={reorder}
-          onRemove={id => current.kind === 'custom' && change({ ...current, items: current.items.filter(item => item.id !== id) })}
+          onRemove={id => {
+            if (current.kind !== 'custom') return;
+            const next = { ...current, items: current.items.filter(item => item.id !== id) };
+            if (slots.editing?.slot === id) void slots.finish().then(saved => saved && change(next));
+            else change(next);
+          }}
           graph={current.view === 'graph'
             ? (
               <Suspense fallback={<p role='status'>{t('graph.title')}</p>}>
@@ -243,42 +255,44 @@ export function CompilationView({ notebookId, path, notebooks, folders, frame, o
   };
 
   return (
-    <div className='compilation-view' data-frame={frame} data-arrangement={row?.view}>
-      {frame === 'zoom' && onClose && (
-        <div className='compilation-frame-bar'>
-          <Button type='button' size='icon' aria-label={t('common.close')} title={t('common.close')} onClick={() => void editing.flushEditors().then(saved => saved && onClose())}>
-            <X size={18} />
-          </Button>
-        </div>
-      )}
-      <div className='compilation-body'>
-        {compilation.error && <p role='alert' className='screen-error'>{compilation.error}</p>}
-        {assetError && <p role='alert' className='screen-error'>{t('screen.assetsError')}</p>}
-        {missing && <p role='alert' className='screen-error'>{t('screen.missing')}</p>}
-        {notice && <p role='status' className='screen-dialog-hint'>{notice}</p>}
-        {compilation.loading ? <LoadingStatus>{t('screen.loading')}</LoadingStatus> : compilation.missing ? <p role='alert' className='screen-error'>{t('compilation.notFound')}</p> : !row
-          ? (
-            <div className='screen-board-empty' role='alert'>
-              <h3>{compilation.invalid[0]?.title ?? path.split('/').pop()}</h3>
-              <p>{t('compilation.invalid')}</p>
-              <p className='screen-form-error'>{compilation.invalid[0]?.error}</p>
-            </div>
-          )
-          : view(row)}
-      </div>
-      {row && dialog === 'edit' && <CompilationEditRow row={row} disabled={disabled} notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={notebookId} onClose={() => setDialog(null)} onApply={change} onRemove={() => setDialog('delete')} />}
-      {row?.kind === 'custom' && dialog === 'add' && <CompilationAddItem notebooks={notebooks} assets={assets} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setDialog(null)} onAdd={item => change({ ...row, items: [...row.items, item] })} />}
-      {row?.kind === 'dynamic' && dialog === 'order' && <CompilationOrderDialog row={row} notebooks={notebooks} assets={assets} disabled={disabled} onClose={() => setDialog(null)} onSave={order => change({ ...row, sort: { field: 'manual', order: 'asc' }, manualOrder: order })} />}
-      {row && dialog === 'delete' && (
-        <WorkspaceDialog title={t('compilation.delete')} onClose={() => setDialog(null)}>
-          <p>{t('compilation.deleteHint', { title: row.name })}</p>
-          <div className='workspace-dialog-actions'>
-            <Button onClick={() => setDialog(null)}>{t('common.cancel')}</Button>
-            <Button variant='primary' onClick={() => void remove()}>{t('compilation.delete')}</Button>
+    <CompilationEditingProvider value={slots}>
+      <div className='compilation-view' data-frame={frame} data-arrangement={row?.view}>
+        {frame === 'zoom' && onClose && (
+          <div className='compilation-frame-bar'>
+            <Button type='button' size='icon' aria-label={t('common.close')} title={t('common.close')} onClick={() => void editing.flushEditors().then(saved => saved && onClose())}>
+              <X size={18} />
+            </Button>
           </div>
-        </WorkspaceDialog>
-      )}
-      {itemOpen.preview}
-    </div>
+        )}
+        <div className='compilation-body'>
+          {compilation.error && <p role='alert' className='screen-error'>{compilation.error}</p>}
+          {assetError && <p role='alert' className='screen-error'>{t('screen.assetsError')}</p>}
+          {missing && <p role='alert' className='screen-error'>{t('screen.missing')}</p>}
+          {notice && <p role='status' className='screen-dialog-hint'>{notice}</p>}
+          {compilation.loading ? <LoadingStatus>{t('screen.loading')}</LoadingStatus> : compilation.missing ? <p role='alert' className='screen-error'>{t('compilation.notFound')}</p> : !row
+            ? (
+              <div className='screen-board-empty' role='alert'>
+                <h3>{compilation.invalid[0]?.title ?? path.split('/').pop()}</h3>
+                <p>{t('compilation.invalid')}</p>
+                <p className='screen-form-error'>{compilation.invalid[0]?.error}</p>
+              </div>
+            )
+            : view(row)}
+        </div>
+        {row && dialog === 'edit' && <CompilationEditRow row={row} disabled={disabled} notebooks={notebooks} assets={assets} folders={folders} selectedNotebookId={notebookId} onClose={() => setDialog(null)} onApply={next => rearrange(row, next)} onRemove={() => setDialog('delete')} />}
+        {row?.kind === 'custom' && dialog === 'add' && <CompilationAddItem notebooks={notebooks} assets={assets} folders={folders} rowName={row.name} notebookId={row.notebookId} onClose={() => setDialog(null)} onAdd={item => change({ ...row, items: [...row.items, item] })} />}
+        {row?.kind === 'dynamic' && dialog === 'order' && <CompilationOrderDialog row={row} notebooks={notebooks} assets={assets} disabled={disabled} onClose={() => setDialog(null)} onSave={order => change({ ...row, sort: { field: 'manual', order: 'asc' }, manualOrder: order })} />}
+        {row && dialog === 'delete' && (
+          <WorkspaceDialog title={t('compilation.delete')} onClose={() => setDialog(null)}>
+            <p>{t('compilation.deleteHint', { title: row.name })}</p>
+            <div className='workspace-dialog-actions'>
+              <Button onClick={() => setDialog(null)}>{t('common.cancel')}</Button>
+              <Button variant='primary' onClick={() => void remove()}>{t('compilation.delete')}</Button>
+            </div>
+          </WorkspaceDialog>
+        )}
+        {itemOpen.preview}
+      </div>
+    </CompilationEditingProvider>
   );
 }

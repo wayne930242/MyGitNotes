@@ -1,5 +1,5 @@
 import { type ButtonHTMLAttributes, type ReactNode, useState } from 'react';
-import { Brain, ChevronLeft, ChevronRight, Columns2, Columns3, LayoutGrid, ListOrdered, Network, Plus, Rows3, SlidersHorizontal, Zap } from 'lucide-react';
+import { BookOpen, Brain, ChevronLeft, ChevronRight, Columns2, Columns3, LayoutGrid, ListOrdered, Network, Plus, SlidersHorizontal, Zap } from 'lucide-react';
 import type { CompilationRow, CompilationSort } from '@mygitnotes/core/compilation';
 import { type NotebookFacets, noteQueryStatuses } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
@@ -9,8 +9,8 @@ import { Button } from './Button.js';
 import { Select } from './Select.js';
 import './study.css';
 
-/** The arrangement switch: the three lane sizes, stack and graph. */
-export const compilationViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'stack', icon: Rows3 }, { value: 'graph', icon: Network }] as const;
+/** The arrangement switch: the three lane sizes, book and graph. */
+export const compilationViewTabs = [{ value: 'thumbnail', icon: LayoutGrid }, { value: 'small', icon: Columns3 }, { value: 'medium', icon: Columns2 }, { value: 'book', icon: BookOpen }, { value: 'graph', icon: Network }] as const;
 
 export interface CompilationHeaderProps {
   row: CompilationRow;
@@ -107,7 +107,7 @@ export function CompilationHeader({ row, count, disabled, readOnly, notebooks, f
             )}
           </div>
         )}
-        {!readOnly && <Select className='screen-view-select' aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView?.(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'stack', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />}
+        {!readOnly && <Select className='screen-view-select' aria-label={`${t('screen.view')}: ${row.name}`} value={row.view} disabled={disabled} onValueChange={value => onView?.(value as CompilationRow['view'])} options={(['thumbnail', 'small', 'medium', 'book', 'graph'] as const).map(value => ({ value, label: t(`screen.${value}`) }))} />}
         {!readOnly && (
           <div className='screen-view-tabs' role='group' aria-label={`${t('screen.view')}: ${row.name}`}>
             {compilationViewTabs.map(({ value, icon: Icon }) => (

@@ -9,13 +9,13 @@ import { emptyStudyWorkspace } from '@mygitnotes/core/study';
 import type { NotebookConfig } from '../lib/types.js';
 import { setNoteQueryScope } from '../lib/use-note-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
-import { CompilationStack } from './CompilationStack.js';
+import { CompilationBook } from './CompilationBook.js';
 
 const REVISION = 'e'.repeat(40);
 let client: QueryClient;
 
 const notebooks: NotebookConfig[] = [{ id: 'nb1', title: 'NB1', root: 'notes/nb1' }];
-const row: CompilationRow = { id: 'row-1', path: 'notes/nb1/reading.compilation.yml', name: 'Reading', view: 'stack', notebookId: 'nb1', kind: 'custom', items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/gone.md' }, { id: 'item-3', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' }] };
+const row: CompilationRow = { id: 'row-1', path: 'notes/nb1/reading.compilation.yml', name: 'Reading', view: 'book', notebookId: 'nb1', kind: 'custom', items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/gone.md' }, { id: 'item-3', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' }] };
 const study: StudyController = { study: emptyStudyWorkspace(), save: async () => false, action: async () => false, reload: async () => {}, loading: false, saving: false, error: '', writable: false };
 
 beforeEach(() => {
@@ -36,13 +36,13 @@ afterEach(() => {
 });
 
 const wrapper = ({ children }: { children: ReactNode; }) => createElement(QueryClientProvider, { client }, children);
-const stack = (props: Partial<Parameters<typeof CompilationStack>[0]> = {}) => createElement(CompilationStack, { row, study, notebooks, assets: [], onOpen: () => {}, disabled: false, readOnly: true, ...props });
+const book = (props: Partial<Parameters<typeof CompilationBook>[0]> = {}) => createElement(CompilationBook, { row, study, notebooks, assets: [], onOpen: () => {}, disabled: false, readOnly: true, ...props });
 
 it('lays the items out in order as sections: the full note, a missing notice in place, the video player', async () => {
-  render(stack(), { wrapper });
+  render(book(), { wrapper });
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Chapter One' })).toBeInTheDocument());
   expect(screen.getByText('The body of note A.')).toBeInTheDocument();
-  const sections = [...document.querySelectorAll<HTMLElement>('.screen-stack > .screen-card')];
+  const sections = [...document.querySelectorAll<HTMLElement>('.compilation-book > .screen-card')];
   expect(sections.map(section => section.dataset.screenItem)).toEqual(['item-1', 'item-2', 'item-3']);
   expect(within(sections[1]).getByText('This item may have moved or been deleted.')).toBeInTheDocument();
   expect(within(sections[2]).getByLabelText('Play video: A talk')).toBeInTheDocument();
@@ -50,13 +50,13 @@ it('lays the items out in order as sections: the full note, a missing notice in 
 
 it('opens an item from its title bar', async () => {
   const onOpen = vi.fn();
-  render(stack({ onOpen }), { wrapper });
+  render(book({ onOpen }), { wrapper });
   fireEvent.click(await waitFor(() => screen.getByRole('button', { name: 'Note A' })));
   expect(onOpen).toHaveBeenCalledWith(row.kind === 'custom' ? row.items[0] : undefined, expect.objectContaining({ path: 'notes/nb1/a.md' }));
 });
 
 it('is read-only: no drag handle or unpin control', async () => {
-  render(stack(), { wrapper });
+  render(book(), { wrapper });
   await waitFor(() => expect(screen.getByText('Note A')).toBeInTheDocument());
   expect(screen.queryByLabelText('Move item: Note A')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Unpin: Note A')).not.toBeInTheDocument();

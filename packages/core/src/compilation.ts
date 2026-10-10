@@ -39,11 +39,11 @@ const SortSchema = z.object({ field: z.enum(['updated', 'created', 'title', 'sta
 const StudySchema = z.object({ filter: z.enum(['all', 'due', 'future', 'paused']), dueFirst: z.boolean(), status: z.string().max(200).optional() }).strict();
 const tag = z.string().trim().min(1).max(200);
 
-export const COMPILATION_ARRANGEMENTS = ['lane', 'stack', 'graph'] as const;
+export const COMPILATION_ARRANGEMENTS = ['lane', 'book', 'graph'] as const;
 export const COMPILATION_SIZES = ['thumbnail', 'small', 'medium'] as const;
 
 /** The stored file; it never repeats the notebook, which the path decides. */
-export const CompilationFileSchema = z.object({ version: z.literal(1), id, title: z.string().trim().min(1).max(100), arrangement: z.enum(COMPILATION_ARRANGEMENTS), size: z.enum(COMPILATION_SIZES).optional(), tags: z.array(tag).max(100).optional(), status: z.string().trim().min(1).max(200).optional(), items: z.array(FileItemSchema).max(COMPILATION_MAX_ITEMS).optional(), source: FileSourceSchema.optional(), sort: SortSchema.optional(), manualOrder: z.array(repoPath).max(COMPILATION_MAX_ORDER).optional(), study: StudySchema.optional(), progression: StudyProgressionSchema.optional(), graph: GraphLayoutSchema.optional() }).strict().superRefine((file, context) => {
+export const CompilationFileSchema = z.object({ version: z.literal(1), id, title: z.string().trim().min(1).max(100), arrangement: z.enum([...COMPILATION_ARRANGEMENTS, 'stack']).transform(value => value === 'stack' ? 'book' as const : value), size: z.enum(COMPILATION_SIZES).optional(), tags: z.array(tag).max(100).optional(), status: z.string().trim().min(1).max(200).optional(), items: z.array(FileItemSchema).max(COMPILATION_MAX_ITEMS).optional(), source: FileSourceSchema.optional(), sort: SortSchema.optional(), manualOrder: z.array(repoPath).max(COMPILATION_MAX_ORDER).optional(), study: StudySchema.optional(), progression: StudyProgressionSchema.optional(), graph: GraphLayoutSchema.optional() }).strict().superRefine((file, context) => {
   if ((file.items === undefined) === (file.source === undefined)) context.addIssue({ code: 'custom', message: 'Give exactly one of items or source', path: ['items'] });
   if (file.sort && !file.source) context.addIssue({ code: 'custom', message: 'sort applies to a source', path: ['sort'] });
   if (file.manualOrder && !file.source) context.addIssue({ code: 'custom', message: 'manualOrder applies to a source', path: ['manualOrder'] });
@@ -57,8 +57,8 @@ export const CompilationFileSchema = z.object({ version: z.literal(1), id, title
 export type CompilationFile = z.infer<typeof CompilationFileSchema>;
 export type CompilationFileItem = z.infer<typeof FileItemSchema>;
 
-export type CompilationView = 'thumbnail' | 'small' | 'medium' | 'graph' | 'stack';
-export const COMPILATION_VIEWS: readonly CompilationView[] = ['thumbnail', 'small', 'medium', 'graph', 'stack'];
+export type CompilationView = 'thumbnail' | 'small' | 'medium' | 'graph' | 'book';
+export const COMPILATION_VIEWS: readonly CompilationView[] = ['thumbnail', 'small', 'medium', 'graph', 'book'];
 export interface CompilationStudy {
   filter: 'all' | 'due' | 'future' | 'paused';
   dueFirst: boolean;
@@ -76,7 +76,7 @@ interface CompilationRowBase {
   /** The file's repository-relative path. */
   path: string;
   view: CompilationView;
-  /** The stored lane card size, kept while `view` is stack or graph so switching back restores it. */
+  /** The stored lane card size, kept while `view` is book or graph so switching back restores it. */
   size?: CompilationFile['size'];
   tags?: string[];
   status?: string;
@@ -148,9 +148,9 @@ export function compilationRow(file: CompilationFile, owner: { notebookId: strin
 
 /** The stored form of a lane model; the inverse of `compilationRow`. */
 export function compilationFile(row: CompilationRow): CompilationFile {
-  const lane = row.view !== 'graph' && row.view !== 'stack';
+  const lane = row.view !== 'graph' && row.view !== 'book';
   const size = lane ? row.view as CompilationFile['size'] : row.size;
-  const common = { version: 1 as const, id: row.id, title: row.name, arrangement: lane ? 'lane' as const : row.view as 'graph' | 'stack', ...(size ? { size } : {}), ...(row.tags?.length ? { tags: row.tags } : {}), ...(row.status ? { status: row.status } : {}), ...(row.study ? { study: row.study } : {}), ...(row.progression ? { progression: row.progression } : {}), ...(row.graph ? { graph: row.graph } : {}) };
+  const common = { version: 1 as const, id: row.id, title: row.name, arrangement: lane ? 'lane' as const : row.view as 'graph' | 'book', ...(size ? { size } : {}), ...(row.tags?.length ? { tags: row.tags } : {}), ...(row.status ? { status: row.status } : {}), ...(row.study ? { study: row.study } : {}), ...(row.progression ? { progression: row.progression } : {}), ...(row.graph ? { graph: row.graph } : {}) };
   if (row.kind === 'custom') return { ...common, items: row.items.map(item => item.kind === 'youtube' ? item : { id: item.id, kind: item.kind, path: item.path }) };
   const source = row.source.kind === 'tag' ? { kind: 'tag' as const, tag: row.source.tag } : { kind: 'folder' as const, path: row.source.path, recursive: row.source.recursive };
   return { ...common, source, ...(row.sort ? { sort: row.sort } : {}), ...(row.manualOrder?.length ? { manualOrder: row.manualOrder } : {}) };

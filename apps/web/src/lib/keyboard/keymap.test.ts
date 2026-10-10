@@ -28,6 +28,16 @@ describe('KEYMAP', () => {
     }
   });
 
+  it('lists finishing an in-place edit beside closing the compilation without a collision', () => {
+    const finish = KEYMAP.find(entry => entry.id === 'compilation.finishEdit');
+    const close = KEYMAP.find(entry => entry.id === 'compilation.close');
+    expect(finish).toMatchObject({ scopes: ['compilation-edit'], handler: 'widget' });
+    expect(finish?.bindings.map(binding => binding.keys)).toEqual(['Escape']);
+    expect(finish?.scopes.some(scope => close?.scopes.includes(scope))).toBe(false);
+    expect(en['shortcuts.scope.compilation-edit']).toBeTruthy();
+    expect(zhTW['shortcuts.scope.compilation-edit']).toBeTruthy();
+  });
+
   it('gives every dispatcher entry a phase and every other entry none', () => {
     for (const entry of KEYMAP) expect(entry.phase !== undefined, entry.id).toBe(entry.handler === 'dispatcher');
   });

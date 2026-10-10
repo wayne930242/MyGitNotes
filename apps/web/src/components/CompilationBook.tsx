@@ -10,24 +10,24 @@ import { CompilationHeader, type CompilationHeaderProps } from './CompilationHea
 import { LoadingStatus } from './LoadingStatus.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 
-type StackHeader = Omit<CompilationHeaderProps, 'row' | 'count' | 'notebooks' | 'scrollButton'>;
+type BookHeader = Omit<CompilationHeaderProps, 'row' | 'count' | 'notebooks' | 'scrollButton'>;
 
 /**
- * The stack arrangement: every item in order as one long document. Notes show their full Markdown,
+ * The book arrangement: every item in order as one long document. Notes show their full Markdown,
  * assets a preview, YouTube the player and folders their notes as links; sections are read-only and
  * their title bars open the item.
  */
-export function CompilationStack({ row, notebooks, assets, onOpen, study, facets, extra, ...header }: Omit<CompilationContentProps, 'notes'> & StackHeader & { row: CompilationRow; study: StudyController; facets?: Record<string, NotebookFacets>; extra?: ReactNode; }) {
+export function CompilationBook({ row, notebooks, assets, onOpen, study, facets, extra, ...header }: Omit<CompilationContentProps, 'notes'> & BookHeader & { row: CompilationRow; study: StudyController; facets?: Record<string, NotebookFacets>; extra?: ReactNode; }) {
   const { t } = useTranslation();
   const laneNotes = useLaneNotes(row, { content: true });
   const content: CompilationContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
   const items = studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study);
   return (
-    <section id={`screen-lane-${row.id}`} className='screen-lane screen-stack-view' aria-label={row.name}>
+    <section id={`screen-lane-${row.id}`} className='screen-lane compilation-book-view' aria-label={row.name}>
       <CompilationHeader row={row} count={items.length} notebooks={notebooks} facets={facets} extra={extra} {...header} />
-      <div className='screen-stack' aria-label={`${row.name} · ${t('screen.items')}`}>
-        {items.map(item => <CompilationCard key={item.id} {...content} item={item} view='stack' />)}
+      <div className='compilation-book' aria-label={`${row.name} · ${t('screen.items')}`}>
+        {items.map(item => <CompilationCard key={item.id} {...content} item={item} view='book' />)}
         {laneNotes.error && <p role='alert' className='screen-error'>{laneNotes.error}</p>}
         {laneNotes.loading && <LoadingStatus className='screen-lane-empty'>{t('notes.loading')}</LoadingStatus>}
         <NoteListSentinel hasMore={laneNotes.hasMore} loading={laneNotes.loadingMore} error={laneNotes.error} onLoadMore={laneNotes.loadMore} className='screen-lane-sentinel' />
