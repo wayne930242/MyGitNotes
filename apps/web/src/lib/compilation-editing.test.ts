@@ -2,7 +2,7 @@
 import { createElement, type ReactNode } from 'react';
 import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { CompilationEditingProvider, holdOrder, useCompilationEditing, useHeldOrder } from './compilation-editing.js';
+import { CompilationEditingProvider, holdOrder, useCompilationEditing, useHeldNotes, useHeldOrder } from './compilation-editing.js';
 
 const flushEditors = vi.fn<(keys?: readonly string[]) => Promise<boolean>>();
 const refreshNotes = vi.fn<() => Promise<void>>();
@@ -117,4 +117,21 @@ it('holds a dynamic list while a slot edits and applies the live order once edit
   expect(result.current.map(entry => entry.id)).toEqual(['1', '2', '3', '4']);
   await act(async () => void await editingRef.finish());
   expect(result.current.map(entry => entry.id)).toEqual(['2', '1', '4']);
+});
+
+it('holds loaded notes under their repository key, as two notes can share an id', async () => {
+  let editingRef!: ReturnType<typeof useCompilationEditing>;
+  const Wrapper = ({ children }: { children: ReactNode; }) => {
+    const editing = useCompilationEditing();
+    /* eslint-disable react/globals -- The test probe captures the hook's result for assertions after React commits. */
+    editingRef = editing;
+    /* eslint-enable react/globals */
+    return createElement(CompilationEditingProvider, { value: editing }, children);
+  };
+  const index = (folder: string, body: string) => ({ id: 'index', notebookId: 'nb', path: `notes/${folder}/index.md`, body });
+  const { result, rerender } = renderHook(({ notes }) => useHeldNotes(notes), { wrapper: Wrapper, initialProps: { notes: [index('x', 'one'), index('y', 'two')] } });
+  await act(async () => void await editingRef.start({ slot: 'x', key: 'nb:notes/x/index.md' }));
+  // The edited note leaves the loaded page; both stay, in their order, and the neighbour keeps its latest copy.
+  rerender({ notes: [index('y', 'two, saved elsewhere')] });
+  expect(result.current.map(note => [note.path, note.body])).toEqual([['notes/x/index.md', 'one'], ['notes/y/index.md', 'two, saved elsewhere']]);
 });

@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useNoteEditing } from '../lib/note-editing.js';
 import { renderNote } from '../lib/markdown.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
 import { InlineNoteSlot, type InlineNoteSlotParts } from './InlineNoteSlot.js';
@@ -15,6 +16,7 @@ export interface BookSectionProps {
   /** 2 for a chapter, 3 for a note listed under a folder chapter. */
   level: 2 | 3;
   note: NoteListItem;
+  /** Whether the compilation can be edited; the note's own repository must allow it too. */
   writable: boolean;
   /** The title of the note in zoom, from the section heading or the body where editing is not offered. */
   onOpenZoom: () => void;
@@ -46,10 +48,11 @@ function SectionFrame({ anchor, level, parts, onOpenZoom, onLiveTitle }: Pick<Bo
 /** A note as a section of the book: its Markdown as it renders elsewhere, or its editor in place. */
 export function BookSection({ anchor, slot, level, note, writable, onOpenZoom, onLiveTitle }: BookSectionProps) {
   const { t } = useTranslation();
+  const { editorProps } = useNoteEditing();
   const tableLabel = t('preview.scrollableTable');
   /* eslint-disable react/preserve-manual-memoization -- Memoization follows the note content/path and display inputs used by the renderer. */
   const html = useMemo(() => typeof note.content === 'string' ? renderNote(note.content, note.path, tableLabel, youtubeLabels(t), note.notebookId) : '', [note.content, note.path, note.notebookId, tableLabel, t]);
   /* eslint-enable react/preserve-manual-memoization */
   const reading = typeof note.content === 'string' ? <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus>;
-  return <InlineNoteSlot slot={slot} notebookId={note.notebookId} path={note.path} title={note.title} writable={writable} layout='grow' reading={reading} onOpenZoom={onOpenZoom}>{parts => <SectionFrame anchor={anchor} level={level} parts={parts} onOpenZoom={onOpenZoom} onLiveTitle={onLiveTitle} />}</InlineNoteSlot>;
+  return <InlineNoteSlot slot={slot} notebookId={note.notebookId} path={note.path} title={note.title} writable={writable && !editorProps({ ...note, content: note.content ?? '' }).readOnly} layout='grow' reading={reading} onOpenZoom={onOpenZoom}>{parts => <SectionFrame anchor={anchor} level={level} parts={parts} onOpenZoom={onOpenZoom} onLiveTitle={onLiveTitle} />}</InlineNoteSlot>;
 }

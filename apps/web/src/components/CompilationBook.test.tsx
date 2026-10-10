@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, type ReactNode, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -13,14 +14,18 @@ import type { StudyController } from '../lib/use-study-workspace.js';
 import { CompilationBook } from './CompilationBook.js';
 
 const flushEditors = vi.fn<(keys?: readonly string[]) => Promise<boolean>>();
-vi.mock('../lib/note-editing.js', () => ({ useNoteEditing: () => ({ flushEditors, refreshNotes: async () => {} }) }));
+const editorProps = vi.fn<(note: { notebookId: string; }) => { readOnly: boolean; }>();
+vi.mock('../lib/note-editing.js', () => ({ useNoteEditing: () => ({ flushEditors, refreshNotes: async () => {}, editorProps }) }));
+/** Paths whose editor renders into the page's body instead of the section, as a note's zoom borrowing it does. */
+const portalled = new Set<string>();
 vi.mock('./NoteEditorHost.js', () => ({
   HostedNoteEditor: ({ path, onSession }: { path: string; onSession?: (session: { content: string; title: string; dirty: boolean; locked: boolean; } | null) => void; }) => {
     useEffect(() => {
       onSession?.({ content: 'body', title: `Editing ${path}`, dirty: false, locked: false });
       return () => onSession?.(null);
     }, [onSession, path]);
-    return createElement('textarea', { 'aria-label': 'Note content', 'defaultValue': 'body' });
+    const editor = createElement('textarea', { 'aria-label': portalled.has(path) ? 'Zoom editor' : 'Note content', 'defaultValue': 'body' });
+    return portalled.has(path) ? createPortal(editor, document.body) : editor;
   },
 }));
 const laneOverride: { current: ReturnType<typeof import('../lib/compilation-queries.js').useLaneNotes> | null; } = { current: null };
@@ -39,6 +44,8 @@ const study: StudyController = { study: emptyStudyWorkspace(), save: async () =>
 
 beforeEach(() => {
   flushEditors.mockReset().mockResolvedValue(true);
+  editorProps.mockReset().mockReturnValue({ readOnly: false });
+  portalled.clear();
   laneOverride.current = null;
   vi.stubGlobal(
     'IntersectionObserver',
@@ -172,6 +179,43 @@ it('highlights the chapter that edits in the contents wherever the book is scrol
   fireEvent.click(within(chapters()[0]).getByRole('button', { name: /^Finish editing/ }));
   await waitFor(() => expect(chapters()[0]).not.toHaveAttribute('data-editing'));
   await waitFor(() => expect(current()).toEqual(['Note B']));
+});
+
+it('ends a section only on keys typed inside it, not on keys of its editor portalled into zoom (E4, K2)', async () => {
+  portalled.add('notes/nb1/a.md');
+  render(book({ readOnly: false }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Note A' }));
+  const zoomEditor = await screen.findByLabelText('Zoom editor');
+  expect(chapters()[0]).not.toContainElement(zoomEditor);
+  fireEvent.keyDown(zoomEditor, { key: 'Escape' });
+  await act(async () => {});
+  expect(chapters()[0]).toHaveAttribute('data-editing');
+  expect(flushEditors).not.toHaveBeenCalled();
+});
+
+it('holds same-named notes of different folders apart while one edits, as a note id is not unique (E11)', async () => {
+  const notesAt = ['x', 'y'].map(folder => ({ id: 'index', path: `notes/nb1/${folder}/index.md`, notebookId: 'nb1', title: `Index ${folder}`, tags: [], metadata: {}, content: `Body of ${folder}` }));
+  laneOverride.current = { notes: notesAt as never, loading: false, error: '', hasMore: false, loadingMore: false, loadMore: () => {} };
+  const same: CompilationRow = { ...row, items: ['x', 'y'].map(folder => ({ id: `pin-${folder}`, kind: 'note' as const, notebookId: 'nb1', path: `notes/nb1/${folder}/index.md` })) };
+  render(book({ row: same, readOnly: false }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Index x' }));
+  await waitFor(() => expect(chapters()[0]).toHaveAttribute('data-editing'));
+  expect(screen.getByText('Body of y')).toBeInTheDocument();
+  expect(within(chapters()[1]).getByRole('button', { name: 'Edit Index y' })).toBeInTheDocument();
+  expect(screen.queryByText('This item may have moved or been deleted.')).not.toBeInTheDocument();
+  expect(chapters()).toHaveLength(2);
+});
+
+it('offers no Edit on a note whose repository cannot be written, though the compilation can (E13)', async () => {
+  editorProps.mockImplementation(note => ({ readOnly: note.notebookId === 'nb1' }));
+  const onOpen = vi.fn();
+  render(book({ readOnly: false, onOpen }), { wrapper });
+  await waitFor(() => expect(screen.getByText('The body of note A.')).toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument();
+  fireEvent.pointerDown(screen.getByText('The body of note A.'), { pointerType: 'mouse' });
+  fireEvent.click(screen.getByText('The body of note A.'), { pointerType: 'mouse' });
+  expect(chapters()[0]).not.toHaveAttribute('data-editing');
+  expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'item-1' }), expect.objectContaining({ path: 'notes/nb1/a.md' }));
 });
 
 it("lists a folder's notes as sub-sections under it, in the book and in the contents, each a note section", async () => {

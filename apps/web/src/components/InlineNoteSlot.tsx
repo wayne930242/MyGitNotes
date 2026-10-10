@@ -148,6 +148,8 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // The note's zoom borrows this slot's editor and is portalled elsewhere in the page, but its keys still bubble through React to the slot: only keys typed inside the slot end it.
+    if (!event.currentTarget.contains(event.target as Node)) return;
     // A selection in the source textarea is the editor's to collapse first; the live editor does this itself.
     const target = event.target;
     if (target instanceof HTMLTextAreaElement && target.selectionStart !== target.selectionEnd) {

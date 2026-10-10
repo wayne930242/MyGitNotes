@@ -167,7 +167,18 @@ try {
   assert.equal(await padding(), overlayPadding, 'The compilation frame changed width after a note was opened and closed');
   assert.equal(await page.evaluate(() => document.activeElement?.className.includes('compilation-book-title')), true, 'Focus did not return to the title that opened the note');
   assert.ok((await page.$eval(`${section(5)} .cm-content`, element => element.textContent)).includes('UNSAVED-SESSION'), 'The section lost its text after zoom');
-  console.log('PASS zoom borrows the section editor and gives it back');
+  // Escape typed in the borrowed zoom editor does not end the section's slot behind it: after zoom closes, the section is still editing with its text.
+  await page.click(`${section(5)} .compilation-book-title`);
+  await page.waitForSelector('[role="dialog"][aria-label="Note editor"] .cm-content');
+  await page.click('[role="dialog"][aria-label="Note editor"] .cm-content');
+  await page.keyboard.press('Escape');
+  await pause(500);
+  await page.click('button[aria-label="Close note"]');
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Note editor"]'));
+  await page.waitForSelector(`${section(5)}[data-editing] .cm-content`);
+  assert.ok(await dialogOpen(), 'Closing zoom closed the compilation as well');
+  assert.ok((await page.$eval(`${section(5)} .cm-content`, element => element.textContent)).includes('UNSAVED-SESSION'), 'The section lost its text after Escape in zoom');
+  console.log('PASS zoom borrows the section editor and gives it back, also after Escape typed in zoom');
 
   // K2: Escape leaves the section first, then the compilation.
   await page.click(`${section(5)} .cm-content`);

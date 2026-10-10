@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useNoteEditing } from './note-editing.js';
 
 /** The note slot an open compilation edits: a Book section or a lane card, and the note's `noteRefKey`. */
@@ -88,4 +89,12 @@ export function useHeldOrder<T extends { id: string; }>(items: readonly T[]): T[
   if (editing && !held) setHeld(items);
   else if (!editing && held) setHeld(null);
   return holdOrder(items, editing ? held : null);
+}
+
+/**
+ * `notes` in the order and with the copies `useHeldOrder` keeps while a slot edits. A note's `id` is not unique
+ * across folders and notebooks (two `index.md`), so they are held under their repository key.
+ */
+export function useHeldNotes<T extends { notebookId: string; path: string; }>(notes: readonly T[]): T[] {
+  return useHeldOrder(notes.map(note => ({ id: noteRefKey(note), note }))).map(held => held.note);
 }

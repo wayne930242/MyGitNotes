@@ -4,9 +4,9 @@ import { horizontalListSortingStrategy, SortableContext, useSortable, verticalLi
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, X } from 'lucide-react';
 import type { CompilationItem, CompilationRow, CompilationSort } from '@mygitnotes/core/compilation';
-import { type NotebookFacets, noteRefKey } from '@mygitnotes/core/note-query';
+import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
-import { useCompilationEditingContext, useHeldOrder } from '../lib/compilation-editing.js';
+import { useCompilationEditingContext, useHeldNotes, useHeldOrder } from '../lib/compilation-editing.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
 import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
@@ -78,8 +78,7 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   // Cards show a body, so the lane's page is read with content; a graph lane needs none.
   const laneNotes = useLaneNotes(row, { content: row.view !== 'graph' });
   // While a card edits, its autosaves must not move or drop anything: the notes keep the copies they had (a note that leaves the loaded page stays a note card), the items their order (E11).
-  // A note's `id` is not unique across folders and notebooks, so notes are held under their repository key.
-  const notes = useHeldOrder(laneNotes.notes.map(note => ({ id: noteRefKey(note), note }))).map(held => held.note);
+  const notes = useHeldNotes(laneNotes.notes);
   const content: CompilationContentProps = { notebooks, assets, onOpen, notes };
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
   const items = useHeldOrder(studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock));

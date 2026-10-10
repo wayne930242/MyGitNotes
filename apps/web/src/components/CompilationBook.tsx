@@ -3,7 +3,7 @@ import { List } from 'lucide-react';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import { bookChapters, bookEntries, type BookEntry, slotAnchor } from '../lib/book-chapters.js';
-import { useCompilationEditingContext, useHeldOrder } from '../lib/compilation-editing.js';
+import { useCompilationEditingContext, useHeldNotes, useHeldOrder } from '../lib/compilation-editing.js';
 import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -35,7 +35,7 @@ export function CompilationBook({ row, notebooks, assets, onOpen, study, facets,
   const laneNotes = useLaneNotes(row, { content: true });
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
   // While a section edits, its autosaves must not move or drop anything: the notes keep the copies they had, the items their order.
-  const notes = useHeldOrder(laneNotes.notes);
+  const notes = useHeldNotes(laneNotes.notes);
   const items = useHeldOrder(studyRowItems(compilationRowItems(row, notes, assets, notebooks), ordinaryRow, notes, study.study));
   const chapters = bookChapters(items, notes, assets, laneNotes.loading);
   const [sections, setSections] = useState<ReadonlyMap<string, readonly BookEntry[]>>(new Map());

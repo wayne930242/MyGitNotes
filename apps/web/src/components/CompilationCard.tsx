@@ -48,12 +48,9 @@ export function CompilationCard({ item, view, controls, writable = false, ...con
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];
   const reading = note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : null;
   const card = (slot?: InlineNoteSlotParts) => {
-    // The note's zoom borrows this card's editor and is portalled elsewhere in the page, but its keys still bubble through React to this card: only keys typed inside the card end its slot.
-    const { onKeyDown, ...frame } = slot?.frameProps ?? {};
     return (
       <article
-        {...frame}
-        onKeyDown={onKeyDown && (event => event.currentTarget.contains(event.target as Node) && onKeyDown(event))}
+        {...slot?.frameProps}
         className={`screen-card screen-item-${item.kind}`}
         data-screen-item={item.id}
         onClick={event => {
