@@ -10,12 +10,18 @@ export interface MemoryAccountOptions {
   limit?(): Omit<MembershipLimit, 'visible'> | null;
 }
 
+/** The in-memory reference store, which can also be handed members as stored, for the contract's `seed`. */
+export interface MemoryAccountSource extends WorkspaceConfigSource {
+  /** Replaces a person's members as stored, bypassing the change rules, and moves their revision on. */
+  seed(person: string, members: WorkspaceMember[]): void;
+}
+
 /**
  * A configuration source that keeps each person's repositories in memory, the reference for the membership store an
  * edition with accounts supplies: platform repositories the members route checked, every member `editable: 'account'`,
  * changes checked against a revision per person, decision C8 by the shared change functions, and the visible limit.
  */
-export function memoryAccountSource({ personOf, site = { type: 'github' }, limit = () => null }: MemoryAccountOptions): WorkspaceConfigSource {
+export function memoryAccountSource({ personOf, site = { type: 'github' }, limit = () => null }: MemoryAccountOptions): MemoryAccountSource {
   const accounts = new Map<string, { revision: number; members: WorkspaceMember[]; }>();
   /** The request's person's repositories; nobody's, and unchangeable, for a request nobody signed in to. */
   const account = async (request: WorkspaceRequest) => {
@@ -35,6 +41,10 @@ export function memoryAccountSource({ personOf, site = { type: 'github' }, limit
   };
   return {
     mode: 'remote',
+    seed(person, members) {
+      const current = accounts.get(person);
+      accounts.set(person, { revision: (current?.revision ?? 0) + 1, members: [...members] });
+    },
     // Signed out, the workspace has no members yet still names its site, which sign-in itself reads.
     settings: async request => ({ site, members: (await account(request))?.members ?? [], manifest: memberManifest }),
     membership(request): MembershipStore {

@@ -17,13 +17,16 @@ const personOf = async (request: { headers: Record<string, string | string[] | u
 let max: number | null = null;
 membershipStoreContract('in-memory', () => {
   max = null;
+  const configSource = memoryAccountSource({ personOf, limit: () => max === null ? null : { max, plan: 'Free' } });
   return {
-    configSource: memoryAccountSource({ personOf, limit: () => max === null ? null : { max, plan: 'Free' } }),
+    configSource,
     request: n => ({ headers: { 'x-person': String(n) } }),
+    signedOut: () => ({ headers: {} }),
     person: n => ({ realm: 'github', userId: n }),
     setLimit: next => {
       max = next;
     },
+    seed: (n, members) => configSource.seed(String(n), members),
   };
 });
 
