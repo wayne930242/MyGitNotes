@@ -23,7 +23,7 @@ function decodeDestinationEntities(href: string): string {
   });
 }
 
-export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t'], notebookId?: string): DecorationSet {
+export function liveDecorations(state: EditorState, focused: boolean, notePath: string, linkLabel: string, tableLabel: string, pageLabel: string, youtubeOwner: string, t: I18nContextValue['t'], notebookId?: string, continuous = false): DecorationSet {
   const marks: Range<Decoration>[] = [];
   const mermaidRanges: { from: number; to: number; }[] = [];
   // Source the math scan must not read: code keeps its dollars, and tables and directives render their own math.
@@ -106,7 +106,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
           underlineOpen = null;
         }
       }
-      if (name === 'HorizontalRule' && node.node.parent?.name === 'Document' && state.sliceDoc(from, to).trim() === '---') {
+      if (!continuous && name === 'HorizontalRule' && node.node.parent?.name === 'Document' && state.sliceDoc(from, to).trim() === '---') {
         const currentPage = pageNumber;
         pageNumber++;
         const label = `${pageLabel} ${currentPage}`;
@@ -260,8 +260,7 @@ export function liveDecorations(state: EditorState, focused: boolean, notePath: 
       }
     }
   }
-  const lastPageLabel = `${pageLabel} ${pageNumber}`;
-  marks.push(Decoration.widget({ widget: new PageFooter(pageNumber, lastPageLabel), side: 1, block: true }).range(state.doc.length));
+  if (!continuous) marks.push(Decoration.widget({ widget: new PageFooter(pageNumber, `${pageLabel} ${pageNumber}`), side: 1, block: true }).range(state.doc.length));
   return Decoration.set(marks, true);
 }
 

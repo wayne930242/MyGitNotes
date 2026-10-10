@@ -15,7 +15,7 @@ import { NoteHtml } from './NoteHtml.js';
 export interface HostedNoteEditorProps {
   notebookId: string;
   path: string;
-  frame: 'pane' | 'compact';
+  frame: 'pane' | 'compact' | 'inline';
   active: boolean;
   documentPanel?: NoteEditorProps['documentPanel'];
   editorRef?: React.Ref<NoteEditorHandle>;
@@ -26,7 +26,7 @@ export interface HostedNoteEditorProps {
 }
 
 /**
- * A place that shows a note's editor: a Focus pane or a graph card. A note has one mounted editor across
+ * A place that shows a note's editor: a Focus pane, a graph card, or a compilation's card or Book section. A note has one mounted editor across
  * these hosts and zoom. The owning host renders it into a stable element so zoom can borrow it without
  * remounting; while zoom shows the note the other hosts say so, and otherwise they show a preview with a
  * control that moves editing there.

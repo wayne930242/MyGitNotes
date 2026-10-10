@@ -14,6 +14,7 @@ import { type NoteEditorSessionState, useNoteEditorSession } from './note-editor
 import { useNoteDocumentPanel } from './note-editor/useNoteDocumentPanel.js';
 import { NoteEditorNotices } from './note-editor/NoteEditorNotices.js';
 import { NoteCompactFrame } from './note-editor/NoteCompactFrame.js';
+import { NoteInlineFrame } from './note-editor/NoteInlineFrame.js';
 import { NoteEditorToolbar } from './note-editor/NoteEditorToolbar.js';
 import { NoteEditorDocumentPanel } from './note-editor/NoteEditorDocumentPanel.js';
 import { NoteEditorLeader } from './note-editor/NoteEditorLeader.js';
@@ -34,9 +35,10 @@ export interface NoteEditorProps extends NoteEditorSharedProps {
   note: NoteItem;
   /**
    * `zoom` fills the full-screen dialog and keeps its own document panel; `pane` sits in a Focus pane;
-   * `compact` is the body alone with a status bar, for a graph card.
+   * `compact` is the body alone with a status bar, for a graph card; `inline` is the note as it reads with one line of
+   * save state, for a compilation's card or Book section.
    */
-  frame: 'zoom' | 'pane' | 'compact';
+  frame: 'zoom' | 'pane' | 'compact' | 'inline';
   /** The active editor answers document-level shortcuts and Escape. */
   active: boolean;
   /** Pane frame: the right rail chooses the document panel section and hosts it. */
@@ -101,7 +103,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   const addToOutline = outlines?.canAdd(note.notebookId) && !session.locked ? () => outlines.add({ ...note, title: session.title, content: session.content }) : undefined;
   // A graph card has no footer to show the counts in.
   const { t } = useTranslation();
-  const changes = useNoteDiffStats(frame === 'compact' ? undefined : readDiff, session.isDirty, !session.isSaving && !session.hasUnsavedChanges);
+  const changes = useNoteDiffStats(frame === 'compact' || frame === 'inline' ? undefined : readDiff, session.isDirty, !session.isSaving && !session.hasUnsavedChanges);
   const refresh = onReadRemote && !session.blocked ? session.pullLatest : undefined;
   const docPanel = useNoteDocumentPanel({ frame, active, isMarkdown, content: session.content, editorMode, documentPanel, editorRef, metadata: session.metadata, notePath: note.path, branch, draftScope, readOnly });
   // The active editor is the file the agent panel names to Pi, with the line its caret is on.
@@ -111,7 +113,7 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
   }, [session.content]);
   const lineNumberOffset = session.baseNote.lineNumberOffset || 0;
   const agentTarget = useMemo(() => ({ notebookId: note.notebookId, path: note.path, caret, content: () => contentRef.current, lineNumberOffset }), [note.notebookId, note.path, caret, lineNumberOffset]);
-  usePublishAgentTarget(agentTarget, active && frame !== 'compact');
+  usePublishAgentTarget(agentTarget, active && (frame === 'zoom' || frame === 'pane'));
 
   // A phone opens every note for reading: a long press then only selects text instead of raising the keyboard,
   // whose resize moved the page under the selection. Editing starts from the toolbar's Edit button.
@@ -154,6 +156,20 @@ export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(({ note,
     setImagePickerOpen(false);
     insert(`\n${ref}\n`);
   };
+
+  if (frame === 'inline') {
+    return (
+      <div className='note-editor' data-frame={frame} data-source-notebook={note.notebookId}>
+        <NoteEditorNotices session={session} notePath={note.path} />
+        {awaitingRecovery && (
+          <p role='status'>
+            {t('outline.recoveryPending')} <button type='button' className='ui-button' onClick={() => outlines?.cancel()}>{t('common.cancel')}</button>
+          </p>
+        )}
+        <NoteInlineFrame note={note} session={session} editorRef={editorRef} onCaret={onCaret} />
+      </div>
+    );
+  }
 
   if (frame === 'compact') {
     return (

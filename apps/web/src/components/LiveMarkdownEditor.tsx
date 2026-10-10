@@ -63,10 +63,12 @@ interface Props {
   showLineNumbers?: boolean;
   lineNumberOffset?: number;
   onCopyLines?: (firstLine: number, lastLine?: number) => void;
+  /** The note as it reads, in a column with no page: no paper behind the text, no page breaks or page numbers. */
+  continuous?: boolean;
 }
 const focusChanged = StateEffect.define<boolean>();
 let youtubeEditorSequence = 0;
-export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ content, notePath, notebookId, readOnly, onChange, onCaret, ariaLabel = 'Note content', showLineNumbers = true, lineNumberOffset = 0, onCopyLines }, ref) => {
+export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ content, notePath, notebookId, readOnly, onChange, onCaret, ariaLabel = 'Note content', showLineNumbers = true, lineNumberOffset = 0, onCopyLines, continuous = false }, ref) => {
   const { t } = useTranslation();
   const linkLabel = t('links.open');
   const tableLabel = t('preview.scrollableTable'), pageLabel = t('editor.page');
@@ -163,12 +165,12 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
   useEffect(() => {
     const field = StateField.define<{ decorations: DecorationSet; focused: boolean; }>({
       create(state) {
-        return { decorations: liveDecorations(state, false, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId), focused: false };
+        return { decorations: liveDecorations(state, false, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId, continuous), focused: false };
       },
       update(value, tr) {
         let focused = value.focused;
         for (const effect of tr.effects) if (effect.is(focusChanged)) focused = effect.value;
-        return { focused, decorations: liveDecorations(tr.state, focused, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId) };
+        return { focused, decorations: liveDecorations(tr.state, focused, notePath, linkLabel, tableLabel, pageLabel, youtubeOwner.current, t, notebookId, continuous) };
       },
       provide: field => EditorView.decorations.from(field, value => value.decorations),
     });
@@ -185,7 +187,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           formatKeymap,
           markdownEditorKeymap(),
           drawSelection(),
-          cardBackgroundLayer,
+          continuous ? [] : cardBackgroundLayer,
           headingGutter,
           lineNumberGutter.current.of(
             showLineNumbers
@@ -250,7 +252,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
       view.destroy();
       editor.current = undefined;
     };
-  }, [notePath, notebookId, ariaLabel, linkLabel, tableLabel, pageLabel, t]);
+  }, [notePath, notebookId, ariaLabel, linkLabel, tableLabel, pageLabel, continuous, t]);
   /* eslint-enable react-hooks/exhaustive-deps */
   useEffect(() => {
     const view = editor.current;
@@ -291,5 +293,5 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
     });
     return () => cancelAnimationFrame(frame);
   }, [location.hash, notePath, content]);
-  return <div ref={host} className='flex-1 min-h-0 min-w-0 overflow-hidden' data-live-markdown />;
+  return <div ref={host} className='flex-1 min-h-0 min-w-0 overflow-hidden' data-live-markdown data-continuous={continuous || undefined} />;
 });

@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -75,4 +76,51 @@ export function hostedWorkspace({ repository, branch = 'main', config, revision,
   const keyedConfig = { ...config, workspace: { ...config.workspace, default_notebook: key(config.workspace.default_notebook) }, notebooks: config.notebooks.map(notebook => ({ ...notebook, id: key(notebook.id) })) };
   const status = { keyedConfig, local: false, defaultRepository: id, coreUpdate: false, repositories: [{ id, type: 'github', repository, branch, revision, write, alias, notebooks: keyedConfig.notebooks.map(notebook => notebook.id), title: config.workspace.title, defaultNotebook: keyedConfig.workspace.default_notebook, preferences: { ...DEFAULT_WORKSPACE_PREFERENCES, ...config.preferences }, config, configRevision: revision }] };
   return { id, alias, key, keyedConfig, status };
+}
+
+/**
+ * Where the first paragraph of the note slot `scope` (a card or a Book section) reads, and in what type, before it edits.
+ * A thumbnail card reads as a short clamped summary rather than the note's body, so it has a left edge and measure but no type to match.
+ */
+export async function slotReading(page, scope) {
+  await page.waitForSelector(`${scope} .compilation-inline-reading :is(.screen-markdown p, .screen-summary)`, { timeout: 20000 });
+  return page.$eval(scope, slot => {
+    const body = slot.querySelector('.compilation-inline-reading .screen-markdown p');
+    const paragraph = body ?? slot.querySelector('.compilation-inline-reading .screen-summary');
+    const style = getComputedStyle(paragraph), box = paragraph.getBoundingClientRect();
+    return { typed: Boolean(body), fontSize: style.fontSize, lineHeight: parseFloat(style.lineHeight), left: box.left, width: box.width };
+  });
+}
+
+/**
+ * The note slot `scope` edits in the reading layout (E15): no page, no paper behind the text, no toolbar, mode switch or
+ * path bar, one quiet save-state line, and the same type and left edge as `reading`, which `slotReading` measured before.
+ * With `fills`, the editor also takes the card's whole content height and the text starts at its top (E16).
+ */
+export async function assertReadingLayout(page, scope, reading, label, { fills = false } = {}) {
+  const found = await page.$eval(scope, slot => {
+    const text = slot.querySelector('.compilation-inline-editor').innerText;
+    const line = [...slot.querySelectorAll('.cm-line')].find(candidate => candidate.textContent.trim() && !candidate.classList.contains('live-md-heading'));
+    const style = getComputedStyle(line), box = line.getBoundingClientRect();
+    const rect = selector => slot.querySelector(selector)?.getBoundingClientRect();
+    const content = slot.querySelector('.screen-card-content')?.getBoundingClientRect();
+    const editor = rect('.compilation-inline-editor'), body = rect('.note-editor-body'), markdown = rect('[data-markdown-editor]');
+    return { pageLabels: slot.querySelectorAll('.live-md-page-footer, .live-md-page-break, .live-md-page-divider').length, pageText: /\bPage \d+\b/.test(text), paper: slot.querySelectorAll('.cm-card-background').length, chrome: slot.querySelectorAll('[data-mode-toggle], .note-compact-bar, .note-compact-path, .markdown-insert-toolbar, .note-format-toolbar, .note-toolbar, .note-footer, [data-source-line-numbers], .cm-lineNumbers').length, status: slot.querySelector('.note-inline-status')?.textContent.trim() ?? '', fontSize: style.fontSize, lineHeight: parseFloat(style.lineHeight), left: box.left, width: box.width, top: box.top, contentTop: content?.top, contentHeight: content?.height, editorHeight: editor?.height, bodyBottom: body?.bottom, markdownBottom: markdown?.bottom, bodyHeight: body?.height, markdownHeight: markdown?.height };
+  });
+  assert.equal(found.pageLabels + found.paper, 0, `${label}: the editing slot shows a page or its paper`);
+  assert.equal(found.pageText, false, `${label}: the editing slot names a page`);
+  assert.equal(found.chrome, 0, `${label}: the editing slot shows editor chrome`);
+  assert.ok(found.status.length > 0, `${label}: the editing slot has no save-state line`);
+  if (reading.typed) {
+    assert.equal(found.fontSize, reading.fontSize, `${label}: type size differs from reading`);
+    assert.ok(Math.abs(found.lineHeight - reading.lineHeight) <= 0.5, `${label}: line height ${found.lineHeight} differs from reading ${reading.lineHeight}`);
+  }
+  assert.ok(Math.abs(found.left - reading.left) <= 2, `${label}: text starts at ${found.left}, reading at ${reading.left}`);
+  assert.ok(found.width >= reading.width - 20 && found.width <= reading.width + 2, `${label}: text measure ${found.width} differs from reading ${reading.width}`);
+  if (fills) {
+    assert.ok(Math.abs(found.editorHeight - found.contentHeight) <= 2, `${label}: the editor is ${found.editorHeight}px in a ${found.contentHeight}px card body`);
+    assert.ok(Math.abs(found.markdownBottom - found.bodyBottom) <= 1 && found.markdownHeight >= found.bodyHeight - 1, `${label}: the text area leaves a band in the editor body`);
+    assert.ok(found.top - found.contentTop <= 48, `${label}: the text starts ${found.top - found.contentTop}px below the top of the card body`);
+  }
+  return found;
 }

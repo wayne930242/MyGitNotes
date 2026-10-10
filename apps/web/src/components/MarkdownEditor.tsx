@@ -46,6 +46,8 @@ interface Props {
   /** The caret, and the other end of the selection when text is selected. */
   onCaret?: (position: number, end?: number) => void;
   compact?: boolean;
+  /** Live mode shows the note in a column with no page, as it reads in a card or a Book section. */
+  continuous?: boolean;
   /** The element that hosts the formatting toolbar; null hides it, and without one it sits in a row above the content. */
   toolbarSlot?: HTMLElement | null;
   showLineNumbers?: boolean;
@@ -78,7 +80,7 @@ export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEdi
   );
 }
 
-export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, toolbarSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0, onInsertImage }, ref) => {
+export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content, path, notebookId, mode, readOnly, onChange, onCaret, compact = false, continuous = false, toolbarSlot, ariaLabel = 'Document content', showLineNumbers = true, lineNumberOffset = 0, onInsertImage }, ref) => {
   const { t } = useTranslation();
   const [caret, setCaret] = useState<number | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -497,7 +499,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       {mode === 'live' && isMarkdown
         ? (
           <React.Suspense fallback={<LoadingStatus className='p-6 text-sm text-muted'>{t('editor.loadingEditor')}</LoadingStatus>}>
-            <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} notebookId={notebookId} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} />
+            <LiveMarkdownEditor key={path} ref={live} content={content} notePath={path} notebookId={notebookId} readOnly={readOnly} onChange={onChange} onCaret={onCaret} ariaLabel={ariaLabel} showLineNumbers={showLineNumbers} lineNumberOffset={lineNumberOffset} onCopyLines={copyLines} continuous={continuous} />
           </React.Suspense>
         )
         : (

@@ -56,7 +56,7 @@ it("turns the slot into the note's editor in place, focused at the start, with D
   fireEvent.click(within(frame('a')).getByRole('button', { name: 'Edit Alpha' }));
   await waitFor(() => expect(frame('a')).toHaveAttribute('data-editing'));
   const editor = within(frame('a')).getByLabelText('Note content');
-  expect(editor).toHaveAttribute('data-frame', 'compact');
+  expect(editor).toHaveAttribute('data-frame', 'inline');
   expect(editor).toHaveAttribute('data-claim', 'true');
   expect(within(frame('a')).getByRole('group', { name: 'Alpha, retitled' })).toHaveAttribute('data-layout', 'fill');
   await waitFor(() => expect(editor).toHaveFocus());

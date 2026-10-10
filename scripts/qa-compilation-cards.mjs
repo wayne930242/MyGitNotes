@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { SUPPORTED_SCHEMA_VERSION } from '../packages/core/dist/config.js';
-import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { assertReadingLayout, createQaWorkspace, launchQaBrowser, product, qaRequire, slotReading, startQaServer } from './lib/qa-harness.mjs';
 
-// Lane cards of a compilation: the narrow vertical layout (L1-L5) and that changing layout never writes a file (S7), then editing a note in its card (E1-E12, L6, L7) and the Graph arrangement's own in-place editing (G1).
+// Lane cards of a compilation: the narrow vertical layout (L1-L5) and that changing layout never writes a file (S7), then editing a note in its card (E1-E12, E15, E16, L6, L7) and the Graph arrangement's own in-place editing (G1).
 const require = qaRequire();
 const { root, write, commitFixture, git } = createQaWorkspace('github-notes-compilation-cards-qa-');
 write('.github-notes.yaml', `schema_version: ${SUPPORTED_SCHEMA_VERSION}\nworkspace:\n  title: Cards QA\n  default_notebook: work\nnotebooks:\n  - id: work\n    title: Work\n    root: notes/work\n`);
@@ -358,19 +358,26 @@ try {
     await page.waitForSelector(selector, { visible: true, timeout: 20000 });
     await page.tap(selector);
   };
-  const SHOTS_EDIT = process.env.QA_SHOTS_EDIT || shots;
+  // A named screenshot for the person who reviews the result, written when QA_SHOTS_FINAL names a folder.
+  const finalShot = async name => {
+    if (!process.env.QA_SHOTS_FINAL) return;
+    fs.mkdirSync(process.env.QA_SHOTS_FINAL, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.QA_SHOTS_FINAL, `${name}.png`) });
+  };
 
   // E1, E5, E6: a body click edits the card and focuses the editor; a body click on another card saves the first on disk and moves editing there.
   await zoom('pins', 1440, 900);
   const smallCard = await cardBox('.compilation-view', 'a');
+  const readingA = await slotReading(page, cardSel('a'));
   await startByBody('.compilation-view', 'a');
   assert.deepEqual(await editing(), ['pin-a']);
   await page.keyboard.type('EDIT-A ');
+  // E15, E16: the card edits in the reading layout, and the text starts at the top of its body.
+  await assertReadingLayout(page, cardSel('a'), readingA, 'small card at 1440px', { fills: true });
   assert.equal((await cardBox('.compilation-view', 'a')).height, smallCard.height, 'The card grew when it began editing');
   assert.ok(await page.$eval(`${cardSel('a')} .cm-scroller`, scroller => scroller.scrollHeight > scroller.clientHeight), 'The editor does not scroll inside the card');
   await shot('card-editing-zoom-1440-small');
-  fs.mkdirSync(SHOTS_EDIT, { recursive: true });
-  await page.screenshot({ path: path.join(SHOTS_EDIT, 'zoom-1440-small-editing.png') });
+  await finalShot('card-small-editing-1440');
   await click(`${cardSel('b')} .compilation-inline-reading p`);
   await page.waitForSelector(`${cardSel('b')}[data-editing] .cm-content`);
   await waitFile(noteFile('a'), 'EDIT-A');
@@ -421,9 +428,11 @@ try {
   for (const [id, label] of [['thumbs', 'thumbnail'], ['medium', 'medium']]) {
     await zoom(id, 1440, 900);
     const sized = await cardBox('.compilation-view', 'a');
+    const readingSized = await slotReading(page, cardSel('a'));
     await startByBody('.compilation-view', 'a');
     assert.equal((await cardBox('.compilation-view', 'a')).height, sized.height, `The ${label} card grew when it began editing`);
-    await page.screenshot({ path: path.join(SHOTS_EDIT, `zoom-1440-${label}-editing.png`) });
+    await assertReadingLayout(page, cardSel('a'), readingSized, `${label} card at 1440px`, { fills: true });
+    await finalShot(`card-${label}-editing-1440`);
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
   }
@@ -511,15 +520,18 @@ try {
   const pane0 = '[data-focus-pane="0"]';
   assertVertical(await measure(pane0), `focus pane ${Math.round(paneWidth)}px`);
   const paneCard = await cardBox(pane0, 'a');
+  const readingPane = await slotReading(page, `${pane0} ${cardSel('a')}`);
   await startByBody(pane0, 'a');
   await page.keyboard.type('PANE-A ');
+  // E16: in a narrow pane the text starts at the top of the card body and the editor fills it, before any blank lines push it down.
+  await assertReadingLayout(page, `${pane0} ${cardSel('a')}`, readingPane, `card in a ${Math.round(paneWidth)}px pane`, { fills: true });
+  await finalShot('card-editing-focus-pane-500');
   for (let line = 0; line < 40; line++) await page.keyboard.press('Enter');
   await settle(400);
   const paneEditing = await cardBox(pane0, 'a');
   assert.equal(paneEditing.height, paneCard.height, 'The pane card grew while editing');
   assert.ok(await page.$eval(`${pane0} ${cardSel('a')} .cm-scroller`, scroller => scroller.scrollHeight > scroller.clientHeight), 'The pane editor does not scroll inside the card');
   assert.ok(paneEditing.right <= paneWidth + (await page.$eval(`${pane0} .compilation-view`, view => view.getBoundingClientRect().left)) + 1, 'The editing card is wider than the pane');
-  await page.screenshot({ path: path.join(SHOTS_EDIT, 'focus-pane-500-editing.png') });
   await shot('card-editing-focus-pane-500');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
@@ -549,6 +561,7 @@ try {
 
   // E1 on a phone: the Edit button edits, and a touch tap on the body opens the note in zoom.
   await zoom('pins', 390, 900);
+  const readingPhone = await slotReading(page, cardSel('c'));
   await tap(`${cardSel('c')} .compilation-inline-reading p`);
   await page.waitForSelector('[role="dialog"][aria-label="Note editor"]');
   assert.deepEqual(await editing(), [], 'A touch tap edited the card');
@@ -558,7 +571,9 @@ try {
   await page.waitForSelector(`${cardSel('c')}[data-editing] .cm-content`);
   await page.waitForFunction(editorFocused);
   assert.equal((await measure('.compilation-view')).pageOverflow <= 0, true, 'The phone page scrolls sideways while a card edits');
-  await page.screenshot({ path: path.join(SHOTS_EDIT, 'phone-390-card-editing.png') });
+  // E16: on a phone the editor fills the card body, with no band under the text and no band above it.
+  await assertReadingLayout(page, cardSel('c'), readingPhone, 'card at 390px', { fills: true });
+  await finalShot('card-editing-390');
   console.log('PASS on a phone a touch tap opens zoom and the Edit button edits the card (E1, E2)');
 
   // G1: in the Graph arrangement a node expanded from its hover button edits in place, and the note saves as it does outside a compilation.
@@ -606,7 +621,6 @@ try {
   await page.click('[data-graph-note] .cm-content');
   await page.keyboard.type('GRAPH-EDIT ');
   assert.ok((await page.$eval('[data-graph-note] .cm-content', element => element.textContent)).includes('GRAPH-EDIT'), 'The typed text did not land in the node editor');
-  await page.screenshot({ path: path.join(SHOTS_EDIT, 'graph-node-editing.png') });
   // Closing the compilation saves what the card edited, as it does for a lane card (E8). The graph card's own debounced autosave is not asserted:
   // inside a zoomed compilation it does not fire on the baseline either (ee56d62), so the guard checks the edit and the flush that exist today.
   await page.keyboard.press('Escape');

@@ -113,7 +113,7 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
     return () => observer.disconnect();
   }, [editing, frame]);
 
-  // In source mode the note is a textarea, which does not grow with its text; a Book section sizes it to its lines so the book scrolls as one document.
+  // A plain-text note is a textarea, which does not grow with its text; a Book section sizes it to its lines so the book scrolls as one document.
   useEffect(() => {
     const root = frame;
     if (!editing || layout !== 'grow' || !root) return;
@@ -131,7 +131,7 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
     };
     fitAll();
     root.addEventListener('input', onInput);
-    // Switching to source mode adds the textarea.
+    // The textarea is added once the note has loaded.
     const observer = new MutationObserver(fitAll);
     observer.observe(root, { childList: true, subtree: true });
     return () => {
@@ -174,7 +174,7 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   const body = editing
     ? (
       <div className='compilation-inline-editor' role='group' aria-label={shown} data-layout={layout}>
-        <HostedNoteEditor notebookId={notebookId} path={path} frame='compact' active={false} claim onSession={setSession} />
+        <HostedNoteEditor notebookId={notebookId} path={path} frame='inline' active={false} claim onSession={setSession} />
       </div>
     )
     : <div className='compilation-inline-reading' onPointerDown={(event: PointerEvent<HTMLElement>) => void (pointer.current = event.pointerType)} onClick={onBodyClick}>{reading}</div>;

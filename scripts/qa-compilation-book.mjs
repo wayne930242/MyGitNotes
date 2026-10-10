@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
+import { assertReadingLayout, collectPageErrors, createQaWorkspace, launchQaBrowser, product, qaRequire, slotReading, startQaServer } from './lib/qa-harness.mjs';
 
 // Book arrangement against the built app and a disposable local workspace: a legacy `stack` file opens as Book without being
 // written, the contents follow scrolling and jump, the drawer serves a narrow compilation, and a section edits in place.
@@ -59,6 +59,13 @@ const scrollToHeading = selector =>
 const dialogOpen = () => page.$('[role="dialog"][aria-label="Compilation"]').then(Boolean);
 const editorFocused = () => Boolean(document.activeElement?.closest('[data-editing] .cm-content, [data-editing] textarea'));
 const shot = name => page.screenshot({ path: path.join(shots, `compilation-book-${name}.png`) });
+const FINAL = process.env.QA_SHOTS_FINAL;
+/** A named screenshot for the person who reviews the result, written when QA_SHOTS_FINAL names a folder. */
+const finalShot = async name => {
+  if (!FINAL) return;
+  fs.mkdirSync(FINAL, { recursive: true });
+  await page.screenshot({ path: path.join(FINAL, `${name}.png`) });
+};
 
 try {
   // S2: a stack file opens as Book and is left as it is.
@@ -74,6 +81,7 @@ try {
   assert.equal(await page.$eval('.compilation-book-layout > .compilation-book-contents', nav => nav.getAttribute('aria-label')), 'Contents');
   assert.equal(await page.$eval('.compilation-book-bar', bar => getComputedStyle(bar).display), 'none', 'The Contents button shows beside a wide contents list');
   await shot('reading');
+  await finalShot('book-reading-1440');
 
   // B6, B7, B11: highlight follows scrolling, a click jumps, the page itself never scrolls.
   assert.deepEqual(await current(), ['Chapter 01']);
@@ -110,6 +118,7 @@ try {
   await scrollToHeading(anchor('c05'));
   await pause(300);
   const before = await headingTop(anchor('c05'));
+  const reading5 = await slotReading(page, section(5));
   // A script click would scroll the button into view first; this one leaves the scroll position to the app.
   await page.$eval('button[aria-label="Edit Chapter 05"]', button => button.click());
   await page.waitForSelector(`${section(5)}[data-editing] .cm-content`);
@@ -120,37 +129,21 @@ try {
   assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('gh_notes_draft:') && key.endsWith(':notes/a/chapter-03.md'))), [], 'A saved section left a recovery draft in storage');
   await pause(300);
   await shot('editing');
+  await finalShot('book-section-editing-1440');
   const after = await headingTop(anchor('c05'));
   assert.ok(Math.abs(after - before) <= 2, `Chapter 5 heading moved from ${before} to ${after} when it began editing`);
   assert.equal(await page.$$eval('[data-editing]', editing => editing.length), 1, 'More than one section edits');
   assert.ok((await page.$eval(`${section(3)} .compilation-inline-reading`, element => element.textContent)).includes('TYPED-IN-CHAPTER-THREE'), 'Chapter 3 does not read with the saved content');
   console.log('PASS click-edit a section, switch to another, the first is saved and the heading keeps its place');
 
-  // E3: the editor takes its content's height in both modes, so the book scrolls as one document.
+  // E3, E15: the section edits in the reading layout and takes its content's height, so the book scrolls as one document.
   const grown = selector => page.$eval(`${section(5)} ${selector}`, element => ({ inner: element.scrollHeight - element.clientHeight, height: element.getBoundingClientRect().height, width: element.getBoundingClientRect().width }));
   const sectionWidth = await page.$eval(section(5), element => element.getBoundingClientRect().width);
   const live = await grown('.cm-scroller');
   assert.ok(live.inner <= 1 && live.height > 400, `The live editor scrolls inside the section: ${JSON.stringify(live)}`);
   assert.ok((await grown('.note-editor-body')).width >= sectionWidth - 4, 'The live editor does not fill the section width');
-  await page.$eval(`${section(5)} [data-mode-toggle]`, button => button.click());
-  await page.waitForSelector(`${section(5)} textarea`);
-  await pause(300);
-  const source = await grown('textarea');
-  assert.ok(source.inner <= 1 && source.height > 400, `The source editor scrolls inside the section: ${JSON.stringify(source)}`);
-  assert.ok(source.width >= sectionWidth - 80, `The source editor is narrower than the section: ${JSON.stringify(source)}`);
-  await page.focus(`${section(5)} textarea`);
-  await page.keyboard.type('x\n\n\n');
-  await pause(200);
-  const typed = await grown('textarea');
-  assert.ok(typed.inner <= 1 && typed.height > source.height, `The source editor did not grow with its text: ${JSON.stringify([source, typed])}`);
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('Backspace');
-  await page.keyboard.press('Backspace');
-  await shot('editing-source');
-  await page.$eval(`${section(5)} [data-mode-toggle]`, button => button.click());
-  await page.waitForSelector(`${section(5)} .cm-content`);
-  console.log('PASS the section editor grows with its content in live and source mode');
+  await assertReadingLayout(page, section(5), reading5, 'chapter 5');
+  console.log('PASS the section editor grows with its content and keeps the reading layout');
 
   // E4: the title opens the note in zoom on the same editing session, and closing zoom returns the editor to the section.
   await page.focus(`${section(5)} .cm-content`);
@@ -189,6 +182,7 @@ try {
   await page.click('.compilation-book-contents-button');
   await page.waitForSelector('[role="dialog"][aria-label="Contents"]');
   await shot('drawer-390');
+  await finalShot('book-drawer-390');
   await page.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-label="Contents"] button')].find(button => button.textContent.trim() === 'Chapter 04').click());
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Contents"]'));
   await page.waitForFunction(

@@ -8,7 +8,7 @@ import type { NotePanelMode } from './types.js';
 import { usePiAgentAvailable } from '../../lib/pi-agent/session.js';
 
 export interface UseNoteDocumentPanelParams {
-  frame: 'zoom' | 'pane' | 'compact';
+  frame: 'zoom' | 'pane' | 'compact' | 'inline';
   active: boolean;
   isMarkdown: boolean;
   content: string;

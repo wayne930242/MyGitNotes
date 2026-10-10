@@ -603,3 +603,17 @@
 .compilation-inline-editor[data-layout='grow'] .cm-editor { height: auto; }
 .compilation-inline-editor[data-layout='grow'] .cm-scroller { overflow: visible; }
 .compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div > div > textarea { overflow-y: hidden; resize: none; }
+/* While a slot edits, its note keeps the reading layout: no page, no paper behind the text, no inner border, the reading body's type (a paragraph's line height is `.prose-custom p`'s) and the slot's own padding, whatever width and size the person chose for the full editor. The `!important`s beat the phone rules that pad the full editor's page. */
+.compilation-inline-editor [data-live-markdown][data-continuous] { font-size: 13px; }
+.compilation-inline-editor [data-live-markdown][data-continuous] :is(.cm-editor, .cm-scroller) { background: transparent; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .cm-scroller { padding: 8px 16px 8px !important; line-height: 1.65; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .cm-content { max-width: none; min-height: 0 !important; margin: 0; padding: 0 !important; font-size: 13px; border-radius: 0 !important; box-shadow: none !important; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .cm-line { padding: 0 !important; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .live-md-h1 { font-size: 21px; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .live-md-h2 { font-size: 18px; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .live-md-h3 { font-size: 16px; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .live-md-codeblock { padding-inline: 12px !important; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .live-md-quote { padding-left: calc(12px + (var(--quote-depth, 1) - 1) * 16px) !important; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed { width: min(100%, 360px); margin-left: 0; }
+.compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='medium'] { width: min(100%, 640px); }
+.compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='theater'] { width: 100%; }
