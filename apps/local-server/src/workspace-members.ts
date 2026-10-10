@@ -1,6 +1,6 @@
 import { type Request, type Response, Router } from 'express';
 import { getCurrentBranch } from '@mygitnotes/git';
-import { githubSite, MembershipError, type MembershipLimit, type MembershipStore, openRemoteRepository, parseSourceConfig, type RemoteSnapshot, type RepositoryId, type RepositoryRef, repositoryRef, RepositoryUnavailableError, SourceError, type WorkspaceConfigSource, type WorkspaceMember, type WorkspaceRequest, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
+import { githubSite, MembershipError, type MembershipLimit, type MembershipStore, normalizeNotebookFolder, openRemoteRepository, parseSourceConfig, type RemoteSnapshot, type RepositoryId, type RepositoryRef, repositoryRef, RepositoryUnavailableError, SourceError, type WorkspaceConfigSource, type WorkspaceMember, type WorkspaceRequest, type WorkspaceSettings, WorkspaceSetupError, type WorkspaceSite } from '@mygitnotes/core';
 import type { AssetStorage } from './asset-storage.js';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { endEventStreams } from './event-stream.js';
@@ -90,6 +90,21 @@ const text = (value: unknown, name: string) => {
   return value;
 };
 
+/** A folder a person typed or picked, normalized as a configured one is; one outside the repository is refused as `invalid`. */
+const notebookFolder = (folder: string) => {
+  try {
+    return normalizeNotebookFolder(folder);
+  } catch (error) {
+    throw new MembershipError('invalid', (error as Error).message, 400);
+  }
+};
+
+/** Whoever a members request acts for: the workspace's site, and the token signed in on it (none for a local site). */
+interface Requester {
+  site: WorkspaceSite;
+  token?: string;
+}
+
 /** A platform repository a person names to add, checked with their sign-in. */
 interface InspectedRepository {
   ref: RepositoryRef;
@@ -150,20 +165,27 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
     }
   };
   const signInFirst = (res: Response) => res.status(401).json({ error: 'Sign in to see the repositories of this workspace.', code: 'sign-in' });
-  /** Answers 401 (or 503) and returns false when a remote request carries no usable sign-in. */
-  const signedIn = async (req: Request, res: Response, settings: WorkspaceSettings) => {
-    if (settings.site.type === 'local' || await tokenOf(req, res, settings.site)) return true;
+  /**
+   * Who makes the request: this computer for a local workspace, else the person signed in on its site with their token.
+   * Answers 401 (or 503) and returns null when a remote request carries no usable sign-in. The token is read once per
+   * request: refreshing an expired cookie session spends its single-use refresh token, which a second read would reuse.
+   */
+  const signedIn = async (req: Request, res: Response, settings: WorkspaceSettings): Promise<Requester | null> => {
+    if (settings.site.type === 'local') return { site: settings.site };
+    const token = await tokenOf(req, res, settings.site);
+    if (token) return { site: settings.site, token };
     signInFirst(res);
-    return false;
+    return null;
   };
   const readOnly = (res: Response) => res.status(405).json({ error: repositoryChoice ? 'Each visitor of this deployment opens the one repository they chose; use Switch repository to open another.' : 'This deployment lists its repositories in mygitnotes.server.yaml or its environment; the administrator changes them there and redeploys.', code: 'read-only' });
-  const change = (action: (store: MembershipStore, req: Request, res: Response) => Promise<{ revision: string; }>) => async (req: Request, res: Response) => {
+  const change = (action: (store: MembershipStore, req: Request, requester: Requester) => Promise<{ revision: string; }>) => async (req: Request, res: Response) => {
     try {
       const store = configSource.membership?.(req);
       if (!store) return readOnly(res);
       // A remote workspace changes only for someone signed in on its site, whatever the store checks itself.
-      if (!(await signedIn(req, res, await configSource.settings(req)))) return;
-      const { revision } = await action(store, req, res);
+      const requester = await signedIn(req, res, await configSource.settings(req));
+      if (!requester) return;
+      const { revision } = await action(store, req, requester);
       endEventStreams();
       // What else follows the members (the agent's session) hears of the change without holding up the answer.
       if (onChange) void configSource.settings(req).then(settings => onChange(settings, req)).catch((error: Error) => console.warn(`[members] after a membership change: ${error.message}`));
@@ -172,27 +194,26 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
       fail(res, error);
     }
   };
-  /** A platform repository the request names, checked with the person's sign-in on the workspace's site. */
-  const inspected = async (req: Request, res: Response, repository: unknown, branch: unknown) => {
-    const { site } = await configSource.settings(req);
-    const token = site.type === 'local' ? undefined : await tokenOf(req, res, site);
+  /** A platform repository the request names, checked with the token the requester signed in with. */
+  const inspected = async ({ site, token }: Requester, repository: unknown, branch: unknown) => {
     if (!token) throw new SourceError('Sign in to add a repository.', 401);
     return { token, ...await inspectRepository(site, token, repository, branch) };
   };
   /**
    * Adds what the store takes: a worktree path in a local deployment; in an edition that keeps membership per person, a
-   * platform repository checked first, which needs a folder exactly when its branch keeps no manifest.
+   * platform repository checked first, which needs a folder exactly when its branch keeps no manifest. That folder is
+   * normalized here, as a configured one is, so no store is handed one outside the repository.
    */
-  const add = async (store: MembershipStore, req: Request, res: Response) => {
+  const add = async (store: MembershipStore, req: Request, requester: Requester) => {
     const body = req.body ?? {};
     const folder = typeof body.folder === 'string' ? body.folder : undefined;
     const revision = text(body.revision, 'revision');
     if (store.adds === 'worktree') return store.add({ localPath: body.path, ...(folder !== undefined ? { folder } : {}) }, revision);
-    const { token, ref, answer } = await inspected(req, res, body.repository, body.branch);
+    const { token, ref, answer } = await inspected(requester, body.repository, body.branch);
     const picked = folder?.trim();
     if (answer.manifest && picked) throw new MembershipError('folder-unused', `${answer.repository} keeps a manifest on ${answer.branch}, which names its notebooks. Leave the folder empty.`);
     if (!answer.manifest && !picked) throw new MembershipError('folder-required', `${answer.repository} keeps no manifest on ${answer.branch}. Choose the folder its notebook uses.`);
-    return store.add({ ref, token, ...(picked ? { folder: picked } : {}) }, revision);
+    return store.add({ ref, token, ...(picked ? { folder: notebookFolder(picked) } : {}) }, revision);
   };
 
   router.get('/', async (req, res) => {
@@ -218,7 +239,9 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
     try {
       const store = configSource.membership?.(req);
       if (store?.adds !== 'repository') return readOnly(res);
-      res.json((await inspected(req, res, req.query.repository, req.query.branch)).answer);
+      const { site } = await configSource.settings(req);
+      const requester: Requester = { site, ...(site.type === 'local' ? {} : { token: await tokenOf(req, res, site) }) };
+      res.json((await inspected(requester, req.query.repository, req.query.branch)).answer);
     } catch (error) {
       fail(res, error);
     }

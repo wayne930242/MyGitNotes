@@ -7,10 +7,10 @@ import { Router } from 'express';
 import type { NewMember, WorkspaceConfigSource } from '@mygitnotes/core';
 import { type AppServices, createApp } from '../src/app.js';
 import type { PiAgent } from '../src/pi-agent.js';
-import { storedSessions } from '../src/browser-sessions.js';
+import { cookieSessions, storedSessions } from '../src/browser-sessions.js';
 import { membershipStoreContract } from '../src/membership-store-contract.js';
 import { memoryAccountSource } from '../src/memory-account-source.js';
-import { createRecordStore } from '../src/record-store/index.js';
+import { createRecordStore, seal } from '../src/record-store/index.js';
 import { chosenRepositorySource } from '../src/workspace-choice.js';
 
 /** The person a test request belongs to: the grant's, else the `x-person` header's. */
@@ -46,8 +46,16 @@ afterEach(async () => {
 const fakeGitHub = () => {
   const repositories: Record<string, { files: Record<string, string>; folders: string[]; }> = { 'octo/kb': { files: { '.mygitnotes.yaml': manifest('KB', 'life'), 'notes/life/note.md': '# KB note\n' }, folders: ['notes', 'notes/life'] }, 'octo/scraps': { files: { 'journal/day.md': '# Day\n', '.github/workflow.yml': 'on: push\n' }, folders: ['journal', 'inbox', '.github'] }, 'octo/old': { files: { '.mygitnotes.yaml': `${manifest('Old', 'old')}    source: { type: github, repository: octo/elsewhere, branch: main }\n` }, folders: [] }, 'octo/wiki': { files: { '.mygitnotes.yaml': manifest('Wiki', 'wiki') }, folders: [] }, 'octo/garden': { files: { '.mygitnotes.yaml': manifest('Garden', 'garden') }, folders: [] } };
   const requests: { method: string; url: string; }[] = [];
+  const refreshes: string[] = [];
   const nativeFetch = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (url, init) => {
+    if (String(url) === 'https://github.com/login/oauth/access_token') {
+      // GitHub refresh tokens are single use: a second refresh with the same one is refused.
+      const { refresh_token } = JSON.parse(String(init?.body));
+      const fresh = !refreshes.includes(refresh_token);
+      refreshes.push(refresh_token);
+      return new Response(JSON.stringify(fresh ? { access_token: `fixture-owner-${refresh_token}`, refresh_token: `${refresh_token}-next`, expires_in: 28800, refresh_token_expires_in: 15811200 } : { error: 'bad_refresh_token' }), { status: fresh ? 200 : 400 });
+    }
     const match = /^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/?]+)(.*)$/.exec(String(url));
     if (!match) return nativeFetch(url, init);
     requests.push({ method: init?.method ?? 'GET', url: String(url) });
@@ -61,7 +69,7 @@ const fakeGitHub = () => {
     if (endpoint.startsWith('/git/blobs/')) return json({ encoding: 'base64', content: Buffer.from(repository.files[decodeURIComponent(endpoint.slice('/git/blobs/'.length)).slice(name.length + 1)] ?? '').toString('base64') });
     return json({});
   });
-  return requests;
+  return Object.assign(requests, { refreshes });
 };
 /** The visitor-choice deployment's environment: GitHub, with no repository named, and sessions in a local directory. */
 const visitorChoice = () => {
@@ -71,14 +79,15 @@ const visitorChoice = () => {
 describe("an edition that keeps each person's repositories", () => {
   const sessions = { owner: 'o'.repeat(43), other: 'p'.repeat(43) };
   /** A deployment where visitors bring repositories, composed with an in-memory account store and no repository choices. */
-  const start = async ({ limit = 2, piAgent }: { limit?: number; piAgent?: PiAgent; } = {}) => {
+  const start = async ({ limit = 2, piAgent, cookies = false }: { limit?: number; piAgent?: PiAgent; cookies?: boolean; } = {}) => {
     const product = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-accounts-')));
     roots.push(product);
     visitorChoice();
     const recordStore = createRecordStore(product);
     await recordStore.set(sessions.owner, { kind: 'session', token: 'fixture-owner', login: 'octo', userId: 1 });
     await recordStore.set(sessions.other, { kind: 'session', token: 'fixture-other', login: 'hubot', userId: 2 });
-    const browser = storedSessions(recordStore);
+    // The lightweight mode keeps the session, provider token included, sealed in the browser's cookie.
+    const browser = cookies ? cookieSessions() : storedSessions(recordStore);
     const accounts = memoryAccountSource({ personOf: async request => (await browser.read(request))?.login as string | undefined, limit: () => ({ max: limit, plan: 'Free', upgradeUrl: 'https://example.com/upgrade' }) });
     const added: NewMember[] = [];
     // The store sees exactly what the members route hands it.
@@ -96,14 +105,14 @@ describe("an edition that keeps each person's repositories", () => {
       },
     };
     const requests = fakeGitHub();
-    server = createServer(createApp(product, { configSource, recordStore, workspaceChoices: null, ...(piAgent ? { piAgent } : {}) }));
+    server = createServer(createApp(product, { configSource, recordStore, workspaceChoices: null, ...(cookies ? { sessions: browser } : {}), ...(piAgent ? { piAgent } : {}) }));
     await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
-    return { requests, added };
+    return { requests, added, refreshes: requests.refreshes };
   };
   const call = async (method: string, url: string, body?: unknown, session: string | null = sessions.owner) => {
     const response = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', ...(session ? { Cookie: `gh_notes_session=${session}` } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
-    return { status: response.status, body: await response.json().catch(() => ({})) };
+    return { status: response.status, body: await response.json().catch(() => ({})), cookies: response.headers.getSetCookie() };
   };
   const members = async (session = sessions.owner) => (await call('GET', '/api/workspace/members', undefined, session)).body;
   const add = async (repository: string, extra: Record<string, unknown> = {}) => call('POST', '/api/workspace/members', { repository, revision: (await members()).revision, ...extra });
@@ -117,7 +126,11 @@ describe("an edition that keeps each person's repositories", () => {
     // Without a manifest the person picks one of the branch's top-level folders, or types a new one.
     expect(await add('octo/scraps')).toMatchObject({ status: 422, body: { code: 'folder-required' } });
     expect((await call('GET', '/api/workspace/members/folders?repository=octo/scraps')).body).toEqual({ repository: 'octo/scraps', branch: 'main', manifest: false, folders: ['inbox', 'journal'] });
-    expect((await add('octo/scraps', { folder: 'journal' })).status).toBe(200);
+    // The route keeps the folder inside the repository before any store sees it, and hands it on normalized.
+    for (const folder of ['../x', '.git', '/etc']) expect([folder, await add('octo/scraps', { folder })]).toEqual([folder, expect.objectContaining({ status: 400, body: expect.objectContaining({ code: 'invalid' }) })]);
+    expect(added.map(member => member.ref?.id)).toEqual(['github:octo/kb@main']);
+    expect((await add('octo/scraps', { folder: ' journal/ ' })).status).toBe(200);
+    expect(added.at(-1)?.folder).toBe('journal');
     expect(await add('octo/wiki', { folder: 'anything' })).toMatchObject({ status: 422, body: { code: 'folder-unused' } });
     // A manifest that does not load is shown with its error, never taken for none.
     expect(await add('octo/old')).toMatchObject({ status: 422, body: { code: 'invalid-manifest', error: expect.stringContaining('pnpm convert-sources') } });
@@ -171,6 +184,22 @@ describe("an edition that keeps each person's repositories", () => {
     expect(await call('POST', '/api/workspace/members', { repository: 'octo/wiki', revision }, null)).toMatchObject({ status: 401, body: { code: 'sign-in' } });
     expect(await call('PATCH', '/api/workspace/members', { repository: 'github:octo/kb@main', hidden: true, revision }, null)).toMatchObject({ status: 401, body: { code: 'sign-in' } });
     expect((await call('GET', '/api/workspace/members/folders?repository=octo/scraps', undefined, null)).status).toBe(401);
+  });
+
+  it('adds a repository with a cookie session whose token needs refreshing, refreshing it exactly once per request', async () => {
+    const { refreshes, added } = await start({ cookies: true });
+    /** A sealed cookie session whose upstream token has expired, with a refresh token of its own that was never used. */
+    const expired = (refreshToken: string) => seal({ value: { kind: 'session', token: 'fixture-owner', refreshToken, upstreamExpiresAt: Date.now() - 1000, login: 'octo', userId: 1 }, expires: Date.now() + 3600_000 });
+    const { revision } = await members(expired('refresh-list'));
+    const answer = await call('POST', '/api/workspace/members', { repository: 'octo/kb', revision }, expired('refresh-add'));
+    expect(answer.status).toBe(200);
+    // The single-use refresh token was spent once, and the browser keeps the rotated session rather than losing it.
+    expect(refreshes.filter(token => token === 'refresh-add')).toEqual(['refresh-add']);
+    expect(answer.cookies.find(cookie => cookie.startsWith('gh_notes_session='))).not.toMatch(/Expires=Thu, 01 Jan 1970/);
+    expect(added.at(-1)).toMatchObject({ ref: { id: 'github:octo/kb@main' }, token: 'fixture-owner-refresh-add' });
+    const folders = await call('GET', '/api/workspace/members/folders?repository=octo/scraps', undefined, expired('refresh-folders'));
+    expect(folders).toMatchObject({ status: 200, body: { folders: ['inbox', 'journal'] } });
+    expect(refreshes.filter(token => token === 'refresh-folders')).toEqual(['refresh-folders']);
   });
 
   it('tells the agent which repositories stay visible and whose request changed them', async () => {
