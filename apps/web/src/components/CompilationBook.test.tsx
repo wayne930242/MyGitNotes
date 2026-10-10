@@ -180,7 +180,7 @@ it('ends the contents list with Load more chapters while a paging dynamic compil
 it('moves the contents into a drawer behind a Contents button: choosing an entry closes it and jumps, Escape or the close button returns focus', async () => {
   render(book(), { wrapper });
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Chapter One' })).toBeInTheDocument());
-  const open = screen.getByRole('button', { name: 'Contents' });
+  const open = screen.getByRole('button', { name: 'Show contents' });
   fireEvent.click(open);
   const drawer = screen.getByRole('dialog', { name: 'Contents' });
   expect(within(drawer).getByRole('button', { name: 'Close contents' })).toHaveFocus();
@@ -202,4 +202,25 @@ it('moves the contents into a drawer behind a Contents button: choosing an entry
   fireEvent.click(screen.getByTestId('book-drawer-backdrop'));
   expect(screen.queryByRole('dialog', { name: 'Contents' })).not.toBeInTheDocument();
   expect(open).toHaveFocus();
+});
+
+it('keeps a section editing, and every chapter as a note, when its note drops out of the loaded notes while it edits (E11)', async () => {
+  const noteB = { ...noteA, id: 'notes/nb1/b.md', path: 'notes/nb1/b.md', title: 'Note B', content: '# Chapter Two\n\nThe body of note B.' };
+  const pair: CompilationRow = { ...row, items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/b.md' }] };
+  const lane = (notes: unknown[]) => ({ notes: notes as never, loading: false, error: '', hasMore: false, loadingMore: false, loadMore: () => {} });
+  laneOverride.current = lane([noteA, noteB]);
+  const { rerender } = render(book({ row: pair, readOnly: false }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Note A' }));
+  await waitFor(() => expect(chapters()[0]).toHaveAttribute('data-editing'));
+  // A page of the dynamic list moves on and takes the edited note and its neighbour out of what is loaded.
+  laneOverride.current = lane([]);
+  rerender(book({ row: pair, readOnly: false }));
+  expect(chapters()[0]).toHaveAttribute('data-editing');
+  expect(within(chapters()[0]).getByLabelText('Note content')).toBeInTheDocument();
+  expect(screen.queryByText('This item may have moved or been deleted.')).not.toBeInTheDocument();
+  expect(chapters().map(chapter => within(chapter).getByRole('heading', { level: 2 }).textContent)).toEqual(['Editing notes/nb1/a.md', 'Note B']);
+  fireEvent.click(within(chapters()[0]).getByRole('button', { name: /^Finish editing/ }));
+  await waitFor(() => expect(chapters()[0]).not.toHaveAttribute('data-editing'));
+  // With editing over, the live notes apply again.
+  await waitFor(() => expect(screen.getAllByText('This item may have moved or been deleted.')).toHaveLength(2));
 });

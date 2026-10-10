@@ -34,8 +34,10 @@ export function CompilationBook({ row, notebooks, assets, onOpen, study, facets,
   const { t } = useTranslation();
   const laneNotes = useLaneNotes(row, { content: true });
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
-  const items = useHeldOrder(studyRowItems(compilationRowItems(row, laneNotes.notes, assets, notebooks), ordinaryRow, laneNotes.notes, study.study));
-  const chapters = bookChapters(items, laneNotes.notes, assets, laneNotes.loading);
+  // While a section edits, its autosaves must not move or drop anything: the notes keep the copies they had, the items their order.
+  const notes = useHeldOrder(laneNotes.notes);
+  const items = useHeldOrder(studyRowItems(compilationRowItems(row, notes, assets, notebooks), ordinaryRow, notes, study.study));
+  const chapters = bookChapters(items, notes, assets, laneNotes.loading);
   const [sections, setSections] = useState<ReadonlyMap<string, readonly BookEntry[]>>(new Map());
   const [liveTitles, setLiveTitles] = useState<ReadonlyMap<string, string>>(new Map());
   const entries = bookEntries(chapters, sections, liveTitles);
@@ -94,7 +96,7 @@ export function CompilationBook({ row, notebooks, assets, onOpen, study, facets,
     <section ref={setBook} id={`screen-lane-${row.id}`} className='screen-lane compilation-book-view' aria-label={row.name}>
       <CompilationHeader row={row} count={chapters.length} notebooks={notebooks} facets={facets} extra={extra} {...header} />
       <div className='compilation-book-bar'>
-        <Button ref={opener} type='button' className='compilation-book-contents-button' aria-haspopup='dialog' aria-expanded={drawer} onClick={() => setDrawer(true)}>
+        <Button ref={opener} type='button' className='compilation-book-contents-button' aria-label={t('book.showContents')} title={t('book.showContents')} aria-haspopup='dialog' aria-expanded={drawer} onClick={() => setDrawer(true)}>
           <List size={14} aria-hidden='true' />
           <span>{t('book.contents')}</span>
         </Button>
