@@ -201,6 +201,11 @@ function macHelper() {
     const result = run('xcrun', ['swiftc', '-O', '-o', binary, source]);
     if (result.status !== 0) throw new Error(`swiftc failed: ${result.stderr}`);
   }
+  // /tmp is shared: run only a plain file this user owns that nobody else can rewrite.
+  const stat = fs.lstatSync(binary);
+  if (!stat.isFile() || stat.uid !== process.getuid() || (stat.mode & 0o022) !== 0) {
+    throw new Error(`${binary} is not a file owned by you and writable only by you; remove it and run again`);
+  }
   return list => {
     const result = run(binary, list);
     if (result.status !== 0) throw new Error(`mac helper ${list.join(' ')}: ${result.stderr}`);

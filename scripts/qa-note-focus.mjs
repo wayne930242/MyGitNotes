@@ -98,11 +98,15 @@ const clickEnd = async (page, scope, text) => {
   await page.mouse.click(point.x, point.y);
   await page.keyboard.press('End');
 };
+/** Runs a command through quick open: Mod+Shift+P opens it on the command list, with `>` typed. */
 const palette = async (page, command) => {
-  await page.keyboard.down('Alt');
-  await page.keyboard.press('Slash');
-  await page.keyboard.up('Alt');
-  await page.waitForSelector('.keyboard-shortcuts-panel[data-mode="palette"] input');
+  const mod = await page.evaluate(() => /Mac|iPhone|iPad/.test(navigator.platform)) ? 'Meta' : 'Control';
+  await page.keyboard.down(mod);
+  await page.keyboard.down('Shift');
+  await page.keyboard.press('KeyP');
+  await page.keyboard.up('Shift');
+  await page.keyboard.up(mod);
+  await page.waitForFunction(() => document.querySelector('.keyboard-shortcuts-panel[data-mode="palette"] input')?.value === '>');
   await page.type('.keyboard-shortcuts-panel input', command);
   await page.waitForFunction(command => document.querySelector('.keyboard-shortcuts-list .is-active')?.textContent.toLowerCase().includes(command), {}, command.toLowerCase());
   await page.keyboard.press('Enter');
