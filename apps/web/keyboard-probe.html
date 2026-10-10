@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<!--
+  Phase 0 keyboard probe (docs/specs/2026-10-10-keyboard-navigation/design.md, "Phase 0").
+  Vite serves it in development only (http://localhost:5173/keyboard-probe.html); it is not in rollupOptions.input,
+  so production builds never emit it. `node scripts/qa-keyboard-probe.mjs export` inlines it into one offline HTML file.
+-->
+<html lang="zh-Hant" translate="no">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex" />
+    <!-- A translate bubble would take focus from the page during trials. -->
+    <meta name="google" content="notranslate" />
+    <title>MGN Keyboard Probe</title>
+    <style>
+      :root { color-scheme: light; font-family: -apple-system, 'Segoe UI', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 15px; }
+      body { margin: 0; padding: 16px 20px 40px; background: #f4f5f2; color: #1d2421; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      .probe-meta { color: #55605b; font-size: 13px; margin-bottom: 12px; }
+      .probe-modes { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+      .probe-modes button, .probe-actions button { font: inherit; padding: 6px 12px; border: 1px solid #9aa7a1; border-radius: 6px; background: #fff; cursor: pointer; }
+      .probe-modes button[aria-pressed='true'] { background: #284d43; color: #fff; border-color: #284d43; }
+      .probe-layout { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+      .probe-contexts { display: grid; gap: 10px; }
+      .probe-context { border: 2px solid #c9d0cc; border-radius: 8px; background: #fff; padding: 8px 10px; }
+      .probe-context[data-active='true'] { border-color: #2f7a5f; box-shadow: 0 0 0 3px #2f7a5f33; }
+      .probe-context h2 { font-size: 13px; margin: 0 0 6px; color: #55605b; font-weight: 600; }
+      .probe-pad { height: 72px; border-radius: 6px; background: repeating-linear-gradient(45deg, #eef1ef, #eef1ef 8px, #e5e9e6 8px, #e5e9e6 16px); display: flex; align-items: center; justify-content: center; color: #55605b; user-select: none; }
+      .probe-context input, .probe-context textarea, .probe-editable { width: 100%; box-sizing: border-box; font: inherit; padding: 6px 8px; border: 1px solid #9aa7a1; border-radius: 6px; background: #fff; }
+      .probe-context textarea { height: 64px; resize: none; }
+      .probe-editable { min-height: 48px; }
+      .probe-codemirror { border: 1px solid #9aa7a1; border-radius: 6px; min-height: 72px; }
+      .probe-codemirror .cm-editor { min-height: 72px; }
+      .probe-panel { background: #fff; border: 1px solid #c9d0cc; border-radius: 8px; padding: 12px 14px; }
+      .probe-step-title { font-size: 22px; font-weight: 700; margin: 6px 0; }
+      .probe-step-hint { color: #3c4743; margin: 6px 0 10px; line-height: 1.6; }
+      .probe-verdict { font-size: 18px; font-weight: 700; padding: 6px 10px; border-radius: 6px; display: inline-block; margin: 4px 0 8px; }
+      .probe-verdict[data-verdict='pass'] { background: #d9f2e4; color: #145c37; }
+      .probe-verdict[data-verdict='fail'] { background: #fbe0dc; color: #8a1f12; }
+      .probe-verdict[data-verdict='expected-fail'] { background: #ece6f7; color: #4a2c86; }
+      .probe-verdict[data-verdict='waiting'] { background: #fff4cc; color: #6b5300; }
+      .probe-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+      .probe-progress { color: #55605b; font-size: 13px; }
+      .probe-log { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; max-height: 320px; overflow: auto; background: #1d2421; color: #e7ece9; border-radius: 6px; padding: 8px; margin-top: 8px; }
+      .probe-result { width: 100%; box-sizing: border-box; height: 220px; font: 12px ui-monospace, Menlo, Consolas, monospace; }
+      .probe-summary { border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+      .probe-summary td, .probe-summary th { border: 1px solid #d6dcd8; padding: 2px 6px; text-align: left; }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <h1>MyGitNotes keyboard probe（Phase 0）</h1>
+    <div class="probe-meta" id="probe-meta"></div>
+    <div class="probe-modes" id="probe-modes"></div>
+    <div class="probe-layout">
+      <div class="probe-contexts" id="probe-contexts"></div>
+      <div class="probe-panel" id="probe-panel"></div>
+    </div>
+    <script type="module" src="/src/dev/keyboard-probe.ts"></script>
+  </body>
+</html>
