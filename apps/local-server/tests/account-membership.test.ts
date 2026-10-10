@@ -42,9 +42,12 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-/** GitHub's API for the repositories named here, recording every request; any other repository is not found. */
+/**
+ * GitHub's API for the repositories named here, recording every request; any other repository is not found. The GitHub
+ * App is installed on all of them but `outer/public`, a public repository a user token still reads.
+ */
 const fakeGitHub = () => {
-  const repositories: Record<string, { files: Record<string, string>; folders: string[]; }> = { 'octo/kb': { files: { '.mygitnotes.yaml': manifest('KB', 'life'), 'notes/life/note.md': '# KB note\n' }, folders: ['notes', 'notes/life'] }, 'octo/scraps': { files: { 'journal/day.md': '# Day\n', '.github/workflow.yml': 'on: push\n' }, folders: ['journal', 'inbox', '.github'] }, 'octo/old': { files: { '.mygitnotes.yaml': `${manifest('Old', 'old')}    source: { type: github, repository: octo/elsewhere, branch: main }\n` }, folders: [] }, 'octo/wiki': { files: { '.mygitnotes.yaml': manifest('Wiki', 'wiki') }, folders: [] }, 'octo/garden': { files: { '.mygitnotes.yaml': manifest('Garden', 'garden') }, folders: [] } };
+  const repositories: Record<string, { files: Record<string, string>; folders: string[]; }> = { 'outer/public': { files: { '.mygitnotes.yaml': manifest('Public', 'public') }, folders: [] }, 'octo/kb': { files: { '.mygitnotes.yaml': manifest('KB', 'life'), 'notes/life/note.md': '# KB note\n' }, folders: ['notes', 'notes/life'] }, 'octo/scraps': { files: { 'journal/day.md': '# Day\n', '.github/workflow.yml': 'on: push\n' }, folders: ['journal', 'inbox', '.github'] }, 'octo/old': { files: { '.mygitnotes.yaml': `${manifest('Old', 'old')}    source: { type: github, repository: octo/elsewhere, branch: main }\n` }, folders: [] }, 'octo/wiki': { files: { '.mygitnotes.yaml': manifest('Wiki', 'wiki') }, folders: [] }, 'octo/garden': { files: { '.mygitnotes.yaml': manifest('Garden', 'garden') }, folders: [] } };
   const requests: { method: string; url: string; }[] = [];
   const refreshes: string[] = [];
   const nativeFetch = globalThis.fetch;
@@ -56,14 +59,20 @@ const fakeGitHub = () => {
       refreshes.push(refresh_token);
       return new Response(JSON.stringify(fresh ? { access_token: `fixture-owner-${refresh_token}`, refresh_token: `${refresh_token}-next`, expires_in: 28800, refresh_token_expires_in: 15811200 } : { error: 'bad_refresh_token' }), { status: fresh ? 200 : 400 });
     }
+    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
+    // As GitHub lists a user access token's installations, one page each.
+    if (String(url).startsWith('https://api.github.com/user/installations')) {
+      requests.push({ method: init?.method ?? 'GET', url: String(url) });
+      if (String(url).startsWith('https://api.github.com/user/installations/7/repositories')) return json({ total_count: 0, repositories: Object.keys(repositories).filter(name => name !== 'outer/public').map(name => ({ full_name: name, default_branch: 'main', private: true, updated_at: '2026-10-10T00:00:00Z', permissions: { push: true } })) });
+      return json({ total_count: 1, installations: [{ id: 7 }] });
+    }
     const match = /^https:\/\/api\.github\.com\/repos\/([^/]+\/[^/?]+)(.*)$/.exec(String(url));
     if (!match) return nativeFetch(url, init);
     requests.push({ method: init?.method ?? 'GET', url: String(url) });
     const [, name, endpoint] = match;
     const repository = repositories[name];
-    const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status });
     if (!repository) return json({ message: 'Not Found' }, 404);
-    if (endpoint === '') return json({ full_name: name, private: true, default_branch: 'main', permissions: { push: true } });
+    if (endpoint === '') return json({ full_name: name, private: name !== 'outer/public', default_branch: 'main', permissions: { push: name !== 'outer/public' } });
     if (endpoint.startsWith('/commits/')) return endpoint === '/commits/main' ? json({ sha: 'c'.repeat(40), commit: { tree: { sha: `${name}-tree` } } }) : json({ message: 'No commit found' }, 422);
     if (endpoint.startsWith('/git/trees/')) return json({ truncated: false, tree: [...repository.folders.map(folder => ({ path: folder, sha: `${name}:${folder}`, type: 'tree', mode: '040000' })), ...Object.entries(repository.files).map(([file, text]) => ({ path: file, sha: `${name}:${file}`, type: 'blob', mode: '100644', size: Buffer.byteLength(text) }))] });
     if (endpoint.startsWith('/git/blobs/')) return json({ encoding: 'base64', content: Buffer.from(repository.files[decodeURIComponent(endpoint.slice('/git/blobs/'.length)).slice(name.length + 1)] ?? '').toString('base64') });
@@ -143,6 +152,23 @@ describe("an edition that keeps each person's repositories", () => {
     expect(workspace.repositories.map((repository: { alias: string; notebooks: string[]; }) => [repository.alias, repository.notebooks])).toEqual([['kb', ['kb~life']], ['scraps', ['scraps~journal']]]);
     // Adding wrote nothing to any repository.
     expect(requests.filter(request => request.method !== 'GET')).toEqual([]);
+  });
+
+  it('refuses a public repository the GitHub App is not installed on as one it cannot reach, and adds it where people sign in with an OAuth App', async () => {
+    const { requests, added } = await start({ limit: 5 });
+    const missing = await add('outer/missing');
+    expect(missing).toMatchObject({ status: 404, body: { error: expect.stringContaining('grant the GitHub App access') } });
+    // The person's token reads the public repository, yet the answer is the one a missing repository gets.
+    expect(await add('outer/public')).toEqual(missing);
+    expect(await call('GET', '/api/workspace/members/folders?repository=outer/public')).toMatchObject({ status: 404, body: missing.body });
+    expect(JSON.stringify(missing.body)).not.toContain('outer/');
+    expect(added).toEqual([]);
+    expect(requests.filter(request => request.url.includes('/repos/outer/public/'))).toEqual([]);
+    // The same repository is installed-or-not only for a GitHub App; an OAuth App token keeps reaching it as before.
+    vi.stubEnv('GITHUB_APP_TYPE', 'oauth-app');
+    expect((await add('outer/public')).status).toBe(200);
+    expect(added.map(member => member.ref?.id)).toEqual(['github:outer/public@main']);
+    expect(await add('outer/missing')).toMatchObject({ status: 404, body: { error: 'That repository does not exist or this sign-in cannot reach it.' } });
   });
 
   it('refuses adding and showing past the visible limit, never hiding anything, and reports the limit with the list', async () => {

@@ -4,7 +4,7 @@ import { githubSite, MembershipError, type MembershipLimit, type MembershipStore
 import type { AssetStorage } from './asset-storage.js';
 import { authToken, CredentialRejected, type SessionServices } from './auth.js';
 import { endEventStreams } from './event-stream.js';
-import { github } from './workspace-choice.js';
+import { appInstalledOn, github, githubApp } from './workspace-choice.js';
 
 /** One member as Settings → Repositories lists it. */
 export interface MemberStatus {
@@ -117,7 +117,9 @@ interface InspectedRepository {
  * Checks, with the person's token, that the repository a person names to add exists and is reachable on the
  * workspace's GitHub site, that its branch (the repository's default branch when none is named) exists, and whether
  * that branch keeps a manifest, read by the same lookup a member's manifest is. A manifest that does not load, one that
- * still names `source` included, is refused with its error rather than taken for none. Nothing is written.
+ * still names `source` included, is refused with its error rather than taken for none. Where people sign in through a
+ * GitHub App, a repository the App is not installed on is refused as one that cannot be reached, with the same answer,
+ * so the refusal tells nothing about whether it exists. Nothing is written.
  */
 async function inspectRepository(site: WorkspaceSite, token: string, repository: unknown, branch: unknown): Promise<InspectedRepository> {
   // The picker lists repositories of a GitHub site; another platform's people add theirs through the configuration.
@@ -125,8 +127,11 @@ async function inspectRepository(site: WorkspaceSite, token: string, repository:
   const name = typeof repository === 'string' ? repository.trim() : '';
   if (!/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_.-]+$/.test(name)) throw new MembershipError('invalid', 'Name a repository as owner/name.', 400);
   const requested = typeof branch === 'string' && branch.trim() ? branch.trim() : undefined;
-  const { body: found } = await github<{ full_name: string; default_branch: string; }>(githubSite(site.url).api, token, `/repos/${name}`);
-  if (!found) throw new SourceError('That repository does not exist or this sign-in cannot reach it.', 404);
+  const api = githubSite(site.url).api;
+  const unreachable = () => new SourceError(`That repository does not exist or this sign-in cannot reach it.${githubApp() ? ' If it is yours, grant the GitHub App access to it first.' : ''}`, 404);
+  const { body: found } = await github<{ full_name: string; default_branch: string; }>(api, token, `/repos/${name}`);
+  // A GitHub App's user token reads public repositories the App was never installed on, which it could not keep.
+  if (!found || (githubApp() && !(await appInstalledOn(api, token, found.full_name)))) throw unreachable();
   let source;
   try {
     source = parseSourceConfig({ source: { type: 'github', ...(site.url ? { url: site.url } : {}), repository: found.full_name, branch: requested ?? found.default_branch } }, '.');
@@ -139,7 +144,7 @@ async function inspectRepository(site: WorkspaceSite, token: string, repository:
   try {
     snapshot = await reader.getSnapshot(true);
   } catch (error) {
-    if (error instanceof RepositoryUnavailableError) throw new SourceError(error.reason === 'missing-branch' ? `Branch ${source.branch} does not exist in ${source.repository}.` : 'That repository does not exist or this sign-in cannot reach it.', 404);
+    if (error instanceof RepositoryUnavailableError) throw error.reason === 'missing-branch' ? new SourceError(`Branch ${source.branch} does not exist in ${source.repository}.`, 404) : unreachable();
     throw error;
   }
   const read = await manifest.read();

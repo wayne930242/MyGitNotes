@@ -61,19 +61,34 @@ async function pages<T>(api: string, token: string, path: string, pick: (body: u
   return items;
 }
 
+/**
+ * The repositories the GitHub App's installations grant the person a user access token belongs to, as GitHub lists them
+ * for that token (`GET /repos/{owner}/{repo}/installation` takes the App's own JWT, which a person's request lacks).
+ */
+async function installedRepositories(api: string, token: string): Promise<GitHubRepository[]> {
+  const installations = await pages(api, token, '/user/installations', body => (body as { installations: { id: number; }[]; }).installations);
+  return (await Promise.all(installations.map(installation => pages(api, token, `/user/installations/${installation.id}/repositories`, body => (body as { repositories: GitHubRepository[]; }).repositories)))).flat();
+}
+
+/**
+ * Whether the GitHub App is installed on `fullName` for the person whose user access token this is. Such a token still
+ * reads a public repository the App was never installed on, so reaching a repository is not enough to keep it.
+ */
+export async function appInstalledOn(api: string, token: string, fullName: string): Promise<boolean> {
+  const name = fullName.toLowerCase();
+  return (await installedRepositories(api, token)).some(repository => repository.full_name.toLowerCase() === name);
+}
+
 /** Repositories the signed-in token can write on the GitHub site `url` names (github.com when absent): those granted to the GitHub App, or every repository of an OAuth App token. */
 export async function availableRepositories(token: string, githubApp: boolean, url?: string): Promise<AvailableRepository[]> {
   const api = githubSite(url).api;
-  let repositories: GitHubRepository[];
-  if (githubApp) {
-    const installations = await pages(api, token, '/user/installations', body => (body as { installations: { id: number; }[]; }).installations);
-    repositories = (await Promise.all(installations.map(installation => pages(api, token, `/user/installations/${installation.id}/repositories`, body => (body as { repositories: GitHubRepository[]; }).repositories)))).flat();
-  } else repositories = await pages(api, token, '/user/repos?affiliation=owner,collaborator,organization_member&sort=updated', body => body as GitHubRepository[]);
+  const repositories = githubApp ? await installedRepositories(api, token) : await pages(api, token, '/user/repos?affiliation=owner,collaborator,organization_member&sort=updated', body => body as GitHubRepository[]);
   const unique = new Map(repositories.filter(repository => repository.permissions?.push !== false).map(repository => [repository.full_name, repository]));
   return [...unique.values()].map(repository => ({ fullName: repository.full_name, defaultBranch: repository.default_branch, private: repository.private, updatedAt: repository.updated_at })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
-const githubApp = () => process.env.GITHUB_APP_TYPE === 'github-app';
+/** Whether people sign in through a GitHub App, whose installations decide which repositories it reaches. */
+export const githubApp = () => process.env.GITHUB_APP_TYPE === 'github-app';
 const defaultStarter = 'wayne930242/mygitnotes-starter';
 /**
  * GitHub's own page for a new private repository from the starter template, prefilled through its documented
