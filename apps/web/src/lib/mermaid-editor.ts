@@ -100,6 +100,8 @@ export function openMermaidEditor({ source, labels, onSave, onClose }: MermaidEd
     close();
   };
   function onKeyDown(event: KeyboardEvent) {
+    // A surface opened over the editor, such as keyboard help, owns the keys typed in it; focus on the page body still reaches the editor.
+    if (event.target instanceof Node && event.target !== document.body && !overlay.contains(event.target)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();

@@ -67,3 +67,31 @@ it('clamps a search selection when matches shrink and keeps the clamped selectio
   act(() => result.current.setFindQuery('on'));
   expect(result.current.findIndex).toBe(0);
 });
+
+it('leaves keys typed in help or quick open to them while a note is zoomed', () => {
+  const props = { frame: 'zoom' as const, active: true, isMarkdown: true, content: '# Alpha', editorMode: 'raw' as const, editorRef: createRef<MarkdownEditorHandle>(), metadata: {}, notePath: 'notes/a.md', branch: 'main', readOnly: false };
+  const { result } = renderHook(() => useNoteDocumentPanel(props));
+  act(() => result.current.setNotePanel('outline'));
+  act(() => result.current.setIsEditorLeaderOpen(true));
+  const press = (target: EventTarget, init: KeyboardEventInit) => {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    act(() => {
+      target.dispatchEvent(event);
+    });
+    return event;
+  };
+  for (const scope of ['help', 'palette']) {
+    const surface = document.body.appendChild(document.createElement('div'));
+    surface.setAttribute('data-key-scope', scope);
+    const filter = surface.appendChild(document.createElement('input'));
+    expect(press(filter, { key: 'f', code: 'KeyF' }).defaultPrevented).toBe(false);
+    expect(press(filter, { key: '/', code: 'Slash' }).defaultPrevented).toBe(false);
+    expect(press(filter, { key: 'Escape' }).defaultPrevented).toBe(false);
+    expect(result.current.isEditorLeaderOpen).toBe(true);
+    expect(result.current.notePanel).toBe('outline');
+    surface.remove();
+  }
+  // Outside those surfaces the same Escape still closes the leader first.
+  expect(press(document.body, { key: 'Escape' }).defaultPrevented).toBe(true);
+  expect(result.current.isEditorLeaderOpen).toBe(false);
+});

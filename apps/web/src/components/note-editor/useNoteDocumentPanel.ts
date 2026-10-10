@@ -185,6 +185,8 @@ export function useNoteDocumentPanel({ frame, active, isMarkdown, content, edito
     if (!active) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (document.querySelector('dialog[open], [role="listbox"]')) return;
+      // Help and quick open own the keys typed in them, Escape included.
+      if (event.target instanceof Element && event.target.closest('[data-key-scope="help"], [data-key-scope="palette"]')) return;
       if (shortcutAction.current(event)) {
         event.preventDefault();
         event.stopPropagation();

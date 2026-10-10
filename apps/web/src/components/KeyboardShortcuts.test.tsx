@@ -10,6 +10,8 @@ import { useAppCommands } from '../app/useAppCommands.js';
 import { useTranslation } from '../lib/i18n/index.js';
 import { KeyboardRoot } from '../lib/keyboard/KeyboardDispatcher.js';
 import { KEYMAP } from '../lib/keyboard/keymap.js';
+import { openMermaidEditor } from '../lib/mermaid-editor.js';
+import { FileSourceEditor } from './FileSourceEditor.js';
 
 const REVISION = 'a'.repeat(40);
 let client: QueryClient;
@@ -197,6 +199,17 @@ it('Ctrl+Shift+P opens the palette in command mode with > already typed', async 
   await waitFor(() => expect(document.activeElement).toBe(input));
 });
 
+it('lists the go-to commands first, so Ctrl+Shift+P then Enter goes to Notes', async () => {
+  render(createElement(Harness), { wrapper });
+  await openCommandPalette();
+  await waitFor(() => expect(document.querySelector('[data-command-id="nav.notes"]')).not.toBeNull());
+  const ids = [...document.querySelectorAll('.keyboard-shortcuts-list [data-command-id]')].map(row => row.getAttribute('data-command-id'));
+  expect(ids.slice(0, 5)).toEqual(['nav.notes', 'nav.graph', 'nav.assets', 'nav.agent', 'nav.settings']);
+  expect(ids.indexOf('note.new')).toBeGreaterThan(4);
+  fireEvent.keyDown(document, { key: 'Enter' });
+  await waitFor(() => expect(navigatedTo).toEqual(['notes']));
+});
+
 it('Ctrl+Shift+P while the palette is in note mode switches it to command mode', async () => {
   render(createElement(Harness), { wrapper });
   const input = await openPalette();
@@ -336,4 +349,54 @@ it('help lists every registry command, grouped, and its filter matches names and
   fireEvent.change(filter, { target: { value: 'graph' } });
   expect(rows()).toEqual(expect.arrayContaining(['nav.graph', 'graph.toggleExpand']));
   expect(rows()).not.toContain('palette.notes');
+});
+
+it('Escape in help opened from the Mermaid editor closes only help, keeping the unsaved diagram', async () => {
+  render(createElement(Harness), { wrapper });
+  const onSave = vi.fn(), onClose = vi.fn();
+  openMermaidEditor({ source: 'graph TD\n  A --> B', labels: { title: 'Edit diagram', source: 'Source', preview: 'Preview', save: 'Save', cancel: 'Cancel', error: 'Error' }, onSave, onClose });
+  const textarea = document.querySelector<HTMLTextAreaElement>('.mermaid-editor-source')!;
+  fireEvent.input(textarea, { target: { value: 'graph TD\n  A --> C' } });
+  pressHelp(textarea);
+  const filter = await waitFor(() => document.querySelector<HTMLInputElement>('.keyboard-shortcuts-panel[data-mode="help"] input')!);
+  act(() => {
+    filter.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  });
+  await waitFor(() => expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull());
+  expect(document.querySelector('.mermaid-editor-overlay')).not.toBeNull();
+  expect(textarea.value).toBe('graph TD\n  A --> C');
+  expect(onClose).not.toHaveBeenCalled();
+  expect(onSave).not.toHaveBeenCalled();
+  // Escape in the diagram editor itself still cancels it.
+  act(() => {
+    textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  });
+  expect(document.querySelector('.mermaid-editor-overlay')).toBeNull();
+  expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+it('Ctrl+/ in the real code-file editor toggles a line comment instead of opening help', async () => {
+  let content = 'const a = 1;';
+  render(
+    createElement(
+      KeyboardRoot,
+      null,
+      createElement(Surface, { noteEditorOpen: false }),
+      createElement(FileSourceEditor, {
+        path: 'src/a.ts',
+        content,
+        readOnly: false,
+        label: 'Source',
+        onChange: value => {
+          content = value;
+        },
+      }),
+    ),
+    { wrapper },
+  );
+  const editor = await waitFor(() => document.querySelector<HTMLElement>('.file-source-editor .cm-content')!);
+  const event = pressHelp(editor);
+  expect(event.defaultPrevented).toBe(true);
+  expect(content).toBe('// const a = 1;');
+  expect(document.querySelector('.keyboard-shortcuts-panel')).toBeNull();
 });

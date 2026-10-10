@@ -28,8 +28,8 @@ const paletteEntryId = (entry: PaletteEntry) => entry.kind === 'command' ? entry
 const paletteOptionId = (id: string) => `shortcut-command-${encodeURIComponent(id)}`;
 const unavailable = (command: ResolvedCommand) => !command.availability.enabled;
 const unavailableReason = (command: ResolvedCommand) => command.availability.enabled ? undefined : command.availability.reason;
-/** Groups in help order; within a group, palette-only commands come before keyed ones. */
-const paletteOrder = (command: ResolvedCommand) => SHORTCUT_GROUPS.indexOf(command.group) * 2 + (command.keys.length ? 1 : 0);
+/** The go-to commands first, so `>` then Enter goes to Notes; then groups in help order, palette-only commands before keyed ones. */
+const paletteOrder = (command: ResolvedCommand) => command.group === 'goTo' ? -1 : SHORTCUT_GROUPS.indexOf(command.group) * 2 + (command.keys.length ? 1 : 0);
 
 export function KeyboardShortcuts({ mode, onModeChange, suspended = false, selectedNotebookId, onOpenNote }: KeyboardShortcutsProps) {
   const { t } = useTranslation();
