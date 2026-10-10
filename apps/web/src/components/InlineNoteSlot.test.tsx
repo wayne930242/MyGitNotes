@@ -15,7 +15,8 @@ vi.mock('./NoteEditorHost.js', () => ({
       onSession?.({ content: 'body', title: path === 'notes/a.md' ? 'Alpha, retitled' : 'Beta', dirty: false, locked: false });
       return () => onSession?.(null);
     }, [onSession, path]);
-    return createElement('textarea', { 'aria-label': 'Note content', 'data-claim': String(claim), 'data-frame': frame, 'defaultValue': 'body' });
+    // The structure of the real editor: the note's source textarea sits in the Markdown editor, and cell editors live inside the live editor's own DOM.
+    return createElement('div', { 'data-markdown-editor': '' }, createElement('div', { className: 'raw' }, createElement('div', { className: 'row' }, createElement('textarea', { 'aria-label': 'Note content', 'data-claim': String(claim), 'data-frame': frame, 'defaultValue': 'body' }))), createElement('div', { className: 'cm-content' }, createElement('textarea', { 'aria-label': 'Cell editor', 'defaultValue': 'cell' })));
   },
 }));
 
@@ -218,6 +219,8 @@ it("sizes the source textarea of a Book section to its lines, and leaves a card'
     lines = 480;
     fireEvent.input(area);
     expect(area).toHaveStyle({ height: '480px' });
+    // A cell or block editor inside the live editor is not the note's source, even in a Book section.
+    expect(within(frame('a')).getByLabelText('Cell editor').style.height).toBe('');
     fireEvent.click(within(frame('b')).getByRole('button', { name: 'Edit Beta' }));
     const card = await within(frame('b')).findByLabelText('Note content');
     await act(async () => {});
@@ -225,4 +228,17 @@ it("sizes the source textarea of a Book section to its lines, and leaves a card'
   } finally {
     Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'scrollHeight');
   }
+});
+
+it('collapses a selection in the source textarea on Escape before it leaves the slot (K2)', async () => {
+  render(two());
+  fireEvent.click(within(frame('a')).getByRole('button', { name: 'Edit Alpha' }));
+  const area = (await within(frame('a')).findByLabelText('Note content')) as HTMLTextAreaElement;
+  area.setSelectionRange(0, 4);
+  fireEvent.keyDown(area, { key: 'Escape' });
+  expect(area.selectionStart).toBe(area.selectionEnd);
+  expect(frame('a')).toHaveAttribute('data-editing');
+  expect(flushEditors).not.toHaveBeenCalled();
+  fireEvent.keyDown(area, { key: 'Escape' });
+  await waitFor(() => expect(frame('a')).not.toHaveAttribute('data-editing'));
 });

@@ -595,4 +595,4 @@
 .compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div, .compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div > div { flex: none; height: auto; min-height: 0; overflow: visible; }
 .compilation-inline-editor[data-layout='grow'] .cm-editor { height: auto; }
 .compilation-inline-editor[data-layout='grow'] .cm-scroller { overflow: visible; }
-.compilation-inline-editor[data-layout='grow'] textarea { overflow-y: hidden; resize: none; }
+.compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div > div > textarea { overflow-y: hidden; resize: none; }

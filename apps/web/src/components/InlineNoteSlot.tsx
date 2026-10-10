@@ -10,6 +10,8 @@ import { HostedNoteEditor } from './NoteEditorHost.js';
 /** Where a click on a note's body is meant for the thing clicked, not for the note: links, controls and embeds. */
 const INTERACTIVE = 'a,button,input,select,textarea,summary,label,[role="button"],iframe,video,audio,.note-youtube-embed,.mermaid,[data-mermaid]';
 const EDITOR_TARGET = '.cm-content[contenteditable="true"],textarea';
+/** The note's own source textarea, not the cell and block editors that live inside the Markdown editor. */
+const SOURCE_TEXTAREA = '[data-markdown-editor] > div > div > textarea';
 
 export interface InlineNoteSlotParts {
   /** Edit or Done for the slot's heading; nothing where the note cannot be edited. */
@@ -116,18 +118,22 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
     const root = frame;
     if (!editing || layout !== 'grow' || !root) return;
     const fit = (area: HTMLTextAreaElement) => {
+      // Measuring needs the height released, which can pull a scrolled book up; the scroll position is put back.
+      const parent = scroller(area);
+      const top = parent?.scrollTop;
       area.style.height = 'auto';
       area.style.height = `${area.scrollHeight}px`;
+      if (parent && top !== undefined) parent.scrollTop = top;
     };
-    const fitAll = () => root.querySelectorAll('textarea').forEach(fit);
+    const fitAll = () => root.querySelectorAll<HTMLTextAreaElement>(SOURCE_TEXTAREA).forEach(fit);
     const onInput = (event: Event) => {
-      if (event.target instanceof HTMLTextAreaElement) fit(event.target);
+      if (event.target instanceof HTMLTextAreaElement && event.target.matches(SOURCE_TEXTAREA)) fit(event.target);
     };
     fitAll();
     root.addEventListener('input', onInput);
-    // Switching to source mode adds the textarea; a change of note content from outside the editor changes its lines.
+    // Switching to source mode adds the textarea.
     const observer = new MutationObserver(fitAll);
-    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    observer.observe(root, { childList: true, subtree: true });
     return () => {
       root.removeEventListener('input', onInput);
       observer.disconnect();
@@ -142,6 +148,14 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   };
   const onKeyDown = (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+    // A selection in the source textarea is the editor's to collapse first; the live editor does this itself.
+    const target = event.target;
+    if (target instanceof HTMLTextAreaElement && target.selectionStart !== target.selectionEnd) {
+      event.preventDefault();
+      event.stopPropagation();
+      target.setSelectionRange(target.selectionEnd, target.selectionEnd);
+      return;
+    }
     // Nothing inside the editor wanted this Escape (selection, completion, a panel): it leaves the slot, and no further.
     event.preventDefault();
     event.stopPropagation();
