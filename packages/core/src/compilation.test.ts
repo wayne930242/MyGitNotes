@@ -150,6 +150,11 @@ describe('tag and status edits', () => {
     expect(applyCompilationMetadata(custom, { tags: ['reading'], status: 'working' })).toBe(custom);
     expect(applyCompilationMetadata('not: [valid', { tags: ['x'] })).toBe('not: [valid');
   });
+  it('keeps the legacy stack token when only tags or status change, so a tag edit is not a rewrite of the arrangement', () => {
+    const next = applyCompilationMetadata(legacyStack, { tags: ['new'], status: 'done' });
+    expect(YAML.parse(next)).toMatchObject({ arrangement: 'stack', tags: ['new'], status: 'done' });
+    expect(parseCompilation(next).arrangement).toBe('book');
+  });
 });
 
 describe('reference rewrite', () => {
