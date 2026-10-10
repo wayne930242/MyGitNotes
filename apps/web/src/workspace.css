@@ -187,6 +187,11 @@
 @container compilation-book (max-width: 719px) { .compilation-book-layout { grid-template-columns: minmax(0, 1fr); } .compilation-book-layout > .compilation-book-contents { display: none; } .compilation-book-bar { display: flex; } .compilation-book { padding-right: 0; } }
 /* Narrow lane: under 560px of the compilation's own width, never the viewport's, cards list top to bottom at the lane's width, scrolling vertically; their height still follows the size. 560 is LANE_VERTICAL_BELOW in lib/use-lane-orientation.ts, which picks the matching behavior. */
 @container compilation (width < 560px) { .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-lane-strip { flex-direction: column; overflow-x: hidden; overflow-y: auto; } .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-card-slot { flex: none; width: 100%; } .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-card-content { flex: none; height: var(--screen-content-height); } }
+/* A note card is a note slot: the padding sits on its reading view, so a click anywhere on the body reaches the slot; while it edits, the editor fills the content area and scrolls inside it and the card keeps its size. */
+.screen-card-note { padding: 0; }
+.screen-card-note > .compilation-inline-reading { box-sizing: border-box; min-height: 100%; padding: 8px 16px 16px; }
+.screen-card[data-editing] > .screen-card-note { display: flex; flex-direction: column; overflow: hidden; }
+.screen-card[data-editing] > .screen-card-note > .compilation-inline-editor { flex: 1 1 0; height: auto; min-height: 0; }
 .screen-lane-dynamic { background: color-mix(in srgb, var(--color-primary) 3%, transparent); outline: 1px dashed color-mix(in srgb, var(--color-primary) 23%, transparent); outline-offset: 4px; }
 .screen-lane-header, .screen-lane-heading, .screen-lane-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .screen-lane-header { justify-content: space-between; padding: 4px 8px; margin-bottom: 6px; gap: 6px 10px; flex-wrap: wrap; }

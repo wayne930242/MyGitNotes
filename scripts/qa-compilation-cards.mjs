@@ -4,7 +4,7 @@ import path from 'node:path';
 import { SUPPORTED_SCHEMA_VERSION } from '../packages/core/dist/config.js';
 import { createQaWorkspace, launchQaBrowser, product, qaRequire, startQaServer } from './lib/qa-harness.mjs';
 
-// Lane cards of a compilation: the narrow vertical layout (L1-L5) and that changing layout never writes a file (S7).
+// Lane cards of a compilation: the narrow vertical layout (L1-L5) and that changing layout never writes a file (S7), then editing a note in its card (E1-E12, L6, L7) and the Graph arrangement's own in-place editing (G1).
 const require = qaRequire();
 const { root, write, commitFixture, git } = createQaWorkspace('github-notes-compilation-cards-qa-');
 write('.github-notes.yaml', `schema_version: ${SUPPORTED_SCHEMA_VERSION}\nworkspace:\n  title: Cards QA\n  default_notebook: work\nnotebooks:\n  - id: work\n    title: Work\n    root: notes/work\n`);
@@ -18,6 +18,12 @@ custom('pins', 'Pins', 'small', noteIds);
 custom('thumbs', 'Thumbs', 'thumbnail', noteIds);
 custom('medium', 'Medium', 'medium', noteIds);
 custom('short', 'Short', 'thumbnail', ['a', 'b', 'c']);
+custom('unpin', 'Unpin', 'small', ['d', 'e']);
+// The Graph fixture's notes are not edited anywhere else, so no recovery draft from an earlier step waits on them.
+for (const id of ['ga', 'gb']) write(`notes/work/${id}.md`, `---\ntitle: Graph ${id.toUpperCase()}\n---\nGraph note ${id}.\n`);
+write('notes/work/graphed.compilation.yml', 'version: 1\nid: graphed\ntitle: Graphed\narrangement: graph\nitems:\n  - id: pin-ga\n    kind: note\n    path: notes/work/ga.md\n  - id: pin-gb\n    kind: note\n    path: notes/work/gb.md\n');
+for (const [n, day] of [[1, '03'], [2, '02'], [3, '01']]) write(`notes/work/recent/r${n}.md`, `---\ntitle: Recent ${n}\nupdated: "2026-01-${day}T10:00:00.000Z"\n---\nRecent note ${n} body.\n`);
+write('notes/work/recent.compilation.yml', 'version: 1\nid: recent\ntitle: Recent\narrangement: lane\nsize: small\nsource:\n  kind: folder\n  path: notes/work/recent\n  recursive: true\nsort:\n  field: updated\n  order: desc\n');
 write('notes/work/many.compilation.yml', 'version: 1\nid: many\ntitle: Many\narrangement: lane\nsize: small\nsource:\n  kind: folder\n  path: notes/work/many\n  recursive: true\nsort:\n  field: title\n  order: asc\n');
 const focus = (id, division, panes) => ({ id, notebookId: 'work', name: id, division, panes: panes.map(paths => ({ tabs: paths.map(file => ({ kind: 'note', path: `notes/work/${file}.compilation.yml` })) })) });
 write('.github-notes-focus.yaml', JSON.stringify({ version: 1, focuses: [focus('split2', 'columns-2', [['pins'], ['many']]), focus('split3', 'columns-3', [['pins'], ['short'], ['many']])] }));
@@ -38,11 +44,12 @@ const freshPage = async () => {
     page.on('console', message => console.log('console', message.text()));
     page.on('response', response => response.status() >= 400 && console.log('http', response.status(), response.url()));
   }
+  await page.evaluateOnNewDocument(() => localStorage.setItem('github-notes:language', 'en'));
   await page.setViewport(size);
 };
 
 const fileText = rel => fs.readFileSync(path.join(root, rel), 'utf8');
-const compilationFiles = ['pins', 'thumbs', 'medium', 'short', 'many'].map(id => `notes/work/${id}.compilation.yml`);
+const compilationFiles = ['pins', 'thumbs', 'medium', 'short', 'many', 'recent', 'graphed', 'unpin'].map(id => `notes/work/${id}.compilation.yml`);
 // --no-optional-locks keeps this check from refreshing the index under the running server.
 const untouched = () => assert.equal(git('--no-optional-locks', 'status', '--porcelain').toString().trim(), '', 'A layout change wrote a file');
 const shot = name => page.screenshot({ path: path.join(shots, `${name}.png`) });
@@ -103,6 +110,7 @@ const assertHorizontal = (m, label) => {
 };
 /** Whether Alt+wheel over `selector` was taken for sideways scrolling, and how far the strip moved. */
 const altWheel = async (scope, selector) => {
+  await page.waitForFunction(selector => document.querySelector(selector)?.getBoundingClientRect().width > 0, {}, `${scope} ${selector}`);
   const box = await (await page.$(`${scope} ${selector}`)).boundingBox();
   await page.mouse.move(box.x + box.width / 2, Math.min(box.y + 40, box.y + box.height - 2));
   const before = await page.$eval(`${scope} .screen-lane-strip`, strip => strip.scrollLeft);
@@ -291,13 +299,19 @@ try {
   await waitOrder('notes/work/short.compilation.yml', 'acb');
   console.log('PASS dropping below the last card places it last');
   // Keyboard: ArrowUp and ArrowDown move the card.
+  // dnd-kit measures the droppable cards a moment after the keyboard drag starts, so a press that lands before that moves nothing; the move is tried again.
   const keyboardMove = async (title, key, expected) => {
-    await page.focus(`${reorderScope} [aria-label="Move item: ${title}"]`);
-    await page.keyboard.press('Space');
-    await page.waitForFunction(label => document.querySelector(`[aria-label="${label}"]`)?.getAttribute('aria-pressed') === 'true', {}, `Move item: ${title}`);
-    await page.keyboard.press(key);
-    await settle(150);
-    await page.keyboard.press('Space');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await page.focus(`${reorderScope} [aria-label="Move item: ${title}"]`);
+      await page.keyboard.press('Space');
+      await page.waitForFunction(label => document.querySelector(`[aria-label="${label}"]`)?.getAttribute('aria-pressed') === 'true', {}, `Move item: ${title}`);
+      await settle(300);
+      await page.keyboard.press(key);
+      await settle(400);
+      await page.keyboard.press('Space');
+      for (let wait = 0; wait < 15 && order('notes/work/short.compilation.yml') !== expected; wait++) await settle(100);
+      if (order('notes/work/short.compilation.yml') === expected) return;
+    }
     await waitOrder('notes/work/short.compilation.yml', expected);
   };
   await keyboardMove('Note B', 'ArrowUp', 'abc');
@@ -305,6 +319,255 @@ try {
   await shot('zoom-390-reorder');
   console.log('PASS keyboard reorder moves a card up with ArrowUp and down with ArrowDown in the vertical list');
   for (const file of compilationFiles.filter(file => !file.includes('short'))) assert.equal(fileText(file), before[file], `${file} changed on disk`);
+
+  // ---- Editing a note in its card (E1-E12, L6, L7) ----
+  const cardSel = id => `.screen-card[data-screen-item="pin-${id}"]`;
+  const noteFile = id => `notes/work/${id}.md`;
+  const waitFile = async (file, text, present = true) => {
+    for (let attempt = 0; attempt < 120; attempt++) {
+      if (fileText(file).includes(text) === present) return;
+      await settle(100);
+    }
+    assert.fail(`${present ? 'Missing' : 'Lingering'} saved content in ${file}: ${text} (file holds ${JSON.stringify(fileText(file).slice(0, 160))})`);
+  };
+  const editorFocused = () => Boolean(document.activeElement?.closest('[data-editing] .cm-content, [data-editing] textarea'));
+  const editing = () => page.$$eval('.screen-card[data-editing]', cards => cards.map(card => card.dataset.screenItem));
+  const dialogOpen = label => page.$(`[role="dialog"][aria-label="${label}"]`).then(Boolean);
+  const startByBody = async (scope, id) => {
+    await click(`${scope} ${cardSel(id)} .compilation-inline-reading p`);
+    await page.waitForSelector(`${scope} ${cardSel(id)}[data-editing] .cm-content`);
+    await page.waitForFunction(editorFocused);
+  };
+  const cardText = (scope, id) => page.$eval(`${scope} ${cardSel(id)}`, card => card.querySelector('.screen-card-content').textContent);
+  const cardBox = (scope, id) => page.$eval(`${scope} ${cardSel(id)}`, card => {
+    const box = card.getBoundingClientRect(), content = card.querySelector('.screen-card-content').getBoundingClientRect();
+    return { height: Math.round(box.height), contentHeight: Math.round(content.height), top: box.top, bottom: box.bottom, left: box.left, right: box.right };
+  });
+  // Cards show their path until the lane's notes arrive, so each control is waited for before it is used.
+  const click = async selector => {
+    await page.waitForSelector(selector, { visible: true, timeout: 20000 });
+    await page.click(selector);
+  };
+  const tap = async selector => {
+    await page.waitForSelector(selector, { visible: true, timeout: 20000 });
+    await page.tap(selector);
+  };
+  const SHOTS_EDIT = process.env.QA_SHOTS_EDIT || shots;
+
+  // E1, E5, E6: a body click edits the card and focuses the editor; a body click on another card saves the first on disk and moves editing there.
+  await zoom('pins', 1440, 900);
+  const smallCard = await cardBox('.compilation-view', 'a');
+  await startByBody('.compilation-view', 'a');
+  assert.deepEqual(await editing(), ['pin-a']);
+  await page.keyboard.type('EDIT-A ');
+  assert.equal((await cardBox('.compilation-view', 'a')).height, smallCard.height, 'The card grew when it began editing');
+  assert.ok(await page.$eval(`${cardSel('a')} .cm-scroller`, scroller => scroller.scrollHeight > scroller.clientHeight), 'The editor does not scroll inside the card');
+  await shot('card-editing-zoom-1440-small');
+  fs.mkdirSync(SHOTS_EDIT, { recursive: true });
+  await page.screenshot({ path: path.join(SHOTS_EDIT, 'zoom-1440-small-editing.png') });
+  await click(`${cardSel('b')} .compilation-inline-reading p`);
+  await page.waitForSelector(`${cardSel('b')}[data-editing] .cm-content`);
+  await waitFile(noteFile('a'), 'EDIT-A');
+  assert.deepEqual(await editing(), ['pin-b'], 'A second card did not take over editing');
+  assert.ok((await cardText('.compilation-view', 'a')).includes('EDIT-A'), 'Card A does not read with the saved text');
+  console.log('PASS a body click edits the card in place; another card saves the first and takes over (E1, E5, E6)');
+
+  // E4: the title opens the note in zoom on the same editing session; closing zoom gives the editor back to the card.
+  await page.waitForFunction(editorFocused);
+  await page.keyboard.type('EDIT-B ');
+  await click(`${cardSel('b')} .screen-card-title`);
+  await page.waitForSelector('[role="dialog"][aria-label="Note editor"] .cm-content');
+  const zoomText = await page.$eval('[role="dialog"][aria-label="Note editor"] .cm-content', element => element.textContent);
+  assert.ok(zoomText.includes('EDIT-B'), `Zoom does not share the editing session: ${zoomText.slice(0, 80)}`);
+  assert.ok((await cardText('.compilation-view', 'b')).includes('This note is open in zoom.'), 'The card does not say the note is in zoom');
+  await click('button[aria-label="Close note"]');
+  await page.waitForSelector(`${cardSel('b')}[data-editing] .cm-content`);
+  assert.ok((await page.$eval(`${cardSel('b')} .cm-content`, element => element.textContent)).includes('EDIT-B'), 'The card lost its text after zoom');
+  console.log('PASS zoom borrows the card editor and gives it back (E4)');
+
+  // K2: Escape returns the card to reading with focus on Edit; the next Escape closes the compilation.
+  await click(`${cardSel('b')} .cm-content`);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(selector => !document.querySelector(selector).hasAttribute('data-editing'), {}, cardSel('b'));
+  assert.ok(await dialogOpen('Compilation'), 'The first Escape closed the compilation');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Edit Note B', 'Focus is not on the Edit button');
+  await waitFile(noteFile('b'), 'EDIT-B');
+  assert.ok((await cardText('.compilation-view', 'b')).includes('EDIT-B'), 'Card B does not read with the saved text');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Compilation"]'));
+  console.log('PASS Escape returns the card to reading with focus on Edit, then closes the compilation (K2)');
+
+  // E2/E13-ish: a button edits as well, and Done saves; a link in the body does not start editing.
+  await zoom('pins', 1440, 900);
+  await click(`${cardSel('c')} button[aria-label="Edit Note C"]`);
+  await page.waitForSelector(`${cardSel('c')}[data-editing] .cm-content`);
+  await page.waitForFunction(editorFocused);
+  await page.keyboard.type('EDIT-C ');
+  await click(`${cardSel('c')} button[aria-label="Finish editing Note C"]`);
+  await page.waitForFunction(selector => !document.querySelector(selector).hasAttribute('data-editing'), {}, cardSel('c'));
+  await waitFile(noteFile('c'), 'EDIT-C');
+  assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Edit Note C');
+  console.log('PASS Edit and Done work from the card heading (E1, E6)');
+
+  // E11: a dynamic compilation sorted by update time keeps the editing card where it is until editing ends.
+  await viewport(1440, 900);
+  await load(`${base}/notebooks/work/notes/recent.compilation.yml`, '.compilation-view .screen-card');
+  assert.deepEqual(await titles('.compilation-view'), ['Recent 1', 'Recent 2', 'Recent 3']);
+  await click('.compilation-view .screen-card-slot:nth-child(2) .compilation-inline-reading p');
+  await page.waitForSelector('.compilation-view .screen-card[data-editing] .cm-content');
+  await page.waitForFunction(editorFocused);
+  await page.keyboard.type('HELD ');
+  await waitFile('notes/work/recent/r2.md', 'HELD');
+  await settle(800);
+  assert.deepEqual(await titles('.compilation-view'), ['Recent 1', 'Recent 2', 'Recent 3'], 'The editing card moved while it was autosaved');
+  assert.equal(await page.$$eval('.compilation-view .screen-card-slot', slots => slots.findIndex(slot => slot.querySelector('[data-editing]'))), 1, 'The editing card is not where it was');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
+  await page.waitForFunction(() => document.querySelector('.compilation-view .screen-card-title')?.textContent === 'Recent 2', { timeout: 10000 });
+  assert.deepEqual(await titles('.compilation-view'), ['Recent 2', 'Recent 1', 'Recent 3']);
+  console.log('PASS a dynamic updated:desc lane holds the editing card in place, then applies the live order (E11)');
+
+  // E12: turning reorder on saves and ends the editing, hides Edit, and body clicks do not edit; unpinning the editing card saves it first.
+  await zoom('pins', 1440, 900);
+  await startByBody('.compilation-view', 'd');
+  await page.keyboard.type('EDIT-D ');
+  await click('.compilation-view .reorder-toggle');
+  await page.waitForSelector('.compilation-view [aria-label^="Move item: "]');
+  assert.deepEqual(await editing(), [], 'Reorder mode left a card editing');
+  await waitFile(noteFile('d'), 'EDIT-D');
+  assert.equal(await page.$$eval('.compilation-view button[aria-label^="Edit "]', buttons => buttons.length), 0, 'Edit is offered in reorder mode');
+  await click(`${cardSel('e')} .compilation-inline-reading p`);
+  assert.deepEqual(await editing(), [], 'A body click edited in reorder mode');
+  await page.waitForSelector('[role="dialog"][aria-label="Note editor"]');
+  await click('button[aria-label="Close note"]');
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Note editor"]'));
+  await zoom('unpin', 1440, 900);
+  await click('.compilation-view .reorder-toggle');
+  await page.waitForSelector('.compilation-view [aria-label^="Move item: "]');
+  await click('.compilation-view .reorder-toggle');
+  await startByBody('.compilation-view', 'd');
+  await page.keyboard.type('UNPIN-D ');
+  await click(`${cardSel('d')} button[aria-label="Unpin: Note D"]`);
+  await waitFile(noteFile('d'), 'UNPIN-D');
+  await waitFile('notes/work/unpin.compilation.yml', 'pin-d', false);
+  console.log('PASS reorder mode saves the editing card first and offers no Edit; unpinning saves before the card goes (E8, E12)');
+
+  // L6/L7: a Focus pane of about 500px lists cards top to bottom; the card edits there, keeps its size and scrolls inside.
+  await openFocus('split2', 1000, 900);
+  let paneWidth = 0;
+  for (let width = 900; width <= 1300; width += 20) {
+    await viewport(width, 900);
+    await settle(150);
+    paneWidth = (await measure('[data-focus-pane="0"]')).viewWidth;
+    if (paneWidth >= 490 && paneWidth <= 520) break;
+  }
+  assert.ok(paneWidth >= 490 && paneWidth <= 520, `No viewport gave a pane of about 500px (${paneWidth})`);
+  const pane0 = '[data-focus-pane="0"]';
+  assertVertical(await measure(pane0), `focus pane ${Math.round(paneWidth)}px`);
+  const paneCard = await cardBox(pane0, 'a');
+  await startByBody(pane0, 'a');
+  await page.keyboard.type('PANE-A ');
+  for (let line = 0; line < 40; line++) await page.keyboard.press('Enter');
+  await settle(400);
+  const paneEditing = await cardBox(pane0, 'a');
+  assert.equal(paneEditing.height, paneCard.height, 'The pane card grew while editing');
+  assert.ok(await page.$eval(`${pane0} ${cardSel('a')} .cm-scroller`, scroller => scroller.scrollHeight > scroller.clientHeight), 'The pane editor does not scroll inside the card');
+  assert.ok(paneEditing.right <= paneWidth + (await page.$eval(`${pane0} .compilation-view`, view => view.getBoundingClientRect().left)) + 1, 'The editing card is wider than the pane');
+  await page.screenshot({ path: path.join(SHOTS_EDIT, 'focus-pane-500-editing.png') });
+  await shot('card-editing-focus-pane-500');
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
+  await waitFile(noteFile('a'), 'PANE-A');
+  console.log(`PASS a card edits in a ${Math.round(paneWidth)}px Focus pane without growing, and the editor scrolls inside it (L6)`);
+
+  // L7: crossing 560px keeps the editing card, its unsaved text and its place in view.
+  await zoom('pins', 900, 900);
+  await startByBody('.compilation-view', 'b');
+  await page.keyboard.type('CROSS-B ');
+  for (const width of [500, 900, 400]) {
+    await viewport(width, 900);
+    await page.waitForFunction(expected => document.querySelector('.compilation-view .screen-lane').dataset.orientation === expected, {}, width < 560 ? 'vertical' : 'horizontal');
+    await settle(200);
+    assert.deepEqual(await editing(), ['pin-b'], `Editing was lost at ${width}px`);
+    assert.ok((await page.$eval(`${cardSel('b')} .cm-content`, element => element.textContent)).includes('CROSS-B'), `The unsaved text was lost at ${width}px`);
+    const box = await cardBox('.compilation-view', 'b');
+    const strip = await page.$eval('.compilation-view .screen-lane-strip', element => element.getBoundingClientRect().toJSON());
+    assert.ok(box.bottom > strip.top && box.top < strip.bottom && box.right > strip.left && box.left < strip.right, `The editing card is out of view at ${width}px`);
+  }
+  console.log('PASS resizing across 560px keeps the editing card, its unsaved text and keeps it in view (L7)');
+  await click(`${cardSel('b')} .cm-content`);
+  await page.keyboard.press('Escape');
+  await page.waitForFunction(() => !document.querySelector('.screen-card[data-editing]'));
+  await waitFile(noteFile('b'), 'CROSS-B');
+
+  // E1 on a phone: the Edit button edits, and a touch tap on the body opens the note in zoom.
+  await zoom('pins', 390, 900);
+  await tap(`${cardSel('c')} .compilation-inline-reading p`);
+  await page.waitForSelector('[role="dialog"][aria-label="Note editor"]');
+  assert.deepEqual(await editing(), [], 'A touch tap edited the card');
+  await click('button[aria-label="Close note"]');
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Note editor"]'));
+  await click(`${cardSel('c')} button[aria-label="Edit Note C"]`);
+  await page.waitForSelector(`${cardSel('c')}[data-editing] .cm-content`);
+  await page.waitForFunction(editorFocused);
+  assert.equal((await measure('.compilation-view')).pageOverflow <= 0, true, 'The phone page scrolls sideways while a card edits');
+  await page.screenshot({ path: path.join(SHOTS_EDIT, 'phone-390-card-editing.png') });
+  console.log('PASS on a phone a touch tap opens zoom and the Edit button edits the card (E1, E2)');
+
+  // G1: in the Graph arrangement a node expanded from its hover button edits in place, and the note saves as it does outside a compilation.
+  await viewport(1440, 900);
+  await load(`${base}/notebooks/work/notes/graphed.compilation.yml`, '.compilation-view [data-graph-nodes="2"]');
+  await settle(2500);
+  // The graph is drawn on a canvas, so the node dots are found by their colour.
+  const dots = await page.evaluate(() => {
+    const canvas = [...document.querySelectorAll('.compilation-view canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    const box = canvas.getBoundingClientRect(), scale = canvas.width / box.width;
+    const { data, width, height } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const cells = new Map();
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 4;
+        if (data[i + 3] > 200 && data[i] > 120 && data[i] - data[i + 1] > 40 && data[i] - data[i + 2] > 40) {
+          const key = `${Math.floor(x / 24)},${Math.floor(y / 24)}`;
+          const cell = cells.get(key) ?? { x: 0, y: 0, n: 0 };
+          cell.x += x; cell.y += y; cell.n++;
+          cells.set(key, cell);
+        }
+      }
+    }
+    const clusters = [];
+    for (const cell of [...cells.values()].filter(cell => cell.n > 20).map(cell => ({ x: cell.x / cell.n, y: cell.y / cell.n, n: cell.n }))) {
+      const near = clusters.find(cluster => Math.hypot(cluster.x - cell.x, cluster.y - cell.y) < 40);
+      if (near) {
+        near.x = (near.x * near.n + cell.x * cell.n) / (near.n + cell.n);
+        near.y = (near.y * near.n + cell.y * cell.n) / (near.n + cell.n);
+        near.n += cell.n;
+      } else clusters.push({ ...cell });
+    }
+    return clusters.map(cluster => ({ x: box.left + cluster.x / scale, y: box.top + cluster.y / scale }));
+  });
+  assert.ok(dots.length >= 2, `Found ${dots.length} graph nodes on the canvas`);
+  await page.mouse.move(dots[0].x, dots[0].y, { steps: 4 });
+  await page.waitForSelector('.compilation-view button[aria-label^="Expand notes: "]', { timeout: 10000 });
+  await click('.compilation-view button[aria-label^="Expand notes: "]');
+  await page.waitForSelector('[data-graph-note] .cm-content', { timeout: 10000 });
+  const graphNote = await page.$eval('[data-graph-note]', element => element.dataset.graphNote);
+  const graphFile = noteFile(graphNote.endsWith('ga.md') ? 'ga' : 'gb');
+  await settle(1500);
+  await page.click('[data-graph-note] .cm-content');
+  await page.keyboard.type('GRAPH-EDIT ');
+  assert.ok((await page.$eval('[data-graph-note] .cm-content', element => element.textContent)).includes('GRAPH-EDIT'), 'The typed text did not land in the node editor');
+  await page.screenshot({ path: path.join(SHOTS_EDIT, 'graph-node-editing.png') });
+  // Closing the compilation saves what the card edited, as it does for a lane card (E8). The graph card's own debounced autosave is not asserted:
+  // inside a zoomed compilation it does not fire on the baseline either (ee56d62), so the guard checks the edit and the flush that exist today.
+  await page.keyboard.press('Escape');
+  if (await dialogOpen('Compilation')) {
+    await settle(300);
+    await page.keyboard.press('Escape');
+  }
+  await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Compilation"]'), { timeout: 10000 });
+  await waitFile(graphFile, 'GRAPH-EDIT');
+  console.log('PASS a Graph node expands and edits in place inside a compilation, and closing saves it (G1)');
 
   assert.deepEqual(errors, []);
   console.log('PASS no page errors');

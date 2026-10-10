@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { horizontalListSortingStrategy, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -6,6 +6,7 @@ import { GripVertical, Plus, X } from 'lucide-react';
 import type { CompilationItem, CompilationRow, CompilationSort } from '@mygitnotes/core/compilation';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
 import type { NotebookConfig } from '../lib/types.js';
+import { useCompilationEditingContext, useHeldOrder } from '../lib/compilation-editing.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import type { StudyController } from '../lib/use-study-workspace.js';
 import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
@@ -35,9 +36,11 @@ export function createLaneNoteContext(row: CompilationRow, notebooks: NotebookCo
   return null;
 }
 
-export function MovableCard({ item, row, reorder, disabled, remove, ...content }: CompilationContentProps & { item: CompilationItem; row: CompilationRow; reorder: boolean; disabled: boolean; remove: () => void; }) {
+export function MovableCard({ item, row, reorder, disabled, editable, remove, ...content }: CompilationContentProps & { item: CompilationItem; row: CompilationRow; reorder: boolean; disabled: boolean; /** Whether its note can edit in place. */ editable: boolean; remove: () => void; }) {
   const { t } = useTranslation();
-  const sort = useSortable({ id: item.id, disabled: disabled || !reorder, data: { rowId: row.id } });
+  // A card that edits stays out of the sortable list, so a drag cannot start from inside its editor (E12).
+  const editing = useCompilationEditingContext().editing?.slot === item.id;
+  const sort = useSortable({ id: item.id, disabled: disabled || !reorder || editing, data: { rowId: row.id } });
   /* eslint-disable react/refs -- dnd-kit sortable bindings are callback refs and render state, forwarded to the card and drag handle. */
   return (
     <div ref={sort.setNodeRef} className='screen-card-slot' style={{ transform: CSS.Transform.toString(sort.transform), transition: sort.transition, opacity: sort.isDragging ? .3 : undefined }}>
@@ -45,6 +48,7 @@ export function MovableCard({ item, row, reorder, disabled, remove, ...content }
         {...content}
         item={item}
         view={row.view}
+        writable={editable}
         controls={!disabled && (
           <>
             {reorder && (
@@ -73,14 +77,27 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   }, []);
   // Cards show a body, so the lane's page is read with content; a graph lane needs none.
   const laneNotes = useLaneNotes(row, { content: row.view !== 'graph' });
-  const content: CompilationContentProps = { notebooks, assets, onOpen, notes: laneNotes.notes };
+  // While a card edits, its autosaves must not move or drop anything: the notes keep the copies they had (a note that leaves the loaded page stays a note card), the items their order (E11).
+  const notes = useHeldOrder(laneNotes.notes);
+  const content: CompilationContentProps = { notebooks, assets, onOpen, notes };
   const ordinaryRow = { ...row, study: { ...row.study, filter: 'all' as const, dueFirst: false } };
-  const items = studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
+  const items = useHeldOrder(studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock));
+  // Reorder mode and a read-only compilation offer no editing (E12, E13).
+  const editable = !readOnly && !disabled && !reorder;
   const filtered = Boolean(row.study?.status);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: readOnly || disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
   // A narrow compilation lists its cards top to bottom: nothing scrolls sideways, and cards sort along the column.
   const vertical = useLaneOrientation(host) === 'vertical';
   useAltWheelHorizontalScroll(host, strip, undefined, row.view !== 'graph' && !vertical);
+  // Crossing the width threshold only changes CSS and the sorting strategy, so a card that edits keeps its editor and unsaved text; it is scrolled back into view (L7).
+  const editingSlot = useCompilationEditingContext().editing?.slot;
+  const seenVertical = useRef(vertical);
+  useLayoutEffect(() => {
+    if (seenVertical.current === vertical) return;
+    seenVertical.current = vertical;
+    const card = [...strip.current?.querySelectorAll<HTMLElement>('[data-screen-item]') ?? []].find(element => element.dataset.screenItem === editingSlot);
+    card?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [vertical, editingSlot]);
   const scrollButton = useHoldScroll(strip);
   const handleCreateInLane = () => {
     const context = createLaneNoteContext(row, content.notebooks);
@@ -92,9 +109,9 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
       {row.view === 'graph' ? graph : (
         <div ref={readOnly ? undefined : drop.setNodeRef} className={!readOnly && drop.isOver ? 'screen-drop-target' : ''}>
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
-            {!readOnly && row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={vertical ? verticalListSortingStrategy : horizontalListSortingStrategy}>{items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove?.(item.id)} />)}</SortableContext> : items.map(item => (
+            {!readOnly && row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={vertical ? verticalListSortingStrategy : horizontalListSortingStrategy}>{items.map(item => <MovableCard reorder={reorder} editable={editable} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove?.(item.id)} />)}</SortableContext> : items.map(item => (
               <div className='screen-card-slot' key={item.id}>
-                <CompilationCard {...content} item={item} view={row.view} />
+                <CompilationCard {...content} item={item} view={row.view} writable={editable} />
               </div>
             ))}
             {laneNotes.error && <p role='alert' className='screen-error'>{laneNotes.error}</p>}

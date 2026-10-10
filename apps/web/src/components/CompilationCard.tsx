@@ -10,6 +10,7 @@ import { youtubeLabels } from '../lib/youtube-embed.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { LoadingStatus } from './LoadingStatus.js';
+import { InlineNoteSlot, type InlineNoteSlotParts } from './InlineNoteSlot.js';
 import { NoteHtml } from './NoteHtml.js';
 
 export type CompilationAsset = AssetItem & { notebookId: string; };
@@ -24,7 +25,10 @@ export function compilationItemTitle(item: CompilationItem, notes: NoteListItem[
   return notes.find(note => note.path === item.path && note.notebookId === item.notebookId)?.title || assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId)?.name || item.path.split('/').pop() || item.path;
 }
 
-export function CompilationCard({ item, view, controls, ...content }: CompilationContentProps & { item: CompilationItem; view: CompilationRow['view']; controls?: ReactNode; }) {
+/** Where a click on a note card's chrome opens the note in zoom: not on a control, and not on the body, which its note slot handles. */
+const CHROME_SKIPPED = 'a,button,input,select,textarea,summary,[role="button"],.compilation-inline-reading,.compilation-inline-editor';
+
+export function CompilationCard({ item, view, controls, writable = false, ...content }: CompilationContentProps & { item: CompilationItem; view: CompilationRow['view']; controls?: ReactNode; /** Whether a note card offers editing in place: write access, and not reorder mode. */ writable?: boolean; }) {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
   const note = item.kind === 'note' ? content.notes.find(note => note.path === item.path && note.notebookId === item.notebookId) : undefined;
@@ -40,26 +44,29 @@ export function CompilationCard({ item, view, controls, ...content }: Compilatio
   const folderNotes = useNoteList(item.kind === 'folder' ? { notebookId: item.notebookId, folders: [item.path], descendants: true, sort: 'title', order: 'asc' } : null, { limit: 200 });
   const members = item.kind === 'folder' ? [...folderNotes.uncommitted, ...folderNotes.notes] : [];
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];
-  return (
+  const reading = note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : null;
+  const card = (slot?: InlineNoteSlotParts) => (
     <article
+      {...slot?.frameProps}
       className={`screen-card screen-item-${item.kind}`}
       data-screen-item={item.id}
       onClick={event => {
-        if (note && !(event.target as HTMLElement).closest('a,button,input,select,textarea,summary,[role="button"]') && !window.getSelection()?.toString()) content.onOpen(item, note);
+        if (note && !slot?.editing && !(event.target as HTMLElement).closest(CHROME_SKIPPED) && !window.getSelection()?.toString()) content.onOpen(item, note);
       }}
     >
       <header className='screen-card-header'>
         {controls}
         {icon}
-        <button type='button' className='screen-card-title' title={title} onClick={() => content.onOpen(item, note)}>{title}</button>
+        <button type='button' className='screen-card-title' title={slot?.title ?? title} onClick={() => content.onOpen(item, note)}>{slot?.title ?? title}</button>
+        {slot?.controls}
         {item.kind !== 'note' && (
           <button type='button' className='screen-open ui-icon-button' aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item, note)}>
             <ExternalLink size={13} />
           </button>
         )}
       </header>
-      <div className='screen-card-content' tabIndex={0} aria-label={title}>
-        {note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : item.kind === 'folder'
+      <div className={slot ? 'screen-card-content screen-card-note' : 'screen-card-content'} tabIndex={0} aria-label={slot?.title ?? title}>
+        {slot ? slot.body : item.kind === 'folder'
           ? (
             <div className='screen-folder-list'>
               {folderNotes.error && <p role='alert' className='screen-missing'>{folderNotes.error}</p>}
@@ -112,4 +119,12 @@ export function CompilationCard({ item, view, controls, ...content }: Compilatio
       </footer>
     </article>
   );
+  // A note card is a note slot: it reads, or edits in place; every other kind of card keeps its own actions.
+  return note
+    ? (
+      <InlineNoteSlot slot={item.id} notebookId={note.notebookId} path={note.path} title={title} writable={writable} layout='fill' reading={reading} onOpenZoom={() => content.onOpen(item, note)}>
+        {parts => card(parts)}
+      </InlineNoteSlot>
+    )
+    : card();
 }
