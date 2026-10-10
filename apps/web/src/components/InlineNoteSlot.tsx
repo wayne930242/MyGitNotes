@@ -1,4 +1,4 @@
-import { type HTMLAttributes, type MouseEvent, type PointerEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type HTMLAttributes, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent, type PointerEvent, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Check, Pencil } from 'lucide-react';
 import { noteRefKey } from '@mygitnotes/core/note-query';
 import { useCompilationEditingContext } from '../lib/compilation-editing.js';
@@ -61,7 +61,7 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   const editing = current?.slot === slot;
   const [session, setSession] = useState<NoteEditorSession | null>(null);
   const [frame, setFrame] = useState<HTMLElement | null>(null);
-  const toggle = useRef<HTMLButtonElement>(null);
+  const [toggle, setToggle] = useState<HTMLButtonElement | null>(null);
   const pointer = useRef('');
   const top = useRef<number | null>(null);
   const refocus = useRef(false);
@@ -89,8 +89,8 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   useEffect(() => {
     if (editing || !refocus.current) return;
     refocus.current = false;
-    toggle.current?.focus();
-  }, [editing]);
+    toggle?.focus();
+  }, [editing, toggle]);
 
   // The editor mounts once its note has loaded and, after a hand-over, been claimed; focus it at the start of the body then.
   useEffect(() => {
@@ -128,7 +128,7 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
   const label = t(editing ? 'compilation.finishNote' : 'compilation.editNote', { title: shown });
   const controls = writable || editing
     ? (
-      <Button ref={toggle} size='small' variant={editing ? 'primary' : 'default'} className='compilation-edit-toggle' aria-label={label} title={label} onClick={() => void (editing ? end() : begin())}>
+      <Button ref={setToggle} size='small' variant={editing ? 'primary' : 'default'} className='compilation-edit-toggle' aria-label={label} title={label} onClick={() => void (editing ? end() : begin())}>
         {editing ? <Check aria-hidden='true' /> : <Pencil aria-hidden='true' />}
         <span>{t(editing ? 'editor.finishEditing' : 'editor.startEditing')}</span>
       </Button>
@@ -140,16 +140,8 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
         <HostedNoteEditor notebookId={notebookId} path={path} frame='compact' active={false} claim onSession={setSession} />
       </div>
     )
-    : (
-      <div className='compilation-inline-reading' onPointerDown={(event: PointerEvent<HTMLElement>) => void (pointer.current = event.pointerType)} onClick={onBodyClick}>
-        {reading}
-      </div>
-    );
-  return children({
-    controls,
-    body,
-    editing,
-    title: shown,
-    frameProps: { ref: setFrame, ...(editing ? { 'data-editing': '', 'data-key-scope': 'compilation-edit', 'onKeyDown': onKeyDown } : {}) } as InlineNoteSlotParts['frameProps'],
-  });
+    : <div className='compilation-inline-reading' onPointerDown={(event: PointerEvent<HTMLElement>) => void (pointer.current = event.pointerType)} onClick={onBodyClick}>{reading}</div>;
+  /* eslint-disable react/refs -- The render prop receives handlers that read refs only when an event runs, never while rendering. */
+  return children({ controls, body, editing, title: shown, frameProps: { ref: setFrame, ...(editing ? { 'data-editing': '', 'data-key-scope': 'compilation-edit', 'onKeyDown': onKeyDown } : {}) } as InlineNoteSlotParts['frameProps'] });
+  /* eslint-enable react/refs */
 }

@@ -30,18 +30,9 @@ afterEach(() => {
 
 const onOpenZoom = vi.fn();
 beforeEach(() => onOpenZoom.mockClear());
-const Slot = ({ slot, path, title, writable = true, layout = 'fill' }: { slot: string; path: string; title: string; writable?: boolean; layout?: 'grow' | 'fill'; }) =>
-  createElement(InlineNoteSlot, {
-    slot,
-    notebookId: 'nb',
-    path,
-    title,
-    writable,
-    layout,
-    reading: createElement('div', null, createElement('p', null, `${title} reads here`), createElement('a', { href: '#x' }, 'a link')),
-    onOpenZoom,
-    children: ({ controls, body, frameProps }: InlineNoteSlotParts) => createElement('article', { 'aria-label': `slot ${slot}`, ...frameProps }, createElement('header', null, controls), body),
-  });
+/* eslint-disable react/no-children-prop -- The slot's render prop is its children prop, passed through createElement. */
+const Slot = ({ slot, path, title, writable = true, layout = 'fill' }: { slot: string; path: string; title: string; writable?: boolean; layout?: 'grow' | 'fill'; }) => createElement(InlineNoteSlot, { slot, notebookId: 'nb', path, title, writable, layout, reading: createElement('div', null, createElement('p', null, `${title} reads here`), createElement('a', { href: '#x' }, 'a link')), onOpenZoom, children: ({ controls, body, frameProps }: InlineNoteSlotParts) => createElement('article', { 'aria-label': `slot ${slot}`, ...frameProps }, createElement('header', null, controls), body) });
+/* eslint-enable react/no-children-prop */
 const Harness = ({ children }: { children: ReactNode; }) => createElement(CompilationEditingProvider, { value: useCompilationEditing() }, children);
 const two = (props: { writable?: boolean; } = {}) => createElement(Harness, null, createElement(Slot, { slot: 'a', path: 'notes/a.md', title: 'Alpha', ...props }), createElement(Slot, { slot: 'b', path: 'notes/b.md', title: 'Beta', ...props }));
 const frame = (slot: string) => screen.getByLabelText(`slot ${slot}`);
@@ -59,7 +50,7 @@ it('offers Edit named after the note, and no control where the note cannot be ed
   expect(screen.queryByRole('button', { name: /^Edit / })).toBeNull();
 });
 
-it('turns the slot into the note\'s editor in place, focused at the start, with Done in its heading', async () => {
+it("turns the slot into the note's editor in place, focused at the start, with Done in its heading", async () => {
   render(two());
   fireEvent.click(within(frame('a')).getByRole('button', { name: 'Edit Alpha' }));
   await waitFor(() => expect(frame('a')).toHaveAttribute('data-editing'));
@@ -73,7 +64,7 @@ it('turns the slot into the note\'s editor in place, focused at the start, with 
   expect(frame('b')).not.toHaveAttribute('data-editing');
 });
 
-it('follows the editor\'s title while it edits (E10)', async () => {
+it("follows the editor's title while it edits (E10)", async () => {
   render(two());
   fireEvent.click(within(frame('a')).getByRole('button', { name: 'Edit Alpha' }));
   expect(await within(frame('a')).findByRole('button', { name: 'Finish editing Alpha, retitled' })).toHaveTextContent('Done');
@@ -176,3 +167,42 @@ it('keeps the first slot when saving it fails, so the second does not open', asy
   expect(frame('a')).toHaveAttribute('data-editing');
   expect(frame('b')).not.toHaveAttribute('data-editing');
 });
+
+/* eslint-disable react/no-children-prop -- The slot's render prop is its children prop, passed through createElement. */
+it('keeps the heading where it was on screen when it begins editing, whatever resized above it (E1)', async () => {
+  // jsdom has no layout: the frame reports where its heading is, 200px higher once the sections above have shrunk.
+  const SlotWithLayout = () =>
+    createElement(InlineNoteSlot, {
+      slot: 'a',
+      notebookId: 'nb',
+      path: 'notes/a.md',
+      title: 'Alpha',
+      writable: true,
+      layout: 'grow',
+      reading: createElement('p', null, 'Alpha reads here'),
+      onOpenZoom,
+      children: ({ controls, body, frameProps }: InlineNoteSlotParts) =>
+        createElement(
+          'article',
+          {
+            'aria-label': 'slot a',
+            ...frameProps,
+            'ref': (element: HTMLElement | null) => {
+              frameProps.ref(element);
+              if (element) element.getBoundingClientRect = () => ({ top: element.hasAttribute('data-editing') ? 100 : 300 }) as DOMRect;
+            },
+          },
+          createElement('header', null, controls),
+          body,
+        ),
+    });
+  const { container } = render(createElement(Harness, null, createElement('div', { 'data-testid': 'scroller', 'style': { overflowY: 'auto' } }, createElement(SlotWithLayout))));
+  const scroller = screen.getByTestId('scroller');
+  Object.defineProperty(scroller, 'scrollHeight', { value: 2000, configurable: true });
+  Object.defineProperty(scroller, 'clientHeight', { value: 500, configurable: true });
+  scroller.scrollTop = 700;
+  fireEvent.click(within(container).getByRole('button', { name: 'Edit Alpha' }));
+  await waitFor(() => expect(screen.getByLabelText('slot a')).toHaveAttribute('data-editing'));
+  expect(scroller.scrollTop).toBe(500);
+});
+/* eslint-enable react/no-children-prop */

@@ -2,6 +2,7 @@ import { readFilterQuery } from './filter-query.js';
 import { noteWebPath } from '@mygitnotes/core/workspace-links';
 import { isBareNotebookId } from '@mygitnotes/core/notebook-key';
 import { matchPath } from 'react-router-dom';
+import { isCompilationPath } from '@mygitnotes/core/compilation';
 export type WorkspaceTab = 'notes' | 'assets' | 'agent' | 'graph' | 'settings';
 export function parseWorkspaceRoute(pathname: string, search: string) {
   pathname = pathname.replace(/\/+$/, '') || '/';
@@ -123,6 +124,21 @@ export function noteReturnRoute(search: string, notebook: string, folder: string
 export function noteTrail(state: unknown): string[] {
   const trail = (state as { noteTrail?: unknown; } | null)?.noteTrail;
   return Array.isArray(trail) ? trail.filter((entry): entry is string => typeof entry === 'string' && entry.startsWith('/') && !entry.startsWith('//') && !entry.includes('\\')) : [];
+}
+
+/**
+ * The compilation a zoomed note was opened from: the last route of the trail when it names a compilation file of the
+ * same notebook, as a path within the repository. It stays open behind the note, so a section still editing in place
+ * returns to it, with its editing state, when the note closes.
+ */
+export function trailCompilation(state: unknown, notebook: string | null, notebookRoot: string): string | null {
+  const previous = noteTrail(state).at(-1);
+  if (!previous) return null;
+  const url = new URL(previous, 'http://workspace.invalid');
+  const route = parseWorkspaceRoute(url.pathname, url.search);
+  if (!route.valid || route.tab !== 'notes' || !route.note || route.notebook !== notebook) return null;
+  const path = `${notebookRoot}/${route.note}`;
+  return isCompilationPath(path) ? path : null;
 }
 
 /** The study session of one compilation. */

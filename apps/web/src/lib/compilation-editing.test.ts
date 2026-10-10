@@ -101,13 +101,15 @@ it('holds the order as it was, appends arrivals, keeps members that left and use
 });
 
 it('holds a dynamic list while a slot edits and applies the live order once editing ends', async () => {
-  const wrapper = ({ children }: { children: ReactNode; }) => {
+  let editingRef!: ReturnType<typeof useCompilationEditing>;
+  const Wrapper = ({ children }: { children: ReactNode; }) => {
     const editing = useCompilationEditing();
+    /* eslint-disable react/globals -- The test probe captures the hook's result for assertions after React commits. */
     editingRef = editing;
+    /* eslint-enable react/globals */
     return createElement(CompilationEditingProvider, { value: editing }, children);
   };
-  let editingRef!: ReturnType<typeof useCompilationEditing>;
-  const { result, rerender } = renderHook(({ items }) => useHeldOrder(items), { wrapper, initialProps: { items: [item('1'), item('2'), item('3')] } });
+  const { result, rerender } = renderHook(({ items }) => useHeldOrder(items), { wrapper: Wrapper, initialProps: { items: [item('1'), item('2'), item('3')] } });
   expect(result.current.map(entry => entry.id)).toEqual(['1', '2', '3']);
   await act(async () => void await editingRef.start({ slot: '2', key: 'nb:2.md' }));
   // An autosave moves the edited note to the top, and a new member arrives.

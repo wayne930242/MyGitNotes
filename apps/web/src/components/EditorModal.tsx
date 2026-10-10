@@ -2,6 +2,7 @@ import { noteRefKey } from '@mygitnotes/core/note-query';
 import React, { type ReactNode, useLayoutEffect, useState, useSyncExternalStore } from 'react';
 import { isCompilationPath } from '@mygitnotes/core/compilation';
 import { NoteItem } from '../lib/types.js';
+import type { NoteRef } from '@mygitnotes/core/note-query';
 import { useTranslation } from '../lib/i18n/index.js';
 import { useNoteEditing } from '../lib/note-editing.js';
 import { usePanelContext } from '../lib/panel-context.js';
@@ -17,14 +18,18 @@ interface EditorModalProps {
   isOpen: boolean;
   /** The view of the compilation at `path`; a compilation opens here instead of an editor. */
   renderCompilation: (path: string) => ReactNode;
+  /** The zoomed compilation this note was opened from, kept mounted and hidden behind the note's zoom. */
+  behind?: NoteRef | null;
 }
 
 /** Zoom: the full-screen frame around a note's editor. */
-export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loading, isOpen, renderCompilation }) => {
+export const EditorModal: React.FC<EditorModalProps> = ({ note, committed, loading, isOpen, renderCompilation, behind }) => {
   if (!isOpen) return null;
-  if (!note) return loading ? <EditorModalLoading /> : null;
-  if (isCompilationPath(note.path)) return <CompilationFrame key={noteRefKey(note)}>{renderCompilation(note.path)}</CompilationFrame>;
-  return <ZoomFrame key={noteRefKey(note)} note={note} committed={committed} />;
+  const compilation = note && isCompilationPath(note.path) ? note : null;
+  // The compilation keeps one place and one key whether it is shown or waits behind a note, so opening a note from it
+  // does not unmount its view: editing state, scroll position and a section's editor survive, and zoom can borrow that editor.
+  const shown = compilation ?? behind ?? null;
+  return <>{shown && <CompilationFrame key={noteRefKey(shown)} hidden={!compilation}>{renderCompilation(shown.path)}</CompilationFrame>}{!compilation && (note ? <ZoomFrame key={noteRefKey(note)} note={note} committed={committed} /> : loading ? <EditorModalLoading /> : null)}</>;
 };
 
 /** Shown while a note's body is read; the editor never starts from a missing body. */
@@ -44,8 +49,8 @@ const EditorModalLoading: React.FC = () => {
 };
 
 /** Zoom for a compilation: the same full-screen frame, around its view. */
-const CompilationFrame: React.FC<{ children: ReactNode; }> = ({ children }) => (
-  <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn'>
+const CompilationFrame: React.FC<{ children: ReactNode; hidden?: boolean; }> = ({ children, hidden = false }) => (
+  <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn' style={hidden ? { visibility: 'hidden' } : undefined} data-behind={hidden || undefined}>
     <div role='dialog' aria-modal='true' aria-label='Compilation' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{children}</div>
   </div>
 );

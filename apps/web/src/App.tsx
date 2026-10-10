@@ -36,7 +36,7 @@ import { WorkspaceLinks } from './components/WorkspaceLinks.js';
 import { type NoteLocation, NoteLocationProvider, readOnlyReason } from './lib/note-location.js';
 import { ImageLightbox } from './components/ImageLightbox.js';
 import { useNavigate } from 'react-router-dom';
-import { notebookRoute, noteRoute, noteTrail, parseWorkspaceRoute } from './lib/routes.js';
+import { notebookRoute, noteRoute, noteTrail, parseWorkspaceRoute, trailCompilation } from './lib/routes.js';
 import { draftScope, pageRepository } from './lib/workspace-repositories.js';
 import { sameValue } from './lib/merge-note.js';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -398,6 +398,9 @@ export const AppContent: React.FC = () => {
     />
   );
 
+  // A note opened from a zoomed compilation leaves that compilation mounted behind it.
+  const behindPath = trailCompilation(location.state, editorRoute.notebook, config?.notebooks.find(nb => nb.id === selectedNotebookId)?.root ?? '');
+  const compilationBehind = behindPath ? { notebookId: selectedNotebookId, path: behindPath } : null;
   if (loading || loadError) return <ConnectionState loading={loading} error={loadError} onRetry={refreshWorkspace} />;
   if (route.legacyScreen) return <LegacyScreenRedirect laneId={route.legacyLane} notebooks={config?.notebooks || []} onMissing={setActionError} />;
 
@@ -675,7 +678,7 @@ export const AppContent: React.FC = () => {
                 />
               )}
               {/* Note Editor Modal */}
-              <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} />
+              <EditorModal key={fileEditorRevision} note={routedNote} committed={routedCommitted && typeof routedCommitted.content === 'string' ? routedCommitted as NoteItem : undefined} loading={routedLoading} isOpen={noteEditorOpen} renderCompilation={renderCompilation} behind={compilationBehind} />
               {addingToFocus && (
                 <AddToFocusDialog
                   focus={noteFocus}

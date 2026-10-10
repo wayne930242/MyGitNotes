@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compilationStudyRoute, legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute } from './routes.js';
+import { compilationStudyRoute, legacyAllNotebooksRoute, notebookRoute, noteReturnRoute, noteRoute, parseWorkspaceRoute, trailCompilation } from './routes.js';
 describe('workspace URLs', () => {
   it('returns editors to their original workspace and preserves filters', () => {
     for (const origin of ['/graph?notebook=example', '/screen?notebook=work', '/notebooks/example/folders/projects?view=graph&tag=demo&q=hello']) {
@@ -89,5 +89,20 @@ describe('all-notebooks scope', () => {
       expect(parseWorkspaceRoute(page, '?notebook=all').allNotebooks).toBe(false);
       expect(legacyAllNotebooksRoute(page, '?notebook=all', 'rules')).toBe(`${page}?notebook=rules`);
     }
+  });
+});
+
+describe('trailCompilation', () => {
+  const state = (...trail: string[]) => ({ noteTrail: trail });
+  it('names the compilation a note was opened from, as a path in the repository', () => {
+    expect(trailCompilation(state('/notebooks/a/notes/reading.compilation.yml?returnTo=%2Fnotes'), 'a', 'notes/a')).toBe('notes/a/reading.compilation.yml');
+    expect(trailCompilation(state('/notebooks/a/notes/other.md', '/notebooks/a/notes/deep/x.compilation.yml'), 'a', 'notes/a')).toBe('notes/a/deep/x.compilation.yml');
+  });
+  it('names nothing when the trail is empty, ends at an ordinary note, another notebook or a foreign route', () => {
+    expect(trailCompilation(null, 'a', 'notes/a')).toBeNull();
+    expect(trailCompilation(state('/notebooks/a/notes/plain.md'), 'a', 'notes/a')).toBeNull();
+    expect(trailCompilation(state('/notebooks/b/notes/reading.compilation.yml'), 'a', 'notes/a')).toBeNull();
+    expect(trailCompilation(state('/settings'), 'a', 'notes/a')).toBeNull();
+    expect(trailCompilation(state('/notebooks/a/notes/../x.compilation.yml'), 'a', 'notes/a')).toBeNull();
   });
 });
