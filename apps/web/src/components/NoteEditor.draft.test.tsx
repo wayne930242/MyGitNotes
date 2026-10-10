@@ -497,10 +497,21 @@ it("reads its note again as soon as the workspace says files changed, adopting a
 it('leaves no recovery draft once an editor flush saves, while the editor stays mounted until the notes refresh', async () => {
   let flush: (() => Promise<boolean>) | undefined;
   const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown>; }) => ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
-  const provide = (current: NoteItem) => createElement(NoteEditingProvider, { register: (_key: string, callback: () => Promise<boolean>) => {
-    flush = callback;
-    return () => {};
-  }, flushEditors: async () => true, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined, editorProps: () => ({ statuses: [], onSave, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' }), children: editor({ onSave, note: current }) });
+  const provide = (current: NoteItem) => (
+    <NoteEditingProvider
+      register={(_key: string, callback: () => Promise<boolean>) => {
+        flush = callback;
+        return () => {};
+      }}
+      flushEditors={async () => true}
+      refreshNotes={async () => {}}
+      closeZoom={() => {}}
+      addToFocus={() => undefined}
+      editorProps={() => ({ statuses: [], onSave, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' })}
+    >
+      {editor({ onSave, note: current })}
+    </NoteEditingProvider>
+  );
   const view = render(provide(note));
   fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nFlushed.' } });
   expect(getLocalDraft('src:main', note.path)?.content).toBe('# Alpha\nFlushed.');
@@ -519,4 +530,50 @@ it('leaves no recovery draft once an editor flush saves, while the editor stays 
   view.unmount();
   render(provide(saved));
   expect(screen.queryByText(/recover|unsaved draft/i)).toBeNull();
+});
+
+it('leaves no recovery draft after a close that saved, while the editor stays mounted as a borrowed one does', async () => {
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown>; }) => ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
+  const onClose = vi.fn();
+  const view = render(editor({ frame: 'zoom', onSave, onClose }));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nClosed.' } });
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Close note' }));
+  });
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(getLocalDraft('src:main', note.path)).toBeNull();
+  // The editor goes back to the card it was borrowed from, still mounted, and the refreshed note reaches it.
+  const saved = await onSave.mock.results[0].value;
+  view.rerender(editor({ frame: 'zoom', onSave, onClose, note: saved }));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  expect(getLocalDraft('src:main', note.path)).toBeNull();
+});
+
+it('clears a draft that an autosave left behind when a flush finds nothing newer than the note', async () => {
+  let flush: (() => Promise<boolean>) | undefined;
+  const provide = () => (
+    <NoteEditingProvider
+      register={(_key: string, callback: () => Promise<boolean>) => {
+        flush = callback;
+        return () => {};
+      }}
+      flushEditors={async () => true}
+      refreshNotes={async () => {}}
+      closeZoom={() => {}}
+      addToFocus={() => undefined}
+      editorProps={() => ({ statuses: [], onSave: async () => note, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' })}
+    >
+      {editor({})}
+    </NoteEditingProvider>
+  );
+  render(provide());
+  // A recovery draft equal to the note itself: the edit it recorded was written and the editor went away before clearing it.
+  localStorage.setItem('gh_notes_draft:src:main:notes/a.md', JSON.stringify({ path: note.path, content: note.content, metadata: note.metadata, savedAt: 1 }));
+  await act(async () => {
+    expect(await flush?.()).toBe(true);
+  });
+  expect(getLocalDraft('src:main', note.path)).toBeNull();
 });

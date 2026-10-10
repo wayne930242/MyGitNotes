@@ -476,13 +476,22 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
   useEffect(() => {
     const persist = async () => {
       const draft = current.current;
-      if (draft.content === note.content && sameValue(draft.metadata, note.metadata)) return true;
+      if (draft.content === note.content && sameValue(draft.metadata, note.metadata)) {
+        // Nothing newer than the note is left to recover; an autosave that finished while the editor was going away leaves its draft behind.
+        clearLocalDraft(draftScope || branch, note.path);
+        return true;
+      }
       saveLocalDraft(draftScope || branch, note.path, draft.content, draft.metadata);
       try {
-        await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
+        const saved = await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
         // What was just written is what is persisted: without this, the draft effect compares the next `note` refresh against an older save and writes the draft back.
         lastSaved.current = { content: draft.content, metadata: draft.metadata };
         clearLocalDraft(draftScope || branch, note.path);
+        // The written note is the new base, so the next remote check does not take the app's own write for an external change.
+        if (mounted.current) {
+          current.current = { ...current.current, baseNote: saved };
+          setBaseNote(saved);
+        }
         return true;
       } catch (error) {
         setSaveError((error as Error).message);
@@ -516,6 +525,8 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       setIsSaving(true);
       try {
         await onSave({ path: note.path, content: current.current.content, metadata: current.current.metadata, baseNote: current.current.baseNote });
+        // A borrowed editor stays mounted after this close, so what it just wrote must count as persisted or the draft effect writes the draft back.
+        lastSaved.current = { content: current.current.content, metadata: current.current.metadata };
         clearLocalDraft(draftScope || branch, note.path);
       } catch (error) {
         closing.current = false;

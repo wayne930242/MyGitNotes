@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { horizontalListSortingStrategy, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -20,8 +21,11 @@ vi.mock('@dnd-kit/sortable', async importOriginal => {
 
 const flushEditors = vi.fn<(keys?: readonly string[]) => Promise<boolean>>();
 const refreshNotes = vi.fn<() => Promise<void>>();
-vi.mock('../lib/note-editing.js', () => ({ useNoteEditing: () => ({ flushEditors, refreshNotes }) }));
-vi.mock('./NoteEditorHost.js', () => ({ HostedNoteEditor: ({ path }: { path: string; }) => createElement('textarea', { 'aria-label': `Editor ${path}`, 'defaultValue': 'body' }) }));
+/** Paths whose editor renders into the page's body instead of the card, as a note's zoom borrowing it does. */
+const portalled = new Set<string>();
+const editorProps = vi.fn<(note: { notebookId: string; }) => { readOnly: boolean; }>();
+vi.mock('../lib/note-editing.js', () => ({ useNoteEditing: () => ({ flushEditors, refreshNotes, editorProps }) }));
+vi.mock('./NoteEditorHost.js', () => ({ HostedNoteEditor: ({ path }: { path: string; }) => portalled.has(path) ? createPortal(createElement('textarea', { 'aria-label': 'Zoom editor' }), document.body) : createElement('textarea', { 'aria-label': `Editor ${path}`, 'defaultValue': 'body' }) }));
 
 const REVISION = 'e'.repeat(40);
 let client: QueryClient;
@@ -39,6 +43,8 @@ beforeEach(() => {
   vi.mocked(useSortable).mockClear();
   flushEditors.mockReset().mockResolvedValue(true);
   refreshNotes.mockReset().mockResolvedValue();
+  editorProps.mockReset().mockReturnValue({ readOnly: false });
+  portalled.clear();
   resizeCallbacks = [];
   vi.stubGlobal(
     'ResizeObserver',
@@ -57,7 +63,7 @@ beforeEach(() => {
       disconnect() {}
     },
   );
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'notes/nb1/a.md', path: 'notes/nb1/a.md', notebookId: 'nb1', title: 'Note A', content: 'Body of A', tags: [], metadata: {} }, { id: 'notes/nb1/b.md', path: 'notes/nb1/b.md', notebookId: 'nb1', title: 'Note B', content: 'Body of B', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
+  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'a', path: 'notes/nb1/a.md', notebookId: 'nb1', title: 'Note A', content: 'Body of A', tags: [], metadata: {} }, { id: 'b', path: 'notes/nb1/b.md', notebookId: 'nb1', title: 'Note B', content: 'Body of B', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } })));
   client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity, retry: false } } });
   setNoteQueryScope({ sourceId: 'github:me/notes', revisions: { 'github:me/notes': REVISION }, repositories: {}, drafts: {} });
 });
@@ -290,16 +296,50 @@ it('keeps the editing card a note card when its note leaves the loaded page, unt
   fireEvent.click(await screen.findByRole('button', { name: 'Edit Note A' }));
   await waitFor(() => expect(screen.getByLabelText('Editor notes/nb1/a.md')).toBeInTheDocument());
   // An autosave moves the note out of the page the lane loaded: the next fetch no longer lists it.
-  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'notes/nb1/b.md', path: 'notes/nb1/b.md', notebookId: 'nb1', title: 'Note B', content: 'Body of B', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } }));
+  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ revision: REVISION, notes: [{ id: 'b', path: 'notes/nb1/b.md', notebookId: 'nb1', title: 'Note B', content: 'Body of B', tags: [], metadata: {} }] }), { headers: { 'Content-Type': 'application/json' } }));
   await act(async () => {
     await client.invalidateQueries();
   });
   await waitFor(() => expect(vi.mocked(fetch).mock.calls.length).toBeGreaterThan(1));
-  await waitFor(() => expect(screen.getByRole('button', { name: 'Edit Note B' })).toBeInTheDocument());
   expect(card('dynamic:row-3:notes/nb1/a.md')).toHaveAttribute('data-editing');
   expect(screen.getByLabelText('Editor notes/nb1/a.md')).toBeInTheDocument();
-  expect(screen.queryByText('screen.missing')).toBeNull();
+  expect(within(card('dynamic:row-3:notes/nb1/a.md')).queryByText('This item may have moved or been deleted.')).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Finish editing Note A' }));
   await waitFor(() => expect(document.querySelector('[data-screen-item="dynamic:row-3:notes/nb1/a.md"]')).toBeNull());
   expect(screen.getByRole('button', { name: 'Edit Note B' })).toBeInTheDocument();
+});
+
+it('holds same-named notes of different folders apart while one edits, as a note id is not unique (E11)', async () => {
+  const notesAt = ['x', 'y'].map(folder => ({ id: 'index', path: `notes/nb1/${folder}/index.md`, notebookId: 'nb1', title: `Index ${folder}`, content: `Body of ${folder}`, tags: [], metadata: {} }));
+  vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ revision: REVISION, notes: notesAt }), { headers: { 'Content-Type': 'application/json' } }));
+  const same: CompilationRow = { ...row, view: 'small', items: ['x', 'y'].map(folder => ({ id: `pin-${folder}`, kind: 'note' as const, notebookId: 'nb1', path: `notes/nb1/${folder}/index.md` })) };
+  render(lane({ row: same }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Index x' }));
+  await waitFor(() => expect(card('pin-x')).toHaveAttribute('data-editing'));
+  expect(screen.getByLabelText('Editor notes/nb1/x/index.md')).toBeInTheDocument();
+  expect(screen.getByText('Body of y')).toBeInTheDocument();
+  expect(within(card('pin-y')).getByRole('button', { name: 'Edit Index y' })).toBeInTheDocument();
+  expect(screen.queryByText('This item may have moved or been deleted.')).toBeNull();
+});
+
+it('offers no Edit on a note whose repository cannot be written, though the compilation can (E13)', async () => {
+  editorProps.mockImplementation(note => ({ readOnly: note.notebookId === 'nb1' }));
+  const onOpen = vi.fn();
+  render(lane({ row: two, onOpen }), { wrapper });
+  mouseClick(await screen.findByText('Body of A'));
+  expect(screen.queryByRole('button', { name: /^Edit Note/ })).toBeNull();
+  expect(card('item-1')).not.toHaveAttribute('data-editing');
+  expect(onOpen).toHaveBeenCalledTimes(1);
+});
+
+it("ends the card's slot only on keys typed inside the card, not on keys of its editor portalled into zoom (E4, K2)", async () => {
+  portalled.add('notes/nb1/b.md');
+  render(lane({ row: two }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Note B' }));
+  const zoomEditor = await screen.findByLabelText('Zoom editor');
+  expect(card('item-2')).not.toContainElement(zoomEditor);
+  fireEvent.keyDown(zoomEditor, { key: 'Escape' });
+  await act(async () => {});
+  expect(card('item-2')).toHaveAttribute('data-editing');
+  expect(flushEditors).not.toHaveBeenCalled();
 });

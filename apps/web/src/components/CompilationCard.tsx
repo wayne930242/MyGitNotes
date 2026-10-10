@@ -6,6 +6,7 @@ import type { AssetItem, NotebookConfig } from '../lib/types.js';
 import { noteSummary } from '../lib/compilation-content.js';
 import { renderNote } from '../lib/markdown.js';
 import { useTranslation } from '../lib/i18n/index.js';
+import { useNoteEditing } from '../lib/note-editing.js';
 import { youtubeLabels } from '../lib/youtube-embed.js';
 import { useNoteList } from '../lib/use-note-queries.js';
 import { NoteListSentinel } from './NoteListSentinel.js';
@@ -30,6 +31,7 @@ const CHROME_SKIPPED = 'a,button,input,select,textarea,summary,[role="button"],.
 
 export function CompilationCard({ item, view, controls, writable = false, ...content }: CompilationContentProps & { item: CompilationItem; view: CompilationRow['view']; controls?: ReactNode; /** Whether a note card offers editing in place: write access, and not reorder mode. */ writable?: boolean; }) {
   const { t } = useTranslation();
+  const { editorProps } = useNoteEditing();
   const [playing, setPlaying] = useState(false);
   const note = item.kind === 'note' ? content.notes.find(note => note.path === item.path && note.notebookId === item.notebookId) : undefined;
   const asset = item.kind === 'asset' ? content.assets.find(asset => asset.path === item.path && asset.notebookId === item.notebookId) : undefined;
@@ -45,86 +47,85 @@ export function CompilationCard({ item, view, controls, writable = false, ...con
   const members = item.kind === 'folder' ? [...folderNotes.uncommitted, ...folderNotes.notes] : [];
   const memberAssets = item.kind === 'folder' ? content.assets.filter(asset => asset.notebookId === item.notebookId && asset.path.startsWith(`${item.path}/`)) : [];
   const reading = note ? typeof note.content !== 'string' ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : view === 'thumbnail' ? <p className='screen-summary'>{noteSummary(note.content)}</p> : <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : null;
-  const card = (slot?: InlineNoteSlotParts) => (
-    <article
-      {...slot?.frameProps}
-      className={`screen-card screen-item-${item.kind}`}
-      data-screen-item={item.id}
-      onClick={event => {
-        if (note && !slot?.editing && !(event.target as HTMLElement).closest(CHROME_SKIPPED) && !window.getSelection()?.toString()) content.onOpen(item, note);
-      }}
-    >
-      <header className='screen-card-header'>
-        {controls}
-        {icon}
-        <button type='button' className='screen-card-title' title={slot?.title ?? title} onClick={() => content.onOpen(item, note)}>{slot?.title ?? title}</button>
-        {slot?.controls}
-        {item.kind !== 'note' && (
-          <button type='button' className='screen-open ui-icon-button' aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item, note)}>
-            <ExternalLink size={13} />
-          </button>
-        )}
-      </header>
-      <div className={slot ? 'screen-card-content screen-card-note' : 'screen-card-content'} tabIndex={0} aria-label={slot?.title ?? title}>
-        {slot ? slot.body : item.kind === 'folder'
-          ? (
-            <div className='screen-folder-list'>
-              {folderNotes.error && <p role='alert' className='screen-missing'>{folderNotes.error}</p>}
-              {folderNotes.loading && <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus>}
-              {members.length
-                ? members.map(note => (
-                  <button key={note.path} type='button' onClick={() => content.onOpen({ id: item.id, kind: 'note', notebookId: note.notebookId, path: note.path }, note)}>
-                    <FileText size={14} />
-                    <span>{note.title}</span>
-                  </button>
-                ))
-                : !memberAssets.length && !folderNotes.loading && !folderNotes.error && <p className='screen-summary'>{t('screen.emptyFolder')}</p>}
-              {memberAssets.map(asset => (
-                <button key={asset.path} type='button' onClick={() => content.onOpen({ id: item.id, kind: 'asset', notebookId: asset.notebookId, path: asset.path })}>
-                  <ImageIcon size={14} />
-                  <span>{asset.name}</span>
-                </button>
-              ))}
-              <NoteListSentinel hasMore={folderNotes.hasMore} loading={folderNotes.loadingMore} error={folderNotes.error} onLoadMore={folderNotes.loadMore} />
-            </div>
-          )
-          : item.kind === 'asset' && asset
-          ? /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(asset.name)
+  const card = (slot?: InlineNoteSlotParts) => {
+    // The note's zoom borrows this card's editor and is portalled elsewhere in the page, but its keys still bubble through React to this card: only keys typed inside the card end its slot.
+    const { onKeyDown, ...frame } = slot?.frameProps ?? {};
+    return (
+      <article
+        {...frame}
+        onKeyDown={onKeyDown && (event => event.currentTarget.contains(event.target as Node) && onKeyDown(event))}
+        className={`screen-card screen-item-${item.kind}`}
+        data-screen-item={item.id}
+        onClick={event => {
+          if (note && !slot?.editing && !(event.target as HTMLElement).closest(CHROME_SKIPPED) && !window.getSelection()?.toString()) content.onOpen(item, note);
+        }}
+      >
+        <header className='screen-card-header'>
+          {controls}
+          {icon}
+          <button type='button' className='screen-card-title' title={slot?.title ?? title} onClick={() => content.onOpen(item, note)}>{slot?.title ?? title}</button>
+          {slot?.controls}
+          {item.kind !== 'note' && (
+            <button type='button' className='screen-open ui-icon-button' aria-label={`${t('links.open')}: ${title}`} onClick={() => content.onOpen(item, note)}>
+              <ExternalLink size={13} />
+            </button>
+          )}
+        </header>
+        <div className={slot ? 'screen-card-content screen-card-note' : 'screen-card-content'} tabIndex={0} aria-label={slot?.title ?? title}>
+          {slot ? slot.body : item.kind === 'folder'
             ? (
-              <button type='button' className='screen-image-button' onClick={() => content.onOpen(item)} aria-label={`${t('screen.preview')}: ${title}`}>
-                <img src={asset.rawUrl} alt={asset.name} loading='lazy' />
-              </button>
-            )
-            : (
-              <div className='screen-file'>
-                <FileText size={38} />
-                <p>{asset.name}</p>
-                <small>{Math.ceil(asset.size / 1024)}{' KB'}</small>
+              <div className='screen-folder-list'>
+                {folderNotes.error && <p role='alert' className='screen-missing'>{folderNotes.error}</p>}
+                {folderNotes.loading && <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus>}
+                {members.length
+                  ? members.map(note => (
+                    <button key={note.path} type='button' onClick={() => content.onOpen({ id: item.id, kind: 'note', notebookId: note.notebookId, path: note.path }, note)}>
+                      <FileText size={14} />
+                      <span>{note.title}</span>
+                    </button>
+                  ))
+                  : !memberAssets.length && !folderNotes.loading && !folderNotes.error && <p className='screen-summary'>{t('screen.emptyFolder')}</p>}
+                {memberAssets.map(asset => (
+                  <button key={asset.path} type='button' onClick={() => content.onOpen({ id: item.id, kind: 'asset', notebookId: asset.notebookId, path: asset.path })}>
+                    <ImageIcon size={14} />
+                    <span>{asset.name}</span>
+                  </button>
+                ))}
+                <NoteListSentinel hasMore={folderNotes.hasMore} loading={folderNotes.loadingMore} error={folderNotes.error} onLoadMore={folderNotes.loadMore} />
               </div>
             )
-          : item.kind === 'youtube'
-          ? playing ? <iframe title={title} src={`https://www.youtube-nocookie.com/embed/${item.videoId}?start=${item.start}&playsinline=1&autoplay=1&rel=0`} allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share' allowFullScreen referrerPolicy='strict-origin-when-cross-origin' /> : (
-            <button type='button' className='screen-youtube-poster' onClick={() => setPlaying(true)} aria-label={`${t('screen.play')}: ${title}`}>
-              <img src={`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`} alt='' loading='lazy' />
-              <span>
-                <Play fill='currentColor' />
-                {t('screen.play')}
-              </span>
-            </button>
-          )
-          : <p className='screen-missing'>{t('screen.missing')}</p>}
-      </div>
-      <footer className='screen-card-footer' title={item.kind === 'youtube' ? item.videoId : item.path}>
-        <span>{notebook?.title || (item.kind === 'youtube' ? 'YouTube' : t('screen.missing'))}</span>
-      </footer>
-    </article>
-  );
+            : item.kind === 'asset' && asset
+            ? /\.(png|jpe?g|gif|webp|svg|avif|bmp)$/i.test(asset.name)
+              ? (
+                <button type='button' className='screen-image-button' onClick={() => content.onOpen(item)} aria-label={`${t('screen.preview')}: ${title}`}>
+                  <img src={asset.rawUrl} alt={asset.name} loading='lazy' />
+                </button>
+              )
+              : (
+                <div className='screen-file'>
+                  <FileText size={38} />
+                  <p>{asset.name}</p>
+                  <small>{Math.ceil(asset.size / 1024)}{' KB'}</small>
+                </div>
+              )
+            : item.kind === 'youtube'
+            ? playing ? <iframe title={title} src={`https://www.youtube-nocookie.com/embed/${item.videoId}?start=${item.start}&playsinline=1&autoplay=1&rel=0`} allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share' allowFullScreen referrerPolicy='strict-origin-when-cross-origin' /> : (
+              <button type='button' className='screen-youtube-poster' onClick={() => setPlaying(true)} aria-label={`${t('screen.play')}: ${title}`}>
+                <img src={`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`} alt='' loading='lazy' />
+                <span>
+                  <Play fill='currentColor' />
+                  {t('screen.play')}
+                </span>
+              </button>
+            )
+            : <p className='screen-missing'>{t('screen.missing')}</p>}
+        </div>
+        <footer className='screen-card-footer' title={item.kind === 'youtube' ? item.videoId : item.path}>
+          <span>{notebook?.title || (item.kind === 'youtube' ? 'YouTube' : t('screen.missing'))}</span>
+        </footer>
+      </article>
+    );
+  };
   // A note card is a note slot: it reads, or edits in place; every other kind of card keeps its own actions.
-  return note
-    ? (
-      <InlineNoteSlot slot={item.id} notebookId={note.notebookId} path={note.path} title={title} writable={writable} layout='fill' reading={reading} onOpenZoom={() => content.onOpen(item, note)}>
-        {parts => card(parts)}
-      </InlineNoteSlot>
-    )
-    : card();
+  return note ? <InlineNoteSlot slot={item.id} notebookId={note.notebookId} path={note.path} title={title} writable={writable && !editorProps({ ...note, content: note.content ?? '' }).readOnly} layout='fill' reading={reading} onOpenZoom={() => content.onOpen(item, note)}>{parts => card(parts)}</InlineNoteSlot> : card();
 }
