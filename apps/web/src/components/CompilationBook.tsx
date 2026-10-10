@@ -2,8 +2,8 @@ import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { List } from 'lucide-react';
 import type { CompilationRow } from '@mygitnotes/core/compilation';
 import type { NotebookFacets } from '@mygitnotes/core/note-query';
-import { bookChapters, bookEntries, type BookEntry } from '../lib/book-chapters.js';
-import { useHeldOrder } from '../lib/compilation-editing.js';
+import { bookChapters, bookEntries, type BookEntry, slotAnchor } from '../lib/book-chapters.js';
+import { useCompilationEditingContext, useHeldOrder } from '../lib/compilation-editing.js';
 import { compilationRowItems, studyRowItems } from '../lib/compilation-content.js';
 import { useLaneNotes } from '../lib/compilation-queries.js';
 import { useTranslation } from '../lib/i18n/index.js';
@@ -45,7 +45,11 @@ export function CompilationBook({ row, notebooks, assets, onOpen, study, facets,
   const [book, setBook] = useState<HTMLElement | null>(null);
   const [drawer, setDrawer] = useState(false);
   const opener = useRef<HTMLButtonElement>(null);
-  const active = useScrollSpy(body, entries.map(entry => entry.anchor).join('\n'));
+  const spied = useScrollSpy(body, entries.map(entry => entry.anchor).join('\n'));
+  // While a section edits, the contents name it wherever the reader has scrolled; scrolling decides again once editing ends (B12).
+  const { editing } = useCompilationEditingContext();
+  const editingEntry = editing ? slotAnchor(editing.slot, chapters) : null;
+  const active = editingEntry && entries.some(entry => entry.anchor === editingEntry) ? editingEntry : spied;
   const writable = !header.readOnly;
 
   const onEntries = useCallback((chapterId: string, next: BookEntry[]) => {

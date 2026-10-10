@@ -147,6 +147,33 @@ it("edits a note section in place, saves it for the next one, and follows the ed
   expect(within(screen.getByRole('navigation', { name: 'Contents' })).getByRole('button', { name: /Note A/ })).toBeInTheDocument();
 });
 
+it('highlights the chapter that edits in the contents wherever the book is scrolled, and scrolling decides again once editing ends (B12)', async () => {
+  const noteB = { ...noteA, id: 'notes/nb1/b.md', path: 'notes/nb1/b.md', title: 'Note B', content: '# Chapter Two\n\nThe body of note B.' };
+  const pair: CompilationRow = { ...row, items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/b.md' }] };
+  laneOverride.current = { notes: [noteA, noteB] as never, loading: false, error: '', hasMore: false, loadingMore: false, loadMore: () => {} };
+  render(book({ row: pair, readOnly: false }), { wrapper });
+  fireEvent.click(await screen.findByRole('button', { name: 'Edit Note A' }));
+  await waitFor(() => expect(chapters()[0]).toHaveAttribute('data-editing'));
+  const body = document.querySelector<HTMLElement>('.compilation-book')!;
+  // The reader scrolls to the end of the book, where the second chapter is the one in view.
+  body.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+  Object.defineProperty(body, 'clientHeight', { value: 800, configurable: true });
+  Object.defineProperty(body, 'scrollHeight', { value: 3000, configurable: true });
+  chapters().forEach((chapter, index) => {
+    within(chapter).getByRole('heading', { level: 2 }).getBoundingClientRect = () => ({ top: [-2000, 100][index] }) as DOMRect;
+  });
+  act(() => void body.dispatchEvent(new Event('scroll')));
+  const nav = screen.getByRole('navigation', { name: 'Contents' });
+  const current = () => within(nav).getAllByRole('button').filter(entry => entry.getAttribute('aria-current') === 'location').map(entry => entry.textContent);
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  });
+  expect(current()).toEqual(['Editing notes/nb1/a.md']);
+  fireEvent.click(within(chapters()[0]).getByRole('button', { name: /^Finish editing/ }));
+  await waitFor(() => expect(chapters()[0]).not.toHaveAttribute('data-editing'));
+  await waitFor(() => expect(current()).toEqual(['Note B']));
+});
+
 it("lists a folder's notes as sub-sections under it, in the book and in the contents, each a note section", async () => {
   const folder: CompilationRow = { ...row, items: [{ id: 'folder-1', kind: 'folder', notebookId: 'nb1', path: 'notes/nb1/sub' }] };
   render(book({ row: folder, readOnly: false }), { wrapper });

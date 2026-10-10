@@ -145,6 +145,13 @@ try {
   await assertReadingLayout(page, section(5), reading5, 'chapter 5');
   console.log('PASS the section editor grows with its content and keeps the reading layout');
 
+  // B12: while chapter 5 edits, the contents name it wherever the book is scrolled.
+  await scrollToHeading(anchor('c09'));
+  await pause(400);
+  assert.deepEqual(await current(), ['Chapter 05'], 'The contents do not name the chapter that edits');
+  assert.equal(await page.$$eval('.compilation-book-layout > .compilation-book-contents [aria-current="location"]', entries => entries.length), 1);
+  console.log('PASS the contents highlight the editing chapter while the book is scrolled elsewhere');
+
   // E4: the title opens the note in zoom on the same editing session, and closing zoom returns the editor to the section.
   await page.focus(`${section(5)} .cm-content`);
   await page.keyboard.type('UNSAVED-SESSION ');
@@ -169,6 +176,9 @@ try {
   assert.ok(await dialogOpen(), 'The first Escape closed the compilation');
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Edit Chapter 05', 'Focus is not on the Edit button');
   await waitFile('notes/a/chapter-05.md', 'UNSAVED-SESSION');
+  // B12: scrolling decides the highlight again once editing has ended.
+  await page.waitForFunction(() => document.querySelector('.compilation-book-layout > .compilation-book-contents button[aria-current="location"]')?.textContent.trim() !== 'Chapter 05');
+  assert.ok((await current())[0] !== 'Chapter 05', 'The contents still name the chapter that stopped editing');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Compilation"]'));
   console.log('PASS Escape leaves the section, then the compilation');

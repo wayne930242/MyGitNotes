@@ -51,3 +51,14 @@ export function bookEntries(chapters: readonly BookChapter[], sections: Readonly
   const titled = (entry: BookEntry): BookEntry => ({ ...entry, title: liveTitles.get(entry.anchor) || entry.title });
   return chapters.flatMap(chapter => [titled({ anchor: chapter.anchor, title: chapter.title, level: 0, ...(chapter.missing ? { missing: true } : {}) }), ...(sections.get(chapter.id) ?? []).map(titled)]);
 }
+
+/**
+ * The contents entry of the section that edits in the compilation's slot `slot`: a chapter's own id, or
+ * `<folder id>:<note path>` for a note section under a folder chapter. `null` when no chapter owns the slot.
+ */
+export function slotAnchor(slot: string, chapters: readonly BookChapter[]): string | null {
+  const own = chapters.find(chapter => chapter.id === slot);
+  if (own) return own.anchor;
+  const folder = chapters.find(chapter => chapter.kind === 'folder' && slot.startsWith(`${chapter.id}:`));
+  return folder ? sectionAnchor(folder.item, slot.slice(folder.id.length + 1)) : null;
+}

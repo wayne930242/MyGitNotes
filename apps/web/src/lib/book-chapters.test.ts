@@ -2,7 +2,7 @@ import { expect, it } from 'vitest';
 import type { CompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { CompilationAsset } from '../components/CompilationCard.js';
-import { bookChapters, bookEntries, type BookEntry, chapterAnchor, sectionAnchor } from './book-chapters.js';
+import { bookChapters, bookEntries, type BookEntry, chapterAnchor, sectionAnchor, slotAnchor } from './book-chapters.js';
 
 const note = (path: string, title: string) => ({ id: path, path, notebookId: 'nb', title, tags: [], metadata: {}, content: '' }) as NoteListItem;
 const asset = { name: 'pic.png', path: 'notes/nb/pic.png', notebookId: 'nb', size: 1, mtime: 1, rawUrl: '/pic.png' } as unknown as CompilationAsset;
@@ -41,4 +41,14 @@ it('shows the title of the section being edited instead of the saved one', () =>
 
 it('holds an empty contents list for a compilation with no members', () => {
   expect(bookEntries(bookChapters([], [], []), new Map())).toEqual([]);
+});
+
+it("names the contents entry of the slot a section edits in: a chapter by its id, a folder's note by the folder and the note's path (B12)", () => {
+  const chapters = bookChapters(items.slice(0, 3), [note('notes/nb/a.md', 'Alpha')], []);
+  expect(slotAnchor('n1', chapters)).toBe(chapterAnchor(items[0]));
+  expect(slotAnchor('f1:notes/nb/sub/x.md', chapters)).toBe(sectionAnchor(items[2], 'notes/nb/sub/x.md'));
+  expect(slotAnchor('f1', chapters)).toBe(chapterAnchor(items[2]));
+  expect(slotAnchor('gone', chapters)).toBeNull();
+  // Only a folder has note sections: a note chapter's id followed by a path names nothing.
+  expect(slotAnchor('n1:notes/nb/a.md', chapters)).toBeNull();
 });
