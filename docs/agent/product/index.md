@@ -66,7 +66,7 @@ Browser QA scripts (`node scripts/qa-*.mjs`) drive the built `apps/local-server/
 動態合輯的 `sort.field: manual` 依 `manualOrder` 的成員路徑排列，沒列入的成員依更新時間由舊到新接在後面；手動模式一次載入全部成員，選其他排序時保留 `manualOrder`。
 檔案的 `arrangement` 是 `lane`、`book` 或 `graph`；書本寫作 `book`。
 舊版的 `stack` 仍可讀，當作書本開啟，開啟、列出、搜尋或學習都不會寫回。
-只有合輯自己被編輯（改名、項目、來源、排序、排列、學習設定、複製）時才改寫成 `book`，`stack` 不再被寫出。
+只有合輯自己被編輯（改名、項目、來源、排序、手動順序、排列、學習設定、複製）時才改寫成 `book`，`stack` 不再被寫出。
 搬移或重新命名筆記與資料夾、筆記的標籤與狀態編輯，保持檔案原本的 token。
 目錄摘要的 `arrangement` 對兩種 token 都回報 `book`；`schema_version` 與檔案的 `version: 1` 不變，也沒有遷移步驟。
 舊版用戶端讀到 `book` 會把該合輯標為無效並附上原因，不會丟棄或改寫；Pro 與社群版要一起升級。

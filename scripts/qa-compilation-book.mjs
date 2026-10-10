@@ -188,8 +188,8 @@ try {
   assert.equal(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')), 'Edit Chapter 05', 'Focus is not on the Edit button');
   await waitFile('notes/a/chapter-05.md', 'UNSAVED-SESSION');
   // B12: scrolling decides the highlight again once editing has ended.
-  await page.waitForFunction(() => document.querySelector('.compilation-book-layout > .compilation-book-contents button[aria-current="location"]')?.textContent.trim() !== 'Chapter 05');
-  assert.ok((await current())[0] !== 'Chapter 05', 'The contents still name the chapter that stopped editing');
+  await scrollToHeading(anchor('c09'));
+  await page.waitForFunction(() => document.querySelector('.compilation-book-layout > .compilation-book-contents button[aria-current="location"]')?.textContent.trim() === 'Chapter 09');
   await page.keyboard.press('Escape');
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Compilation"]'));
   console.log('PASS Escape leaves the section, then the compilation');

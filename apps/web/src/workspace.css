@@ -617,3 +617,6 @@
 .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed { width: min(100%, 360px); margin-left: 0; }
 .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='medium'] { width: min(100%, 640px); }
 .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='theater'] { width: 100%; }
+@media (max-width: 640px) { .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed, .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='medium'], .compilation-inline-editor [data-live-markdown][data-continuous] .note-youtube-embed[data-youtube-mode='theater'] { width: 100%; } }
+/* A note that opens with a table keeps room above it for the table's toolbar, which the scroller would otherwise clip. */
+.compilation-inline-editor [data-live-markdown][data-continuous] .cm-scroller:has(> .cm-content > .live-md-table:first-child) { padding-top: 44px !important; }

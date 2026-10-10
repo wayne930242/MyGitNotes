@@ -159,10 +159,11 @@ it('highlights the chapter that edits in the contents wherever the book is scrol
   const pair: CompilationRow = { ...row, items: [{ id: 'item-1', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/a.md' }, { id: 'item-2', kind: 'note', notebookId: 'nb1', path: 'notes/nb1/b.md' }] };
   laneOverride.current = { notes: [noteA, noteB] as never, loading: false, error: '', hasMore: false, loadingMore: false, loadMore: () => {} };
   render(book({ row: pair, readOnly: false }), { wrapper });
-  fireEvent.click(await screen.findByRole('button', { name: 'Edit Note A' }));
-  await waitFor(() => expect(chapters()[0]).toHaveAttribute('data-editing'));
+  await screen.findByRole('button', { name: 'Edit Note A' });
+  const nav = screen.getByRole('navigation', { name: 'Contents' });
+  const current = () => within(nav).getAllByRole('button').filter(entry => entry.getAttribute('aria-current') === 'location').map(entry => entry.textContent);
+  // The reader has scrolled to the end of the book, where the second chapter is the one in view.
   const body = document.querySelector<HTMLElement>('.compilation-book')!;
-  // The reader scrolls to the end of the book, where the second chapter is the one in view.
   body.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
   Object.defineProperty(body, 'clientHeight', { value: 800, configurable: true });
   Object.defineProperty(body, 'scrollHeight', { value: 3000, configurable: true });
@@ -170,8 +171,12 @@ it('highlights the chapter that edits in the contents wherever the book is scrol
     within(chapter).getByRole('heading', { level: 2 }).getBoundingClientRect = () => ({ top: [-2000, 100][index] }) as DOMRect;
   });
   act(() => void body.dispatchEvent(new Event('scroll')));
-  const nav = screen.getByRole('navigation', { name: 'Contents' });
-  const current = () => within(nav).getAllByRole('button').filter(entry => entry.getAttribute('aria-current') === 'location').map(entry => entry.textContent);
+  await waitFor(() => expect(current()).toEqual(['Note B']));
+  // Editing the first chapter names it at once, though the book is still scrolled to the second.
+  fireEvent.click(screen.getByRole('button', { name: 'Edit Note A' }));
+  await waitFor(() => expect(chapters()[0]).toHaveAttribute('data-editing'));
+  await waitFor(() => expect(current()).toEqual(['Editing notes/nb1/a.md']));
+  act(() => void body.dispatchEvent(new Event('scroll')));
   await act(async () => {
     await new Promise(resolve => setTimeout(resolve, 50));
   });

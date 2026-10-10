@@ -120,7 +120,7 @@ export async function assertReadingLayout(page, scope, reading, label, { fills =
   if (fills) {
     assert.ok(Math.abs(found.editorHeight - found.contentHeight) <= 2, `${label}: the editor is ${found.editorHeight}px in a ${found.contentHeight}px card body`);
     assert.ok(Math.abs(found.markdownBottom - found.bodyBottom) <= 1 && found.markdownHeight >= found.bodyHeight - 1, `${label}: the text area leaves a band in the editor body`);
-    assert.ok(found.top - found.contentTop <= 48, `${label}: the text starts ${found.top - found.contentTop}px below the top of the card body`);
+    assert.ok(found.top - found.contentTop <= 16, `${label}: the text starts ${found.top - found.contentTop}px below the top of the card body`);
   }
   return found;
 }
