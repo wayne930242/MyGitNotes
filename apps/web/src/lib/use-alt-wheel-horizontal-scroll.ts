@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 
 type ElementRef = { readonly current: HTMLElement | null; };
 
-export function useAltWheelHorizontalScroll(targetRef: ElementRef, scrollerRef: ElementRef, nestedSelector?: string) {
+/** Alt+wheel scrolls `scrollerRef` sideways; `enabled` is false where it does not scroll sideways, leaving Alt+wheel to the browser. */
+export function useAltWheelHorizontalScroll(targetRef: ElementRef, scrollerRef: ElementRef, nestedSelector?: string, enabled = true) {
   useEffect(() => {
+    if (!enabled) return;
     const target = targetRef.current;
     const scroller = scrollerRef.current;
     if (!target || !scroller) return;
@@ -21,5 +23,5 @@ export function useAltWheelHorizontalScroll(targetRef: ElementRef, scrollerRef: 
     const capture = Boolean(nestedSelector);
     target.addEventListener('wheel', wheel, { passive: false, capture });
     return () => target.removeEventListener('wheel', wheel, capture);
-  }, [scrollerRef, targetRef, nestedSelector]);
+  }, [scrollerRef, targetRef, nestedSelector, enabled]);
 }

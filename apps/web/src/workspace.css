@@ -124,7 +124,7 @@
 .screen-view-thumbnail { --screen-card-width: 240px; --screen-content-height: 125px; }
 .screen-view-medium { --screen-card-width: 480px; --screen-content-height: 405px; }
 /* An open compilation, in zoom or in a Focus pane: a header, then the lane, the book or the graph. */
-.compilation-view { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
+.compilation-view { container: compilation / inline-size; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; height: 100%; }
 .compilation-frame-bar { display: flex; flex: none; justify-content: flex-start; padding: 6px 8px 0; }
 .compilation-body { flex: 1; min-width: 0; min-height: 0; overflow: auto; padding: 4px 12px 16px; }
 .compilation-view[data-arrangement='graph'] .compilation-body { overflow: hidden; display: flex; flex-direction: column; }
@@ -185,6 +185,8 @@
 .compilation-book-drawer-panel > .compilation-book-contents { flex: 1 1 auto; }
 /* Under 720px (the compilation's own width, in zoom or in a Focus pane) the contents list gives its column to the book and opens as a drawer from the Contents button. */
 @container compilation-book (max-width: 719px) { .compilation-book-layout { grid-template-columns: minmax(0, 1fr); } .compilation-book-layout > .compilation-book-contents { display: none; } .compilation-book-bar { display: flex; } .compilation-book { padding-right: 0; } }
+/* Narrow lane: under 560px of the compilation's own width, never the viewport's, cards list top to bottom at the lane's width, scrolling vertically; their height still follows the size. 560 is LANE_VERTICAL_BELOW in lib/use-lane-orientation.ts, which picks the matching behavior. */
+@container compilation (width < 560px) { .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-lane-strip { flex-direction: column; overflow-x: hidden; overflow-y: auto; } .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-card-slot { flex: none; width: 100%; } .compilation-view:is([data-arrangement='thumbnail'], [data-arrangement='small'], [data-arrangement='medium']) .screen-card-content { flex: none; height: var(--screen-content-height); } }
 .screen-lane-dynamic { background: color-mix(in srgb, var(--color-primary) 3%, transparent); outline: 1px dashed color-mix(in srgb, var(--color-primary) 23%, transparent); outline-offset: 4px; }
 .screen-lane-header, .screen-lane-heading, .screen-lane-actions { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .screen-lane-header { justify-content: space-between; padding: 4px 8px; margin-bottom: 6px; gap: 6px 10px; flex-wrap: wrap; }
@@ -210,7 +212,7 @@
 @container compilation-header (max-width: 760px) { .screen-lane-header .screen-view-tabs, .screen-lane-header .screen-lane-query { display: none; } .screen-lane-header .select-trigger.screen-view-select, .screen-lane-header .screen-lane-query-toggle.ui-icon-button { display: inline-flex; } .screen-lane-header .select-trigger.screen-view-select { width: auto; min-width: 0; } .screen-lane-header .screen-lane-query[data-open='true'] { position: absolute; top: calc(100% - 2px); right: 8px; z-index: 5; display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 220px; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); box-shadow: 0 4px 16px color-mix(in srgb, var(--color-scrim) 13%, transparent); } .screen-lane-header .screen-lane-query[data-open='true'] .screen-lane-filter { display: grid; grid-template-columns: auto minmax(0, 1fr); margin: 0; } .screen-lane-header .screen-lane-query[data-open='true'] .screen-lane-filter .ui-control, .screen-lane-header .screen-lane-query[data-open='true'] .screen-sort-select { width: 100%; min-width: 0; max-width: none; } }
 .screen-view-tabs [aria-pressed='true'] { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 3px color-mix(in srgb, var(--color-scrim) 7%, transparent); }
 .screen-lane-strip { display: flex; gap: 10px; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 0; min-height: 120px; }
-.screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: calc(100vw - 44px); min-width: 0; }
+.screen-card-slot { flex: 0 0 var(--screen-card-width); width: var(--screen-card-width); max-width: 100%; min-width: 0; }
 .screen-card { position: relative; display: flex; flex-direction: column; border: 1px solid var(--workspace-divider); border-radius: 10px; background: var(--color-surface); overflow: hidden; box-shadow: 0 2px 4px color-mix(in srgb, var(--color-scrim) 1%, transparent); }
 .screen-card-header { display: flex; align-items: center; gap: 7px; padding: 6px 10px; min-width: 0; }
 .screen-card-header > svg { width: 14px; height: 14px; color: var(--color-muted); flex: none; }

@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
-import { horizontalListSortingStrategy, SortableContext, useSortable } from '@dnd-kit/sortable';
+import { horizontalListSortingStrategy, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Plus, X } from 'lucide-react';
 import type { CompilationItem, CompilationRow, CompilationSort } from '@mygitnotes/core/compilation';
@@ -16,6 +16,7 @@ import { CompilationCard, type CompilationContentProps, compilationItemTitle } f
 import { NoteListSentinel } from './NoteListSentinel.js';
 import { useAltWheelHorizontalScroll } from '../lib/use-alt-wheel-horizontal-scroll.js';
 import { useHoldScroll } from '../lib/use-hold-scroll.js';
+import { useLaneOrientation } from '../lib/use-lane-orientation.js';
 import { LoadingStatus } from './LoadingStatus.js';
 
 export { compilationViewTabs } from './CompilationHeader.js';
@@ -77,19 +78,21 @@ export function CompilationLane({ row, graph, reorder, disabled, study, facets, 
   const items = studyRowItems(compilationRowItems(row, content.notes, content.assets, content.notebooks), ordinaryRow, content.notes, study.study, clock);
   const filtered = Boolean(row.study?.status);
   const drop = useDroppable({ id: `lane:${row.id}`, disabled: readOnly || disabled || !reorder || filtered || row.kind !== 'custom', data: { rowId: row.id, empty: row.kind === 'custom' && !row.items.length } });
-  useAltWheelHorizontalScroll(host, strip);
+  // A narrow compilation lists its cards top to bottom: nothing scrolls sideways, and cards sort along the column.
+  const vertical = useLaneOrientation(host) === 'vertical';
+  useAltWheelHorizontalScroll(host, strip, undefined, row.view !== 'graph' && !vertical);
   const scrollButton = useHoldScroll(strip);
   const handleCreateInLane = () => {
     const context = createLaneNoteContext(row, content.notebooks);
     if (context) onCreateNote?.(context);
   };
   return (
-    <section id={`screen-lane-${row.id}`} ref={host} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
-      <CompilationHeader row={row} count={items.length} disabled={disabled} readOnly={readOnly} notebooks={content.notebooks} facets={facets} extra={extra} onStudy={onStudy} onView={onView} onAdd={onAdd} onSort={onSort} onEditOrder={onEditOrder} onRename={onRename} onStudyChange={onStudyChange} onCreateInSource={handleCreateInLane} scrollButton={row.view === 'graph' ? undefined : scrollButton} />
+    <section id={`screen-lane-${row.id}`} ref={host} data-orientation={row.view === 'graph' ? undefined : vertical ? 'vertical' : 'horizontal'} className={`screen-lane screen-view-${row.view} ${row.kind === 'dynamic' ? 'screen-lane-dynamic' : ''}`} aria-label={row.name}>
+      <CompilationHeader row={row} count={items.length} disabled={disabled} readOnly={readOnly} notebooks={content.notebooks} facets={facets} extra={extra} onStudy={onStudy} onView={onView} onAdd={onAdd} onSort={onSort} onEditOrder={onEditOrder} onRename={onRename} onStudyChange={onStudyChange} onCreateInSource={handleCreateInLane} scrollButton={row.view === 'graph' || vertical ? undefined : scrollButton} />
       {row.view === 'graph' ? graph : (
         <div ref={readOnly ? undefined : drop.setNodeRef} className={!readOnly && drop.isOver ? 'screen-drop-target' : ''}>
           <div ref={strip} className='screen-lane-strip' tabIndex={0} aria-label={`${row.name} · ${t('screen.items')}`}>
-            {!readOnly && row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={horizontalListSortingStrategy}>{items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove?.(item.id)} />)}</SortableContext> : items.map(item => (
+            {!readOnly && row.kind === 'custom' ? <SortableContext items={items.map(item => item.id)} strategy={vertical ? verticalListSortingStrategy : horizontalListSortingStrategy}>{items.map(item => <MovableCard reorder={reorder} key={item.id} {...content} item={item} row={row} disabled={disabled || filtered} remove={() => onRemove?.(item.id)} />)}</SortableContext> : items.map(item => (
               <div className='screen-card-slot' key={item.id}>
                 <CompilationCard {...content} item={item} view={row.view} />
               </div>

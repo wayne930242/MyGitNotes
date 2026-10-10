@@ -4,7 +4,8 @@ import { useAltWheelHorizontalScroll } from './use-alt-wheel-horizontal-scroll.j
 
 afterEach(() => vi.unstubAllGlobals());
 
-function setup(nested = true) {
+function setup(nested = true, enabled = true) {
+  const added = vi.fn();
   let listener: (event: WheelEvent) => void = () => {};
   const scroller = { scrollLeft: 0, clientWidth: 300 };
   class Child {
@@ -17,15 +18,16 @@ function setup(nested = true) {
   const host = {
     contains: () => nested,
     addEventListener: (_: string, fn: typeof listener) => {
+      added();
       listener = fn;
     },
     removeEventListener() {},
   };
   /* eslint-disable react-hooks/rules-of-hooks -- This unit harness invokes mocked React hooks to exercise event registration without rendering. */
-  useAltWheelHorizontalScroll({ current: host as unknown as HTMLElement }, { current: scroller as unknown as HTMLElement }, nested ? '.table-scroll' : undefined);
+  useAltWheelHorizontalScroll({ current: host as unknown as HTMLElement }, { current: scroller as unknown as HTMLElement }, nested ? '.table-scroll' : undefined, enabled);
   /* eslint-enable react-hooks/rules-of-hooks */
   const event = { target: new Child(), altKey: true, ctrlKey: false, defaultPrevented: false, deltaX: 0, deltaY: 40, deltaMode: 0, preventDefault: vi.fn(), stopPropagation: vi.fn() };
-  return { scroller, event, dispatch: () => listener(event as unknown as WheelEvent) };
+  return { scroller, event, added, dispatch: () => listener(event as unknown as WheelEvent) };
 }
 
 describe('Alt wheel horizontal scrolling', () => {
@@ -52,6 +54,10 @@ describe('Alt wheel horizontal scrolling', () => {
     dispatch();
     expect(scroller.scrollLeft).toBe(640);
     expect(event.stopPropagation).not.toHaveBeenCalled();
+  });
+  it('registers nothing where the scroller does not scroll sideways', () => {
+    const { added } = setup(false, false);
+    expect(added).not.toHaveBeenCalled();
   });
   it('leaves events already handled by a nested table alone', () => {
     const { scroller, event, dispatch } = setup(false);
