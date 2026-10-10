@@ -48,11 +48,14 @@ export const HostedNoteEditor: React.FC<HostedNoteEditorProps> = ({ notebookId, 
   const claimed = useRef(false);
   const { claimEditor } = editing;
   useEffect(() => {
-    if (!claim || claimed.current || hosts.owner(key) === id) return;
+    if (!claim || claimed.current) return;
     claimed.current = true;
-    setClaiming(true);
+    // The first host of a note is its owner already and has nothing to claim.
+    if (hosts.owner(key) === id) return;
     void claimEditor(key, id).finally(() => setClaiming(false));
   }, [claim, claimEditor, hosts, key, id]);
+  // An owner has nothing left to claim or wait for; a host that loses the note later shows the preview, not the loading status.
+  if (owner && claiming) setClaiming(false);
   const lookup = useNoteLookup([{ notebookId, path }], true);
   const found = lookup.notes[0], committed = lookup.committed[0];
   const loaded = found && typeof found.content === 'string' ? found as NoteItem : null;

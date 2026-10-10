@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { createElement, forwardRef, Fragment, type ReactNode, useEffect } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import '@testing-library/jest-dom/vitest';
 import { NoteEditingProvider, useNoteEditing } from '../lib/note-editing.js';
@@ -117,4 +117,17 @@ it('falls back to the preview with its Edit here button when the claim fails', a
   await waitFor(() => expect(screen.getByRole('button', { name: 'Edit here' })).toBeInTheDocument());
   expect(screen.getByTestId('pane').querySelector('[data-testid="editor"]')).toBeInTheDocument();
   expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toBeNull();
+});
+
+it('shows the preview with its Edit here button, not the loading status, once another host takes over a note it owned from the start', async () => {
+  render(provide(createElement('section', { 'data-testid': 'card' }, createElement(HostedNoteEditor, { notebookId: 'a', path: 'notes/a.md', frame: 'compact', active: false, claim: true })), createElement('section', { 'data-testid': 'pane' }, createElement(HostedNoteEditor, { notebookId: 'a', path: 'notes/a.md', frame: 'pane', active: true }))));
+  await waitFor(() => expect(screen.getByTestId('card').querySelector('[data-testid="editor"]')).toBeInTheDocument());
+  expect(screen.getByTestId('pane')).toHaveTextContent('This note is open for editing elsewhere.');
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name: 'Edit here' }));
+  });
+  expect(screen.getByTestId('pane').querySelector('[data-testid="editor"]')).toBeInTheDocument();
+  expect(screen.getByTestId('card')).toHaveTextContent('This note is open for editing elsewhere.');
+  expect(screen.getByTestId('card')).not.toHaveTextContent('Loading note');
+  expect(within(screen.getByTestId('card')).getByRole('button', { name: 'Edit here' })).toBeInTheDocument();
 });
