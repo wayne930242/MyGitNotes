@@ -115,6 +115,9 @@ try {
   await page.waitForSelector(`${section(5)}[data-editing] .cm-content`);
   await page.waitForFunction(selector => !document.querySelector(selector).hasAttribute('data-editing'), {}, section(3));
   await waitFile('notes/a/chapter-03.md', 'TYPED-IN-CHAPTER-THREE');
+  // The saved section leaves no recovery draft behind, or reopening it would offer to restore text that is already on disk.
+  await pause(1000);
+  assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('gh_notes_draft:') && key.endsWith(':notes/a/chapter-03.md'))), [], 'A saved section left a recovery draft in storage');
   await pause(300);
   await shot('editing');
   const after = await headingTop(anchor('c05'));

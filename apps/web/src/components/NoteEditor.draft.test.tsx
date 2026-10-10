@@ -2,6 +2,7 @@
 import { type ChangeEvent, createElement, forwardRef } from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { NoteEditingProvider } from '../lib/note-editing.js';
 import { PanelProvider } from '../lib/panel-context.js';
 import { getLocalDraft } from '../lib/storage.js';
 import { announceWorkspaceFilesChanged } from '../lib/workspace-changes.js';
@@ -491,4 +492,31 @@ it("reads its note again as soon as the workspace says files changed, adopting a
   });
   expect(onReadRemote).toHaveBeenCalledTimes(2);
   expect((screen.getByLabelText('Note content') as HTMLTextAreaElement).value).toBe('# Alpha\nWritten by Pi.\n');
+});
+
+it('leaves no recovery draft once an editor flush saves, while the editor stays mounted until the notes refresh', async () => {
+  let flush: (() => Promise<boolean>) | undefined;
+  const onSave = vi.fn(async ({ content, metadata }: { content: string; metadata?: Record<string, unknown>; }) => ({ ...note, content, metadata: { ...metadata, updated: 't1' } }));
+  const provide = (current: NoteItem) => createElement(NoteEditingProvider, { register: (_key: string, callback: () => Promise<boolean>) => {
+    flush = callback;
+    return () => {};
+  }, flushEditors: async () => true, refreshNotes: async () => {}, closeZoom: () => {}, addToFocus: () => undefined, editorProps: () => ({ statuses: [], onSave, onRestoreFile: async () => null, branch: 'main', draftScope: 'src:main' }), children: editor({ onSave, note: current }) });
+  const view = render(provide(note));
+  fireEvent.change(screen.getByLabelText('Note content'), { target: { value: '# Alpha\nFlushed.' } });
+  expect(getLocalDraft('src:main', note.path)?.content).toBe('# Alpha\nFlushed.');
+  // A compilation slot saves through the registry, then waits for the notes to refresh before it lets the editor go.
+  await act(async () => {
+    expect(await flush?.()).toBe(true);
+  });
+  expect(onSave).toHaveBeenCalledTimes(1);
+  expect(getLocalDraft('src:main', note.path)).toBeNull();
+  const saved = await onSave.mock.results[0].value;
+  view.rerender(provide(saved));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  expect(getLocalDraft('src:main', note.path)).toBeNull();
+  view.unmount();
+  render(provide(saved));
+  expect(screen.queryByText(/recover|unsaved draft/i)).toBeNull();
 });

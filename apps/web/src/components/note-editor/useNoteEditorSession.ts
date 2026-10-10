@@ -480,6 +480,8 @@ export function useNoteEditorSession({ note, readOnly, autoSave, draftMode, remo
       saveLocalDraft(draftScope || branch, note.path, draft.content, draft.metadata);
       try {
         await onSave({ path: note.path, content: draft.content, metadata: draft.metadata, baseNote: draft.baseNote });
+        // What was just written is what is persisted: without this, the draft effect compares the next `note` refresh against an older save and writes the draft back.
+        lastSaved.current = { content: draft.content, metadata: draft.metadata };
         clearLocalDraft(draftScope || branch, note.path);
         return true;
       } catch (error) {

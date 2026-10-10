@@ -369,6 +369,9 @@ try {
   await page.waitForSelector(`${cardSel('b')}[data-editing] .cm-content`);
   await waitFile(noteFile('a'), 'EDIT-A');
   assert.deepEqual(await editing(), ['pin-b'], 'A second card did not take over editing');
+  // The saved card leaves no recovery draft behind, or reopening it would offer to restore text that is already on disk.
+  await settle(1000);
+  assert.deepEqual(await page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('gh_notes_draft:') && key.endsWith(':notes/work/a.md'))), [], 'A saved card left a recovery draft in storage');
   assert.ok((await cardText('.compilation-view', 'a')).includes('EDIT-A'), 'Card A does not read with the saved text');
   console.log('PASS a body click edits the card in place; another card saves the first and takes over (E1, E5, E6)');
 
