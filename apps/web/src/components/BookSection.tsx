@@ -51,9 +51,5 @@ export function BookSection({ anchor, slot, level, note, writable, onOpenZoom, o
   const html = useMemo(() => typeof note.content === 'string' ? renderNote(note.content, note.path, tableLabel, youtubeLabels(t), note.notebookId) : '', [note.content, note.path, note.notebookId, tableLabel, t]);
   /* eslint-enable react/preserve-manual-memoization */
   const reading = typeof note.content === 'string' ? <NoteHtml className='prose-custom screen-markdown' html={html} notebookId={note.notebookId} /> : <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus>;
-  return (
-    <InlineNoteSlot slot={slot} notebookId={note.notebookId} path={note.path} title={note.title} writable={writable} layout='grow' reading={reading} onOpenZoom={onOpenZoom}>
-      {parts => <SectionFrame anchor={anchor} level={level} parts={parts} onOpenZoom={onOpenZoom} onLiveTitle={onLiveTitle} />}
-    </InlineNoteSlot>
-  );
+  return <InlineNoteSlot slot={slot} notebookId={note.notebookId} path={note.path} title={note.title} writable={writable} layout='grow' reading={reading} onOpenZoom={onOpenZoom}>{parts => <SectionFrame anchor={anchor} level={level} parts={parts} onOpenZoom={onOpenZoom} onLiveTitle={onLiveTitle} />}</InlineNoteSlot>;
 }

@@ -44,17 +44,15 @@ function ChapterFrame({ chapter, onOpen, children }: { chapter: Chapter; onOpen:
 function YouTubeChapter({ item, title }: { item: Extract<CompilationItem, { kind: 'youtube'; }>; title: string; }) {
   const { t } = useTranslation();
   const [playing, setPlaying] = useState(false);
-  return playing
-    ? <iframe title={title} src={`https://www.youtube-nocookie.com/embed/${item.videoId}?start=${item.start}&playsinline=1&autoplay=1&rel=0`} allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share' allowFullScreen referrerPolicy='strict-origin-when-cross-origin' />
-    : (
-      <button type='button' className='screen-youtube-poster' onClick={() => setPlaying(true)} aria-label={`${t('screen.play')}: ${title}`}>
-        <img src={`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`} alt='' loading='lazy' />
-        <span>
-          <Play fill='currentColor' />
-          {t('screen.play')}
-        </span>
-      </button>
-    );
+  return playing ? <iframe title={title} src={`https://www.youtube-nocookie.com/embed/${item.videoId}?start=${item.start}&playsinline=1&autoplay=1&rel=0`} allow='accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share' allowFullScreen referrerPolicy='strict-origin-when-cross-origin' /> : (
+    <button type='button' className='screen-youtube-poster' onClick={() => setPlaying(true)} aria-label={`${t('screen.play')}: ${title}`}>
+      <img src={`https://i.ytimg.com/vi/${item.videoId}/hqdefault.jpg`} alt='' loading='lazy' />
+      <span>
+        <Play fill='currentColor' />
+        {t('screen.play')}
+      </span>
+    </button>
+  );
 }
 
 /** One chapter of the book, by kind: a note section, an asset, a video, a folder's note sections, or a missing notice in place. */
@@ -73,9 +71,7 @@ export function BookChapter({ chapter, assets, writable, onOpen, onLiveTitle, on
   }
   return (
     <ChapterFrame chapter={chapter} onOpen={onOpen}>
-      {item.kind === 'note' && !chapter.missing
-        ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus>
-        : item.kind === 'asset' && asset
+      {item.kind === 'note' && !chapter.missing ? <LoadingStatus className='screen-summary'>{t('notes.loading')}</LoadingStatus> : item.kind === 'asset' && asset
         ? IMAGE.test(asset.name)
           ? (
             <button type='button' className='screen-image-button' onClick={() => onOpen(item)} aria-label={`${t('screen.preview')}: ${title}`}>

@@ -2,18 +2,11 @@ import { expect, it } from 'vitest';
 import type { CompilationItem } from '@mygitnotes/core/compilation';
 import type { NoteListItem } from '@mygitnotes/core/note-query';
 import type { CompilationAsset } from '../components/CompilationCard.js';
-import { type BookEntry, bookChapters, bookEntries, chapterAnchor, sectionAnchor } from './book-chapters.js';
+import { bookChapters, bookEntries, type BookEntry, chapterAnchor, sectionAnchor } from './book-chapters.js';
 
 const note = (path: string, title: string) => ({ id: path, path, notebookId: 'nb', title, tags: [], metadata: {}, content: '' }) as NoteListItem;
 const asset = { name: 'pic.png', path: 'notes/nb/pic.png', notebookId: 'nb', size: 1, mtime: 1, rawUrl: '/pic.png' } as unknown as CompilationAsset;
-const items: CompilationItem[] = [
-  { id: 'n1', kind: 'note', notebookId: 'nb', path: 'notes/nb/a.md' },
-  { id: 'n2', kind: 'note', notebookId: 'nb', path: 'notes/nb/gone.md' },
-  { id: 'f1', kind: 'folder', notebookId: 'nb', path: 'notes/nb/sub' },
-  { id: 'a1', kind: 'asset', notebookId: 'nb', path: 'notes/nb/pic.png' },
-  { id: 'a2', kind: 'asset', notebookId: 'nb', path: 'notes/nb/lost.png' },
-  { id: 'y1', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' },
-];
+const items: CompilationItem[] = [{ id: 'n1', kind: 'note', notebookId: 'nb', path: 'notes/nb/a.md' }, { id: 'n2', kind: 'note', notebookId: 'nb', path: 'notes/nb/gone.md' }, { id: 'f1', kind: 'folder', notebookId: 'nb', path: 'notes/nb/sub' }, { id: 'a1', kind: 'asset', notebookId: 'nb', path: 'notes/nb/pic.png' }, { id: 'a2', kind: 'asset', notebookId: 'nb', path: 'notes/nb/lost.png' }, { id: 'y1', kind: 'youtube', videoId: 'dQw4w9WgXcQ', start: 0, title: 'A talk' }];
 
 it('makes a chapter of each member in order, titled the way lane cards title them', () => {
   const chapters = bookChapters(items, [note('notes/nb/a.md', 'Alpha')], [asset]);
@@ -35,7 +28,7 @@ it('matches notes by notebook as well as path', () => {
   expect(bookChapters([items[0]], [other], [])[0].note).toBeUndefined();
 });
 
-it('lists every chapter with a folder\'s note sections beneath it and the missing label on a missing chapter', () => {
+it("lists every chapter with a folder's note sections beneath it and the missing label on a missing chapter", () => {
   const chapters = bookChapters(items.slice(0, 3), [note('notes/nb/a.md', 'Alpha')], []);
   const sections = new Map<string, BookEntry[]>([['f1', [{ anchor: sectionAnchor(items[2], 'notes/nb/sub/x.md'), title: 'X', level: 1 }, { anchor: sectionAnchor(items[2], 'notes/nb/sub/y.md'), title: 'Y', level: 1 }]]]);
   expect(bookEntries(chapters, sections).map(entry => [entry.title, entry.level, entry.missing ?? false])).toEqual([['Alpha', 0, false], ['gone.md', 0, true], ['sub', 0, false], ['X', 1, false], ['Y', 1, false]]);

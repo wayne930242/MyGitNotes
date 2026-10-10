@@ -32,7 +32,12 @@ export function BookContents({ entries, active, hasMore, loadingMore, onLoadMore
       <ol>
         {entries.map(entry => (
           <li key={entry.anchor} data-level={entry.level}>
-            <button type='button' aria-current={entry.anchor === active ? 'location' : undefined} title={entry.title} onClick={() => onJump(entry.anchor)}>
+            <button
+              type='button'
+              aria-current={entry.anchor === active ? 'location' : undefined}
+              title={entry.title}
+              onClick={() => onJump(entry.anchor)}
+            >
               <span>{entry.title}</span>
               {entry.missing && <AlertCircle size={13} role='img' aria-label={t('screen.missing')} />}
             </button>

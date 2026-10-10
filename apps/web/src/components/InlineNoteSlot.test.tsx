@@ -206,3 +206,23 @@ it('keeps the heading where it was on screen when it begins editing, whatever re
   expect(scroller.scrollTop).toBe(500);
 });
 /* eslint-enable react/no-children-prop */
+
+it("sizes the source textarea of a Book section to its lines, and leaves a card's alone", async () => {
+  let lines = 321;
+  Object.defineProperty(HTMLTextAreaElement.prototype, 'scrollHeight', { configurable: true, get: () => lines });
+  try {
+    render(createElement(Harness, null, createElement(Slot, { slot: 'a', path: 'notes/a.md', title: 'Alpha', layout: 'grow' }), createElement(Slot, { slot: 'b', path: 'notes/b.md', title: 'Beta', layout: 'fill' })));
+    fireEvent.click(within(frame('a')).getByRole('button', { name: 'Edit Alpha' }));
+    const area = await within(frame('a')).findByLabelText('Note content');
+    await waitFor(() => expect(area).toHaveStyle({ height: '321px' }));
+    lines = 480;
+    fireEvent.input(area);
+    expect(area).toHaveStyle({ height: '480px' });
+    fireEvent.click(within(frame('b')).getByRole('button', { name: 'Edit Beta' }));
+    const card = await within(frame('b')).findByLabelText('Note content');
+    await act(async () => {});
+    expect(card.style.height).toBe('');
+  } finally {
+    Reflect.deleteProperty(HTMLTextAreaElement.prototype, 'scrollHeight');
+  }
+});

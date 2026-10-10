@@ -38,7 +38,7 @@ const body = (metrics: { scrollTop: number; clientHeight: number; scrollHeight: 
   return root;
 };
 
-it('measures headings against the body\'s own top edge and detects its end only when it scrolls', () => {
+it("measures headings against the body's own top edge and detects its end only when it scrolls", () => {
   const scrolled = body({ scrollTop: 900, clientHeight: 100, scrollHeight: 1000 }, { a: -50, b: 40 });
   expect(measureHeadings(scrolled)).toEqual({ headings: [{ anchor: 'a', top: -50 }, { anchor: 'b', top: 40 }], atEnd: true });
   const middle = body({ scrollTop: 100, clientHeight: 100, scrollHeight: 1000 }, { a: 0 });

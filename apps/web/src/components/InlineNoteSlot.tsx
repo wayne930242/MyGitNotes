@@ -111,6 +111,29 @@ export function InlineNoteSlot({ slot, notebookId, path, title, writable, layout
     return () => observer.disconnect();
   }, [editing, frame]);
 
+  // In source mode the note is a textarea, which does not grow with its text; a Book section sizes it to its lines so the book scrolls as one document.
+  useEffect(() => {
+    const root = frame;
+    if (!editing || layout !== 'grow' || !root) return;
+    const fit = (area: HTMLTextAreaElement) => {
+      area.style.height = 'auto';
+      area.style.height = `${area.scrollHeight}px`;
+    };
+    const fitAll = () => root.querySelectorAll('textarea').forEach(fit);
+    const onInput = (event: Event) => {
+      if (event.target instanceof HTMLTextAreaElement) fit(event.target);
+    };
+    fitAll();
+    root.addEventListener('input', onInput);
+    // Switching to source mode adds the textarea; a change of note content from outside the editor changes its lines.
+    const observer = new MutationObserver(fitAll);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => {
+      root.removeEventListener('input', onInput);
+      observer.disconnect();
+    };
+  }, [editing, layout, frame]);
+
   const onBodyClick = (event: MouseEvent<HTMLElement>) => {
     if ((event.target as HTMLElement).closest(INTERACTIVE) || window.getSelection()?.toString()) return;
     const device = (event.nativeEvent as { pointerType?: string; }).pointerType || pointer.current;

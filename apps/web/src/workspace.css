@@ -589,7 +589,10 @@
 .compilation-inline-editor[data-layout='fill'] { flex: 1 1 auto; height: 100%; }
 /* A Book section's editor takes its content's height, so the book scrolls as one document. */
 .compilation-inline-editor[data-layout='grow'] { height: auto; }
-.compilation-inline-editor[data-layout='grow'] :is(.note-editor, .note-editor-host, .note-editor-slot, .note-editor-body, [data-markdown-editor], [data-live-markdown]) { flex: none; height: auto; overflow: visible; }
+.compilation-inline-editor[data-layout='grow'] :is(.note-editor, .note-editor-host, .note-editor-slot, .note-editor-body) { flex: none; height: auto; overflow: visible; }
+/* The editor sits in a row beside nothing, so it keeps filling the width while its height follows its content. */
+.compilation-inline-editor[data-layout='grow'] [data-markdown-editor] { flex: 1 1 auto; min-width: 0; height: auto; overflow: visible; }
+.compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div, .compilation-inline-editor[data-layout='grow'] [data-markdown-editor] > div > div { flex: none; height: auto; min-height: 0; overflow: visible; }
 .compilation-inline-editor[data-layout='grow'] .cm-editor { height: auto; }
 .compilation-inline-editor[data-layout='grow'] .cm-scroller { overflow: visible; }
 .compilation-inline-editor[data-layout='grow'] textarea { overflow-y: hidden; resize: none; }

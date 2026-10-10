@@ -52,9 +52,10 @@ const current = () => page.$$eval('.compilation-book-layout > .compilation-book-
 const entries = () => page.$$eval('.compilation-book-layout > .compilation-book-contents button', buttons => buttons.map(button => button.textContent.trim()));
 /** The heading's top edge relative to the top of the book body. */
 const headingTop = selector => page.$eval(BODY, (body, selector) => body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top, selector);
-const scrollToHeading = selector => page.$eval(BODY, (body, selector) => {
-  body.scrollTop += body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top;
-}, selector);
+const scrollToHeading = selector =>
+  page.$eval(BODY, (body, selector) => {
+    body.scrollTop += body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top;
+  }, selector);
 const dialogOpen = () => page.$('[role="dialog"][aria-label="Compilation"]').then(Boolean);
 const editorFocused = () => Boolean(document.activeElement?.closest('[data-editing] .cm-content, [data-editing] textarea'));
 const shot = name => page.screenshot({ path: path.join(shots, `compilation-book-${name}.png`) });
@@ -79,10 +80,14 @@ try {
   await scrollToHeading(anchor('c06'));
   await page.waitForFunction(() => document.querySelector('.compilation-book-layout > .compilation-book-contents button[aria-current="location"]')?.textContent.trim() === 'Chapter 06');
   await page.click('.compilation-book-layout > .compilation-book-contents li:nth-child(9) button');
-  await page.waitForFunction(selector => {
-    const body = document.querySelector('.compilation-book');
-    return Math.abs(body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top) < 12;
-  }, {}, anchor('c09'));
+  await page.waitForFunction(
+    selector => {
+      const body = document.querySelector('.compilation-book');
+      return Math.abs(body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top) < 12;
+    },
+    {},
+    anchor('c09'),
+  );
   assert.deepEqual(await current(), ['Chapter 09']);
   assert.equal(await page.evaluate(() => document.activeElement?.dataset.bookAnchor), 'chapter:c09', 'Heading did not take focus');
   assert.ok(new URL(page.url()).hash === '', 'A jump changed the URL');
@@ -118,8 +123,34 @@ try {
   assert.ok((await page.$eval(`${section(3)} .compilation-inline-reading`, element => element.textContent)).includes('TYPED-IN-CHAPTER-THREE'), 'Chapter 3 does not read with the saved content');
   console.log('PASS click-edit a section, switch to another, the first is saved and the heading keeps its place');
 
+  // E3: the editor takes its content's height in both modes, so the book scrolls as one document.
+  const grown = selector => page.$eval(`${section(5)} ${selector}`, element => ({ inner: element.scrollHeight - element.clientHeight, height: element.getBoundingClientRect().height, width: element.getBoundingClientRect().width }));
+  const sectionWidth = await page.$eval(section(5), element => element.getBoundingClientRect().width);
+  const live = await grown('.cm-scroller');
+  assert.ok(live.inner <= 1 && live.height > 400, `The live editor scrolls inside the section: ${JSON.stringify(live)}`);
+  assert.ok((await grown('.note-editor-body')).width >= sectionWidth - 4, 'The live editor does not fill the section width');
+  await page.$eval(`${section(5)} [data-mode-toggle]`, button => button.click());
+  await page.waitForSelector(`${section(5)} textarea`);
+  await pause(300);
+  const source = await grown('textarea');
+  assert.ok(source.inner <= 1 && source.height > 400, `The source editor scrolls inside the section: ${JSON.stringify(source)}`);
+  assert.ok(source.width >= sectionWidth - 80, `The source editor is narrower than the section: ${JSON.stringify(source)}`);
+  await page.focus(`${section(5)} textarea`);
+  await page.keyboard.type('x\n\n\n');
+  await pause(200);
+  const typed = await grown('textarea');
+  assert.ok(typed.inner <= 1 && typed.height > source.height, `The source editor did not grow with its text: ${JSON.stringify([source, typed])}`);
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await page.keyboard.press('Backspace');
+  await shot('editing-source');
+  await page.$eval(`${section(5)} [data-mode-toggle]`, button => button.click());
+  await page.waitForSelector(`${section(5)} .cm-content`);
+  console.log('PASS the section editor grows with its content in live and source mode');
+
   // E4: the title opens the note in zoom on the same editing session, and closing zoom returns the editor to the section.
-  await page.waitForFunction(editorFocused);
+  await page.focus(`${section(5)} .cm-content`);
   await page.keyboard.type('UNSAVED-SESSION ');
   await page.click(`${section(5)} .compilation-book-title`);
   await page.waitForSelector('[role="dialog"][aria-label="Note editor"] .cm-content');
@@ -153,10 +184,14 @@ try {
   await shot('drawer-390');
   await page.evaluate(() => [...document.querySelectorAll('[role="dialog"][aria-label="Contents"] button')].find(button => button.textContent.trim() === 'Chapter 04').click());
   await page.waitForFunction(() => !document.querySelector('[role="dialog"][aria-label="Contents"]'));
-  await page.waitForFunction(selector => {
-    const body = document.querySelector('.compilation-book');
-    return Math.abs(body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top) < 12;
-  }, {}, anchor('c04'));
+  await page.waitForFunction(
+    selector => {
+      const body = document.querySelector('.compilation-book');
+      return Math.abs(body.querySelector(selector).getBoundingClientRect().top - body.getBoundingClientRect().top) < 12;
+    },
+    {},
+    anchor('c04'),
+  );
   await page.click('.compilation-book-contents-button');
   await page.waitForSelector('[role="dialog"][aria-label="Contents"]');
   await page.keyboard.press('Escape');

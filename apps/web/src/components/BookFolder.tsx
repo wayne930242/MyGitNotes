@@ -36,7 +36,7 @@ export function BookFolder({ item, anchor, title, assets, writable, onOpen, onLi
     return () => onEntries(item.id, []);
     // The signature stands for the member list: the entries are rebuilt from it, not from the note objects' identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, signature, onEntries]);
+  }, [item.id, signature, onEntries]);
   const memberItem = (note: NoteListItem): CompilationItem => ({ id: item.id, kind: 'note', notebookId: note.notebookId, path: note.path });
   return (
     <>
@@ -57,7 +57,10 @@ export function BookFolder({ item, anchor, title, assets, writable, onOpen, onLi
           <ul className='compilation-book-assets'>
             {memberAssets.map(asset => (
               <li key={asset.path}>
-                <button type='button' onClick={() => onOpen({ id: item.id, kind: 'asset', notebookId: asset.notebookId, path: asset.path })}>
+                <button
+                  type='button'
+                  onClick={() => onOpen({ id: item.id, kind: 'asset', notebookId: asset.notebookId, path: asset.path })}
+                >
                   <ImageIcon size={14} aria-hidden='true' />
                   <span>{asset.name}</span>
                 </button>
@@ -70,4 +73,3 @@ export function BookFolder({ item, anchor, title, assets, writable, onOpen, onLi
     </>
   );
 }
-
