@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { en } from '../i18n/en.js';
 import { zhTW } from '../i18n/zh-TW.js';
-import { bannedChordReason, chordsOf, keysId } from './keys.js';
+import { bannedChordReason, chordId, chordsOf, type ParsedKeys, parseKeys } from './keys.js';
 import { bindingApplies, KEYMAP, type KeyScope, parsedBinding } from './keymap.js';
 import type { Browser, KeyEnvironment, Platform } from './platform.js';
+
+/** The physical key presses a binding takes: Mod is Ctrl outside macOS, so Ctrl+M and Mod+M are one press there. */
+const pressedId = (keys: ParsedKeys, platform: Platform) => chordsOf(keys).map(chord => chordId(platform === 'other' && chord.ctrl ? { ...chord, ctrl: false, mod: true } : chord)).join(' ');
 
 const ENVIRONMENTS: KeyEnvironment[] = (['mac', 'other'] as Platform[]).flatMap(platform => (['chrome', 'edge', 'firefox', 'safari', 'other'] as Browser[]).map(browser => ({ platform, browser })));
 
@@ -29,10 +32,15 @@ describe('KEYMAP', () => {
     for (const entry of KEYMAP) expect(entry.phase !== undefined, entry.id).toBe(entry.handler === 'dispatcher');
   });
 
+  it('compares Ctrl and Mod as the one key they are outside macOS', () => {
+    expect(pressedId(parseKeys('Ctrl+M'), 'other')).toBe(pressedId(parseKeys('Mod+M'), 'other'));
+    expect(pressedId(parseKeys('Ctrl+M'), 'mac')).not.toBe(pressedId(parseKeys('Mod+M'), 'mac'));
+  });
+
   it('never binds two entries to the same key where their scopes overlap', () => {
     const overlaps = (a: KeyScope, b: KeyScope) => a === b || a === 'global' || b === 'global';
     for (const env of ENVIRONMENTS) {
-      const pressed = KEYMAP.flatMap(entry => entry.bindings.filter(binding => bindingApplies(binding, env)).map(binding => ({ entry, binding, id: keysId(parsedBinding(binding)) })));
+      const pressed = KEYMAP.flatMap(entry => entry.bindings.filter(binding => bindingApplies(binding, env)).map(binding => ({ entry, binding, id: pressedId(parsedBinding(binding), env.platform) })));
       for (const [index, a] of pressed.entries()) {
         for (const b of pressed.slice(index + 1)) {
           if (a.entry === b.entry || a.id !== b.id) continue;
