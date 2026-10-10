@@ -45,11 +45,12 @@ export interface AppServices {
   /** Where browser sign-ins live: the record store, or sealed cookies in the lightweight mode. */
   sessions: BrowserSessions;
   /**
-   * Where visitors' repository choices are kept, where the deployment lets them choose. The community deployment uses a
-   * sealed cookie; an edition that supplies its own `configSource` and no choices keeps each person's repositories in
-   * its `MembershipStore` instead, so `/api/workspace/choice` is not offered and people add repositories in Settings.
+   * Where visitors' repository choices are kept, where the deployment lets them choose. Left out, it is a sealed cookie,
+   * whatever `configSource` is given, as the community entry points (`index.ts`, `api/index.js`) use. `null` says there
+   * are none: an edition keeps each person's repositories in its `MembershipStore`, so `/api/workspace/choice` is not
+   * offered, the session probe answers `accountMembers` and people add repositories in Settings.
    */
-  workspaceChoices?: WorkspaceChoices;
+  workspaceChoices?: WorkspaceChoices | null;
   /** The remote read cache; defaults to Redis when configured, else process memory. Local workspaces use none. */
   remoteCache?: RemoteCache;
   piAgent?: PiAgent;
@@ -67,8 +68,8 @@ export interface AppServices {
 }
 
 export function createApp(base: string, overrides: Partial<AppServices> = {}): express.Express {
-  const workspaceChoices = overrides.workspaceChoices ?? (overrides.configSource ? undefined : cookieWorkspaceChoices());
-  const configSource = overrides.configSource ?? chosenRepositorySource(base, process.env, workspaceChoices);
+  const workspaceChoices = overrides.workspaceChoices === null ? null : overrides.workspaceChoices ?? cookieWorkspaceChoices();
+  const configSource = overrides.configSource ?? chosenRepositorySource(base, process.env, workspaceChoices ?? undefined);
   const local = configSource.mode === 'local';
   // The lightweight mode keeps sign-ins in cookies and nothing on the server; local workspaces never use it.
   const lightweight = !local && storageMode() === 'cookie';
@@ -106,8 +107,8 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   app.use((req, res, next) => req.path === '/mcp' || req.path.startsWith('/mcp/') ? next() : smallBody(req, res, next));
   // A parse error message can quote part of the body, such as an API key, so it is answered with fixed text and never logged.
   app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => (error as { type?: string; } | null)?.type === 'entity.parse.failed' ? res.status(400).json({ error: 'Request body is not valid JSON.', code: 'bad-json' }) : next(error));
-  app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices }));
-  app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices }));
+  app.use('/api/auth', createAuth({ store: recordStore, sessions, configSource, choices: workspaceChoices ?? undefined }));
+  app.use('/api', workspaceChoiceRouter({ store: recordStore, sessions, choices: workspaceChoices ?? undefined }));
   services.routes?.(app, services);
   app.use('/mcp', createRemoteMCP(recordStore, configSource, assetStorage, cache));
   app.get('/api/history/events', serverlessHistoryEvents);

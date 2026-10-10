@@ -5,12 +5,13 @@ import path from 'node:path';
 import { createServer, type Server } from 'node:http';
 import { Router } from 'express';
 import type { NewMember, WorkspaceConfigSource } from '@mygitnotes/core';
-import { createApp } from '../src/app.js';
+import { type AppServices, createApp } from '../src/app.js';
 import type { PiAgent } from '../src/pi-agent.js';
 import { storedSessions } from '../src/browser-sessions.js';
 import { membershipStoreContract } from '../src/membership-store-contract.js';
 import { memoryAccountSource } from '../src/memory-account-source.js';
 import { createRecordStore } from '../src/record-store/index.js';
+import { chosenRepositorySource } from '../src/workspace-choice.js';
 
 /** The person a test request belongs to: the grant's, else the `x-person` header's. */
 const personOf = async (request: { headers: Record<string, string | string[] | undefined>; person?: { userId: number | string; }; }) => request.person ? String(request.person.userId) : request.headers['x-person'] as string | undefined;
@@ -62,6 +63,10 @@ const fakeGitHub = () => {
   });
   return requests;
 };
+/** The visitor-choice deployment's environment: GitHub, with no repository named, and sessions in a local directory. */
+const visitorChoice = () => {
+  for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', REDIS_URL: '', MYGITNOTES_STORAGE: '', APP_URL: '', VERCEL: '', GITHUB_APP_TYPE: 'github-app', GITHUB_CLIENT_ID: 'app-client', GITHUB_CLIENT_SECRET: 'app-secret' })) vi.stubEnv(key, value);
+};
 
 describe("an edition that keeps each person's repositories", () => {
   const sessions = { owner: 'o'.repeat(43), other: 'p'.repeat(43) };
@@ -69,7 +74,7 @@ describe("an edition that keeps each person's repositories", () => {
   const start = async ({ limit = 2, piAgent }: { limit?: number; piAgent?: PiAgent; } = {}) => {
     const product = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-accounts-')));
     roots.push(product);
-    for (const [key, value] of Object.entries({ MYGITNOTES_SOURCE: 'github', MYGITNOTES_REPOSITORY: '', SESSION_SECRET: 's'.repeat(64), UPSTASH_REDIS_REST_URL: '', APP_URL: '', VERCEL: '', GITHUB_APP_TYPE: 'github-app' })) vi.stubEnv(key, value);
+    visitorChoice();
     const recordStore = createRecordStore(product);
     await recordStore.set(sessions.owner, { kind: 'session', token: 'fixture-owner', login: 'octo', userId: 1 });
     await recordStore.set(sessions.other, { kind: 'session', token: 'fixture-other', login: 'hubot', userId: 2 });
@@ -91,7 +96,7 @@ describe("an edition that keeps each person's repositories", () => {
       },
     };
     const requests = fakeGitHub();
-    server = createServer(createApp(product, { configSource, recordStore, ...(piAgent ? { piAgent } : {}) }));
+    server = createServer(createApp(product, { configSource, recordStore, workspaceChoices: null, ...(piAgent ? { piAgent } : {}) }));
     await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
     return { requests, added };
@@ -175,5 +180,56 @@ describe("an edition that keeps each person's repositories", () => {
     await add('octo/wiki');
     await call('PATCH', '/api/workspace/members', { repository: 'github:octo/wiki@main', hidden: true, revision: (await members()).revision });
     await vi.waitFor(() => expect(membershipChanged).toHaveBeenLastCalledWith(['github:octo/kb@main'], expect.objectContaining({ headers: expect.objectContaining({ cookie: `gh_notes_session=${sessions.owner}` }) })));
+  });
+});
+
+describe('repository choices beside a configuration source', () => {
+  const session = 'o'.repeat(43);
+  /** Serves a fresh product directory with the services `services` names for it; GitHub is faked once per test. */
+  const serve = async (services: (product: string) => Partial<AppServices>) => {
+    const product = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-choices-')));
+    roots.push(product);
+    const recordStore = createRecordStore(product);
+    await recordStore.set(session, { kind: 'session', token: 'fixture-owner', login: 'octo', userId: 1 });
+    server = createServer(createApp(product, { recordStore, ...services(product) }));
+    await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
+    base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
+  };
+  const call = async (method: string, url: string, body?: unknown, cookie = `gh_notes_session=${session}`) => {
+    const response = await fetch(base + url, { method, headers: { 'Content-Type': 'application/json', Cookie: cookie }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: response.status, body: await response.json().catch(() => ({})), cookies: response.headers.getSetCookie() };
+  };
+
+  it('keeps cookie choices for a visitor-choice deployment started from the Node entry, which passes its configuration source', async () => {
+    visitorChoice();
+    fakeGitHub();
+    // As apps/local-server/src/index.ts starts the server under Docker and `pnpm start`.
+    await serve(product => ({ configSource: chosenRepositorySource(product) }));
+    const before = (await call('GET', '/api/auth/session')).body;
+    expect(before).toMatchObject({ authenticated: true, repositoryChoice: true, workspace: null });
+    expect(before.accountMembers).toBeUndefined();
+    const chosen = await call('POST', '/api/workspace/choice', { repository: 'octo/kb' });
+    expect(chosen).toMatchObject({ status: 200, body: { choice: { repository: 'octo/kb', branch: 'main' } } });
+    const choice = chosen.cookies.find(cookie => cookie.startsWith('mygitnotes_workspace='))!.split(';')[0];
+    const cookie = `gh_notes_session=${session}; ${choice}`;
+    expect((await call('GET', '/api/auth/session', undefined, cookie)).body).toMatchObject({ repositoryChoice: true, workspace: { repository: 'octo/kb', branch: 'main' } });
+    expect((await call('GET', '/api/workspace/members', undefined, cookie)).body).toMatchObject({ changeable: false, repositoryChoice: true, members: [{ id: 'github:octo/kb@main' }] });
+    const forgotten = await call('DELETE', '/api/workspace/choice', undefined, cookie);
+    expect(forgotten.status).toBe(200);
+    expect(forgotten.cookies.find(line => line.startsWith('mygitnotes_workspace='))).toMatch(/Expires=Thu, 01 Jan 1970/);
+  });
+
+  it("keeps each person's repositories in the membership store only when told there are no choices", async () => {
+    visitorChoice();
+    fakeGitHub();
+    const accounts = memoryAccountSource({ personOf: async () => 'octo' });
+    await serve(() => ({ configSource: accounts }));
+    expect((await call('GET', '/api/auth/session')).body.accountMembers).toBeUndefined();
+    expect((await call('DELETE', '/api/workspace/choice')).status).toBe(200);
+    await new Promise<void>(resolve => server!.close(() => resolve()));
+    await serve(() => ({ configSource: accounts, workspaceChoices: null }));
+    expect((await call('GET', '/api/auth/session')).body).toMatchObject({ repositoryChoice: true, accountMembers: true, workspace: null });
+    expect(await call('DELETE', '/api/workspace/choice')).toMatchObject({ status: 404, body: { error: expect.stringContaining('Settings') } });
+    expect((await call('GET', '/api/workspace/members')).body).toMatchObject({ changeable: true, adds: 'repository' });
   });
 });
