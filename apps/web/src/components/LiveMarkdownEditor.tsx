@@ -1,8 +1,8 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import { Compartment, EditorState, StateEffect, StateField, Transaction } from '@codemirror/state';
-import { type DecorationSet, drawSelection, EditorView, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
+import { type DecorationSet, drawSelection, EditorView, highlightActiveLineGutter, lineNumbers } from '@codemirror/view';
 import { autocompletion } from '@codemirror/autocomplete';
-import { defaultKeymap, history, historyKeymap, isolateHistory } from '@codemirror/commands';
+import { history, isolateHistory } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
@@ -28,6 +28,7 @@ import { headingGutter } from './live-markdown/heading-gutter.js';
 import { tableBoundaries } from './live-markdown/table-boundaries.js';
 import { useNoteViewPreferences } from '../lib/editor-preferences.js';
 import { applyMarkdownFormat, formatKeymap } from './live-markdown/format-commands.js';
+import { markdownEditorKeymap } from './live-markdown/editor-keymap.js';
 import type { MarkdownFormat } from '../lib/markdown-format.js';
 import { isOutlinePath } from '@mygitnotes/core/outline';
 import { applyOutlineCommand, outlineKeymap } from './live-markdown/outline-commands.js';
@@ -182,7 +183,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           isOutlinePath(notePath) ? [outlineKeymap, outlineDrag({ move: t('outline.move'), before: t('outline.dropBefore'), after: t('outline.dropAfter'), child: t('outline.dropChild') })] : [],
           tableBoundaries,
           formatKeymap,
-          keymap.of([...defaultKeymap, ...historyKeymap]),
+          markdownEditorKeymap(),
           drawSelection(),
           cardBackgroundLayer,
           headingGutter,
@@ -226,7 +227,7 @@ export const LiveMarkdownEditor = forwardRef<LiveMarkdownHandle, Props>(({ conte
           }),
           EditorView.atomicRanges.of(view => view.state.field(field).decorations.update({ filter: (_from, _to, decoration) => decoration.spec.widget instanceof LiveMarkdownTable })),
           permission.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
-          EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'role': 'textbox', 'aria-multiline': 'true' }),
+          EditorView.contentAttributes.of({ 'aria-label': ariaLabel, 'role': 'textbox', 'aria-multiline': 'true', 'data-key-scope': 'markdown-editor' }),
           EditorView.domEventHandlers({
             focus: (_event, view) => {
               view.dispatch({ effects: focusChanged.of(true) });

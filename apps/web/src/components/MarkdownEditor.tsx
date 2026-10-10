@@ -19,6 +19,9 @@ import { isOutlinePath } from '@mygitnotes/core/outline';
 import { editOutline, type OutlineCommand } from '../lib/outline-editing.js';
 import { OutlineRawHistory, type OutlineRawSnapshot } from '../lib/outline-raw-history.js';
 import { textChange } from '../lib/text-change.js';
+import { formatKeys } from '../lib/keyboard/keys.js';
+import { bindingsFor, keymapEntry, matchesCommand } from '../lib/keyboard/keymap.js';
+import { keyEnvironment } from '../lib/keyboard/platform.js';
 
 const LiveMarkdownEditor = React.lazy(() => import('./LiveMarkdownEditor.js').then(module => ({ default: module.LiveMarkdownEditor })));
 export type MarkdownEditorMode = 'live' | 'raw';
@@ -51,11 +54,13 @@ interface Props {
   onInsertImage?: () => void;
 }
 
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
-
-/** The formatting toolbar's groups; a shortcut key is shown in the button's label. */
-const FORMAT_GROUPS: { format: MarkdownFormat; icon: LucideIcon; key?: string; }[][] = [[{ format: 'heading1', icon: Heading1 }, { format: 'heading2', icon: Heading2 }, { format: 'heading3', icon: Heading3 }], [{ format: 'bold', icon: Bold, key: 'B' }, { format: 'italic', icon: Italic, key: 'I' }, { format: 'underline', icon: Underline, key: 'U' }, { format: 'strikethrough', icon: Strikethrough }, { format: 'code', icon: Code }], [{ format: 'bulletList', icon: List }, { format: 'orderedList', icon: ListOrdered }, { format: 'taskList', icon: ListTodo }, { format: 'quote', icon: Quote }], [{ format: 'codeBlock', icon: SquareCode }, { format: 'link', icon: Link }, { format: 'horizontalRule', icon: SeparatorHorizontal }]];
-const SHORTCUT_FORMATS: Record<string, MarkdownFormat> = { b: 'bold', i: 'italic', u: 'underline' };
+/** The formatting toolbar's groups; a format with a KEYMAP entry shows its key in the button's label. */
+const FORMAT_GROUPS: { format: MarkdownFormat; icon: LucideIcon; command?: string; }[][] = [[{ format: 'heading1', icon: Heading1 }, { format: 'heading2', icon: Heading2 }, { format: 'heading3', icon: Heading3 }], [{ format: 'bold', icon: Bold, command: 'format.bold' }, { format: 'italic', icon: Italic, command: 'format.italic' }, { format: 'underline', icon: Underline, command: 'format.underline' }, { format: 'strikethrough', icon: Strikethrough }, { format: 'code', icon: Code }], [{ format: 'bulletList', icon: List }, { format: 'orderedList', icon: ListOrdered }, { format: 'taskList', icon: ListTodo }, { format: 'quote', icon: Quote }], [{ format: 'codeBlock', icon: SquareCode }, { format: 'link', icon: Link }, { format: 'horizontalRule', icon: SeparatorHorizontal }]];
+const SHORTCUT_FORMATS: readonly (readonly [string, MarkdownFormat])[] = [['format.bold', 'bold'], ['format.italic', 'italic'], ['format.underline', 'underline']];
+const commandKeyLabel = (command: string) => {
+  const [keys] = bindingsFor(keymapEntry(command));
+  return keys ? formatKeys(keys, keyEnvironment).join(' ') : '';
+};
 
 export function MarkdownEditorModeSwitch({ mode, onChange }: { mode: MarkdownEditorMode; onChange: (mode: MarkdownEditorMode) => void; }) {
   const { t } = useTranslation();
@@ -287,8 +292,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
       <div className='markdown-format-toolbar' role='toolbar' aria-label={t('editor.formatToolbar')}>
         {FORMAT_GROUPS.map((group, index) => (
           <div className='markdown-format-group' key={index}>
-            {group.map(({ format, icon: Icon, key }) => {
-              const label = t(`format.${format}` as TranslationKey) + (key ? ` (${isMac ? '⌘' : 'Ctrl+'}${key})` : '');
+            {group.map(({ format, icon: Icon, command }) => {
+              const label = t(`format.${format}` as TranslationKey) + (command ? ` (${commandKeyLabel(command)})` : '');
               return (
                 <button
                   key={format}
@@ -551,15 +556,16 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(({ content
                 }}
                 onKeyDown={event => {
                   if (event.nativeEvent.isComposing) return;
-                  const shortcut = SHORTCUT_FORMATS[event.key.toLowerCase()];
-                  if (shortcut && isMarkdown && !readOnly && (isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && !event.shiftKey && !event.altKey) {
+                  const shortcut = SHORTCUT_FORMATS.find(([command]) => matchesCommand(event.nativeEvent, command))?.[1];
+                  if (shortcut && isMarkdown && !readOnly) {
                     event.preventDefault();
                     applyFormat(shortcut);
                     return;
                   }
-                  if (outline && !readOnly && (isMac ? event.metaKey : event.ctrlKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
+                  const redo = matchesCommand(event.nativeEvent, 'editor.redo');
+                  if (outline && !readOnly && (redo || matchesCommand(event.nativeEvent, 'editor.undo'))) {
                     event.preventDefault();
-                    rawUndo(event.shiftKey || event.key.toLowerCase() === 'y');
+                    rawUndo(redo);
                     return;
                   }
                   const escaped = tabEscape.current;

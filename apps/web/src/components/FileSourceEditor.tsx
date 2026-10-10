@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
-import { EditorView, highlightActiveLine, keymap, lineNumbers } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { EditorView, highlightActiveLine, lineNumbers } from '@codemirror/view';
+import { history } from '@codemirror/commands';
+import { codeEditorKeymap } from './live-markdown/editor-keymap.js';
 import { syntaxHighlighting } from '@codemirror/language';
 import { codeMirrorTokenTheme, tokenHighlightStyle } from '../lib/codemirror-theme.js';
 import { markdown } from '@codemirror/lang-markdown';
@@ -40,13 +41,13 @@ export function FileSourceEditor({ path, content, readOnly, label, onChange }: {
           lineNumbers(),
           highlightActiveLine(),
           history(),
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          codeEditorKeymap(),
           language(path),
           syntaxHighlighting(tokenHighlightStyle),
           codeMirrorTokenTheme,
           permissions.current.of([EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)]),
           EditorState.lineSeparator.of(initial.current.includes('\r\n') ? '\r\n' : '\n'),
-          EditorView.contentAttributes.of({ 'aria-label': label }),
+          EditorView.contentAttributes.of({ 'aria-label': label, 'data-key-scope': 'code-editor' }),
           EditorView.updateListener.of(update => {
             if (update.docChanged) change.current(update.state.sliceDoc());
           }),

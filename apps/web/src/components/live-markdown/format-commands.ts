@@ -1,6 +1,7 @@
 import { Prec } from '@codemirror/state';
 import { type EditorView, keymap } from '@codemirror/view';
 import { formatMarkdown, type MarkdownFormat } from '../../lib/markdown-format.js';
+import { codeMirrorBindings } from './editor-keymap.js';
 
 /** Applies `format` to the main selection as one undoable edit. */
 export function applyMarkdownFormat(view: EditorView, format: MarkdownFormat): boolean {
@@ -12,5 +13,5 @@ export function applyMarkdownFormat(view: EditorView, format: MarkdownFormat): b
   return true;
 }
 
-/** Mod-b, Mod-i and Mod-u; ahead of the default keymap, which spends Mod-i and Mod-u on selection commands. */
-export const formatKeymap = Prec.high(keymap.of([{ key: 'Mod-b', run: view => applyMarkdownFormat(view, 'bold') }, { key: 'Mod-i', run: view => applyMarkdownFormat(view, 'italic') }, { key: 'Mod-u', run: view => applyMarkdownFormat(view, 'underline') }]));
+/** Bold, italic and underline (Mod-b, Mod-i, Mod-u in the table), ahead of the other editing keys. */
+export const formatKeymap = Prec.high(keymap.of(codeMirrorBindings('markdown-editor', { 'format.bold': { run: view => applyMarkdownFormat(view, 'bold') }, 'format.italic': { run: view => applyMarkdownFormat(view, 'italic') }, 'format.underline': { run: view => applyMarkdownFormat(view, 'underline') } })));
