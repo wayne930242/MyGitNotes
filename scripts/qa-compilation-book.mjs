@@ -152,6 +152,8 @@ try {
   // E4: the title opens the note in zoom on the same editing session, and closing zoom returns the editor to the section.
   await page.focus(`${section(5)} .cm-content`);
   await page.keyboard.type('UNSAVED-SESSION ');
+  const padding = () => page.$eval('.note-overlay', overlay => getComputedStyle(overlay).paddingRight);
+  const overlayPadding = await padding();
   await page.click(`${section(5)} .compilation-book-title`);
   await page.waitForSelector('[role="dialog"][aria-label="Note editor"] .cm-content');
   const zoomText = await page.$eval('[role="dialog"][aria-label="Note editor"] .cm-content', element => element.textContent);
@@ -159,6 +161,8 @@ try {
   assert.ok((await page.$eval(`${section(5)}`, element => element.textContent)).includes('This note is open in zoom.'), 'The section does not say the note is in zoom');
   await page.click('button[aria-label="Close note"]');
   await page.waitForSelector(`${section(5)}[data-editing] .cm-content`);
+  assert.equal(await padding(), overlayPadding, 'The compilation frame changed width after a note was opened and closed');
+  assert.equal(await page.evaluate(() => document.activeElement?.className.includes('compilation-book-title')), true, 'Focus did not return to the title that opened the note');
   assert.ok((await page.$eval(`${section(5)} .cm-content`, element => element.textContent)).includes('UNSAVED-SESSION'), 'The section lost its text after zoom');
   console.log('PASS zoom borrows the section editor and gives it back');
 

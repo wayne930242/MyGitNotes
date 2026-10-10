@@ -1,5 +1,5 @@
 import { noteRefKey } from '@mygitnotes/core/note-query';
-import React, { type ReactNode, useLayoutEffect, useState, useSyncExternalStore } from 'react';
+import React, { type ReactNode, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { isCompilationPath } from '@mygitnotes/core/compilation';
 import { NoteItem } from '../lib/types.js';
 import type { NoteRef } from '@mygitnotes/core/note-query';
@@ -42,18 +42,32 @@ const EditorModalLoading: React.FC = () => {
     return () => setHasOpenNote(false);
   }, [setHasOpenNote]);
   return (
-    <div className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
+    <div role='dialog' aria-modal='true' aria-busy='true' aria-label={t('notes.loadingNote')} className='viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-4'>
       <LoadingStatus className='px-6 py-4 rounded-xl text-sm' style={{ backgroundColor: 'var(--color-surface)', color: 'var(--color-text)' }}>{t('notes.loadingNote')}</LoadingStatus>
     </div>
   );
 };
 
 /** Zoom for a compilation: the same full-screen frame, around its view. */
-const CompilationFrame: React.FC<{ children: ReactNode; hidden?: boolean; }> = ({ children, hidden = false }) => (
-  <div className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn' style={hidden ? { visibility: 'hidden' } : undefined} data-behind={hidden || undefined}>
-    <div role='dialog' aria-modal='true' aria-label='Compilation' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{children}</div>
-  </div>
-);
+const CompilationFrame: React.FC<{ children: ReactNode; hidden?: boolean; }> = ({ children, hidden = false }) => {
+  const frame = useRef<HTMLDivElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
+  // Behind a note the compilation cannot hold focus; the control that opened the note gets it back when the note closes.
+  useLayoutEffect(() => {
+    if (hidden) {
+      if (frame.current?.contains(document.activeElement)) opener.current = document.activeElement as HTMLElement;
+      return;
+    }
+    const element = opener.current;
+    opener.current = null;
+    if (element?.isConnected) element.focus({ preventScroll: true });
+  }, [hidden]);
+  return (
+    <div ref={frame} className='note-overlay viewport-overlay fixed inset-0 z-50 bg-scrim/60 backdrop-blur-sm flex items-center justify-center p-3 animate-fadeIn' style={hidden ? { visibility: 'hidden' } : undefined} data-behind={hidden || undefined}>
+      <div role='dialog' aria-modal='true' aria-label='Compilation' className='note-dialog ui-dialog shadow-2xl w-full max-w-none h-full flex flex-col overflow-hidden transition-colors'>{children}</div>
+    </div>
+  );
+};
 
 const ZoomFrame: React.FC<{ note: NoteItem; committed?: NoteItem; }> = ({ note, committed }) => {
   const editing = useNoteEditing();

@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { getSavedPanelState, savePanelState } from './panel-state.js';
 
 /** The rail's own tools. The agent is one of them, so it works on the notebook list and beside any Focus pane. */
@@ -14,6 +14,8 @@ export const isDocumentTool = (id: PanelToolId): id is DocumentToolId => (DOCUME
  * Tracks the workspace-level tool panel (Calendar/Todo). It hides itself
  * while a note is open — the editor owns its own document panel (find,
  * outline, frontmatter, view, history) rather than sharing this one.
+ * Zoomed notes and compilations each count while they are mounted, so a
+ * compilation kept behind a note keeps the panel hidden after the note closes.
  */
 interface PanelContextValue {
   isOpen: boolean;
@@ -21,6 +23,7 @@ interface PanelContextValue {
   hasOpenNote: boolean;
   openTool: (id: PanelToolId) => void;
   close: () => void;
+  /** A zoomed note or compilation mounts (`true`) or unmounts (`false`); every `true` is paired with a `false`. */
   setHasOpenNote: (open: boolean) => void;
 }
 
@@ -36,7 +39,9 @@ export function PanelProvider({ children }: { children: ReactNode; }) {
   const saved = useMemo(() => getSavedPanelState([...WORKSPACE_TOOL_IDS, ...DOCUMENT_TOOL_IDS]), []);
   const [isOpen, setIsOpen] = useState(saved.open);
   const [activeTool, setActiveTool] = useState<PanelToolId>(saved.tool);
-  const [hasOpenNote, setHasOpenNote] = useState(false);
+  const [openNotes, setOpenNotes] = useState(0);
+  const hasOpenNote = openNotes > 0;
+  const setHasOpenNote = useCallback((open: boolean) => setOpenNotes(count => Math.max(0, count + (open ? 1 : -1))), []);
 
   useEffect(() => savePanelState({ open: isOpen, tool: activeTool }), [isOpen, activeTool]);
 
