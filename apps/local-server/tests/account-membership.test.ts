@@ -79,7 +79,7 @@ const visitorChoice = () => {
 describe("an edition that keeps each person's repositories", () => {
   const sessions = { owner: 'o'.repeat(43), other: 'p'.repeat(43) };
   /** A deployment where visitors bring repositories, composed with an in-memory account store and no repository choices. */
-  const start = async ({ limit = 2, piAgent, cookies = false }: { limit?: number; piAgent?: PiAgent; cookies?: boolean; } = {}) => {
+  const start = async ({ limit = 2, piAgent, cookies = false, defer }: { limit?: number; piAgent?: PiAgent; cookies?: boolean; defer?: AppServices['defer']; } = {}) => {
     const product = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'mygitnotes-accounts-')));
     roots.push(product);
     visitorChoice();
@@ -105,7 +105,7 @@ describe("an edition that keeps each person's repositories", () => {
       },
     };
     const requests = fakeGitHub();
-    server = createServer(createApp(product, { configSource, recordStore, workspaceChoices: null, ...(cookies ? { sessions: browser } : {}), ...(piAgent ? { piAgent } : {}) }));
+    server = createServer(createApp(product, { configSource, recordStore, workspaceChoices: null, ...(cookies ? { sessions: browser } : {}), ...(piAgent ? { piAgent } : {}), ...(defer ? { defer } : {}) }));
     await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${(server.address() as { port: number; }).port}`;
     return { requests, added, refreshes: requests.refreshes };
@@ -209,6 +209,29 @@ describe("an edition that keeps each person's repositories", () => {
     await add('octo/wiki');
     await call('PATCH', '/api/workspace/members', { repository: 'github:octo/wiki@main', hidden: true, revision: (await members()).revision });
     await vi.waitFor(() => expect(membershipChanged).toHaveBeenLastCalledWith(['github:octo/kb@main'], expect.objectContaining({ headers: expect.objectContaining({ cookie: `gh_notes_session=${sessions.owner}` }) })));
+  });
+
+  it("hands the agent's work after a change to the edition's defer, which holds it past the answer as waitUntil does", async () => {
+    let release = () => {};
+    const membershipChanged = vi.fn(() => new Promise<void>(resolve => (release = resolve)));
+    const deferred: Promise<unknown>[] = [];
+    await start({ piAgent: { router: Router(), membershipChanged }, defer: work => deferred.push(work) });
+    expect((await add('octo/kb')).status).toBe(200);
+    // The answer went out while the agent is still busy; what the edition holds is that very work.
+    expect(deferred).toHaveLength(1);
+    await vi.waitFor(() => expect(membershipChanged).toHaveBeenCalledTimes(1));
+    let settled = false;
+    void deferred[0].then(() => (settled = true));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(settled).toBe(false);
+    release();
+    await deferred[0];
+    // A failing agent is logged inside the held work rather than rejecting it.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    membershipChanged.mockRejectedValueOnce(new Error('sandbox gone'));
+    await add('octo/wiki');
+    await expect(deferred[1]).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith('[members] after a membership change: sandbox gone');
   });
 });
 

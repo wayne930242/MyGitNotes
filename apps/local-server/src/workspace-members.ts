@@ -62,6 +62,8 @@ export interface MembersRouterOptions {
   repositoryChoice?: boolean;
   /** Runs after a change, without holding up the answer, with the new settings and the request that made it. */
   onChange?: (settings: WorkspaceSettings, request: WorkspaceRequest) => Promise<void>;
+  /** Keeps `onChange`'s work alive past the answer (see `AppServices.defer`); its errors are already logged. */
+  defer?: (work: Promise<unknown>) => void;
 }
 
 /**
@@ -152,7 +154,7 @@ async function inspectRepository(site: WorkspaceSite, token: string, repository:
  * change them, adding, removing, hiding, showing, reordering and choosing the default. Mounted ahead of the routes that
  * open repositories. A change ends the open event streams, so every page reconnects to the new membership.
  */
-export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage, auth: SessionServices, { repositoryChoice = false, onChange }: MembersRouterOptions = {}): Router {
+export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource, assetStorage: AssetStorage, auth: SessionServices, { repositoryChoice = false, onChange, defer }: MembersRouterOptions = {}): Router {
   const router = Router();
   /** The request's sign-in token on the workspace's site; undefined without a usable one. */
   const tokenOf = async (req: Request, res: Response, site: WorkspaceSite) => {
@@ -188,7 +190,10 @@ export function createWorkspaceMembersRouter(configSource: WorkspaceConfigSource
       const { revision } = await action(store, req, requester);
       endEventStreams();
       // What else follows the members (the agent's session) hears of the change without holding up the answer.
-      if (onChange) void configSource.settings(req).then(settings => onChange(settings, req)).catch((error: Error) => console.warn(`[members] after a membership change: ${error.message}`));
+      if (onChange) {
+        const work = configSource.settings(req).then(settings => onChange(settings, req)).catch((error: Error) => console.warn(`[members] after a membership change: ${error.message}`));
+        if (defer) defer(work);
+      }
       res.json({ revision });
     } catch (error) {
       fail(res, error);

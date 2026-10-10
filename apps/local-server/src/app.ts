@@ -56,6 +56,12 @@ export interface AppServices {
   piAgent?: PiAgent;
   /** Publishes committed notes beyond the repository, after the commit succeeded and beside the Gist push; without it nothing changes. */
   publishing?: PublishingService;
+  /**
+   * Keeps work a request starts without awaiting (the agent hearing of a membership change) alive after the answer, as
+   * Vercel's `waitUntil` does, where a function may freeze once it has answered. The work logs its own errors. Left out,
+   * it runs unheld, which a long-running Node server finishes anyway.
+   */
+  defer?: (work: Promise<unknown>) => void;
   /** Which R2 bucket and key space each request reaches, and any quota it meters; defaults to the deployment's environment (see asset-storage.ts). */
   assetStorage: AssetStorage;
   /** The built web app to serve; defaults to apps/web/dist under the application root. */
@@ -116,7 +122,7 @@ export function createApp(base: string, overrides: Partial<AppServices> = {}): e
   if (!local) app.use('/api/core', product ? createRemoteCoreUpdateRouter({ store: recordStore, sessions }, product) : (_req, res) => res.status(404).json({ error: 'This deployment names no product repository, so it offers no Core update.' }));
   if (piAgent?.tools) app.use('/api/pi', piAgent.tools);
   // The member list opens no repository, so it works while every repository is hidden or unreachable.
-  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }, { repositoryChoice: visitorChoice, onChange: async (settings, request) => piAgent?.membershipChanged?.(visibleMembers(settings).map(member => member.ref.id), request) }));
+  app.use('/api/workspace/members', createWorkspaceMembersRouter(configSource, assetStorage, { store: recordStore, sessions }, { repositoryChoice: visitorChoice, onChange: async (settings, request) => piAgent?.membershipChanged?.(visibleMembers(settings).map(member => member.ref.id), request), ...(services.defer ? { defer: services.defer } : {}) }));
   app.use(['/api', '/raw-assets', '/r2-assets'], requestWorkspace({ store: recordStore, sessions }, configSource, cache));
   app.use(createFileManagerRouter());
   app.use(createR2ManagerRouter(assetStorage));
